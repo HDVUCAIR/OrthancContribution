@@ -1,5 +1,9 @@
 # Purpose
-Create a constellation of [Orthanc servers](https://www.orthanc-server.com) for purposes of DICOM anonymization, distribution and organization on disk.  The servers are built upon the [Osimis docker image](https://hub.docker.com/r/osimis/orthanc), modified to extend scripting capability.  See README.build for instructions.
+Create a constellation of [Orthanc servers](https://www.orthanc-server.com) and accompanying PostGreSQL servers for purposes of DICOM anonymization, distribution and organization on disk.  The servers are built upon the [Osimis docker image](https://hub.docker.com/r/osimis/orthanc), modified to extend scripting capability.  See README.build for instructions.
+
+A lookup table is maintained in the PostGreSQL server in order to support the anonymization of longitudinal studies for the same patient.  In full anonymization mode, each patient has their visits shifted by a random number of days (one random setting per patient, same setting for each study).  
+
+The anonymization was created to maintain reference links between series within a study.  This is handled by recursively examining existing links between all DICOM and reproducing those links with anonymized UID.
 
 # Status
 I built a lot of this setup in the days when Lua was the only [embedded scripting language](https://book.orthanc-server.com/users/lua.html) available to the Orthanc.  This setup is currently in flux as I convert my old Lua scripts to use the more powerful [Python plugin](https://book.orthanc-server.com/plugins/python.html?highlight=python) capability.  Eventually, I plan to replace all the Lua scripts with Python.
