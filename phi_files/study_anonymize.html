@@ -1,0 +1,110 @@
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">
+<head>
+<script type="text/javascript" src="../../app/libs/jquery.min.js"></script>
+<script type="text/javascript" src="study_anonymize.js"></script>
+<style>
+#div_progress {
+  position: fixed;
+  top: 0px;
+  z-index: 99;
+  width: 50%;
+  background-color: #fff;
+}
+
+#div_pbar {
+  width: 1%;
+  height: 30px;
+  background-color: #4CAF50;
+}
+
+#div_select {
+   position: fixed;
+   background-color: #ffa;
+   z-index: 50;
+   width:100%;
+   height:65px;
+   top: 0px;
+   left: 0px;
+   vertical-align: middle;
+   text-align:center;
+   border: solid 1px #000;
+}
+
+#div_main {
+   position: relative;
+   top: 65px;
+   left: 0px;
+   background-color: #fff;
+}
+
+</style>
+
+</head>
+<body>
+
+<div id="div_progress">
+  Processing.  Please hold...
+  <div id="div_pbar"></div>
+</div>
+
+<div id="div_select">
+   <br>
+   <select id="ase_select_study"></select> will be anonymized as: <span id="ase_current_name">None Selected</span>
+   <br>
+</div>
+
+<div id="div_main">
+   <p>Links:
+   <ul>
+      <li><a href="../../app/explorer.html">Return to Orthanc home page</a></li>
+      <li><a href="#SetAnonParam">Set up anonymization parameters</a></li>
+      <li>
+         <a href="#ReviewMatches">Review data prior to anonymization</a>
+         <ul>
+            <li><a href="#FromTheDicom">From dicom to be anonymzied</a></li>
+            <li><a href="#InPACS">From matches in PACS</a></li>
+            <li><a href="#InOrthanc">From matches in Orthanc</a></li>
+            <li><a href="#InHistory">From previous anonymizations</a></li>
+         </ul>
+      </li>
+      <li><a href="#InitiateAnon">Initiate anonymization on selected subject</a></li>
+   </ul>
+   <hr>
+
+   <h2 id="SetAnonParam">Set Anonymization Parameters</h2>
+      <h3>Select The New Base Name</h3>
+      <ul>
+         <li>The base name becomes the last name of the anonymized subject.</li>
+         <li>The first name is based on the Orthanc internal number.</li>
+         <li>The full anonymized name will look like BASENAME^ID######^^^</li>
+      </ul>
+      <p><input id="ase_entry_base" type="text" name="ase_input_base" value="">
+      <select id="ase_select_base">
+         <option value="IRB_SOME_CODE_A_">IRB SOME_CODE_A description A</option>
+         <option value="IRB_SOME_CODE_B_">IRB SOME_CODE_B description B</option>
+      </select><br>
+      <table border=1><tr>
+      <td><button type="button" id="ase_button_base">(Re)Set</button></td>
+      <td id="ase_status_col"><label>Ready:</label> <span id="ase_status_base">No</span><br></td>
+      <td><label>Current base:</label> <span id="ase_current_base">None Selected</span></td>
+      </tr></table>
+   <hr>
+   
+   <h2 id="ReviewMatches">Review Matches For Subject In Database</h2>
+      <h3 id="FromTheDicom">From the DICOM</h3>
+      <table border=1 id="ase_table_study"></table>
+   
+      <h3 id="InPACS">Matches In PACS</h3>
+      <button id="button_pacs" type="button">Scan PACS Now</button>
+      <table border=1 id="ase_table_pacs"></table>
+   
+      <h3 id="InOrthanc">Matches In Orthanc</h3>
+      <table border=1 id="ase_table_db"></table>
+   
+      <h3 id="InHistory">Matches In History</h3>
+      <table border=1 id="ase_table_lu"></table>
+   <hr>
+   <h2 id="InitiateAnon">Initiate Anonymization on Selected Subject</h2>
+   <button type="button" id="ase_initiate_anon">Initiate Anonymization</button>
+</body>
+</html>

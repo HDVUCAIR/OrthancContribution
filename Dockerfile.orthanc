@@ -1,0 +1,21 @@
+# Start with osimis orthanc with plugins
+FROM osimis/orthanc:latest
+
+ARG PROCESS_UID
+ARG PROCESS_GID
+
+# We need to add the lua postgres interface
+RUN apt-get update && \
+    apt-get install -y \
+       apt-utils \
+       lua-sql-postgres lua-socket lua-posix \
+       html2text net-tools \
+       python3-bs4 python3-psycopg2 python3-pydicom && \
+    mkdir /scripts
+
+# Fix the entry file to force umask
+RUN sed -i.bak -e "s/^.*Orthanc .verb.*/umask 0007\n&/g" /docker-entrypoint.sh 
+
+RUN chown -R $PROCESS_UID:$PROCESS_GID /usr/share/orthanc /etc/orthanc /scripts
+
+

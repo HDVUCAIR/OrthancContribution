@@ -1,0 +1,565 @@
+version: "3.2"
+services:
+
+  phi_orthanc:
+    image: dcorthanc:python.uid1004umask
+#    entrypoint:
+#       - tail
+#       - -f
+#       - /dev/null
+    build:
+      context: .
+      dockerfile: Dockerfile.orthanc
+      args:
+        PROCESS_UID: ${ORTHANC_UID}
+        PROCESS_GID: ${ORTHANC_GID}
+    user: "${ORTHANC_UID}:${ORTHANC_GID}"
+    environment:
+      # ================================
+      # Env variables for my scripts
+      # --------------------------------
+      HOST_FQDN: "${HOST_FQDN}"
+      # Generation of the certs
+      CERT_CITY: "${CERT_CITY}"
+      CERT_CONTACT_EMAIL: "${CERT_CONTACT_EMAIL}"
+      CERT_COUNTRY_CODE: "${CERT_COUNTRY_CODE}"
+      CERT_ORGANIZATION: "${CERT_ORGANIZATION}"
+      CERT_STATE_REGION: "${CERT_STATE_REGION}"
+      CERT_SURNAME: "${CERT_SURNAME}"
+      # Lua control
+      LUA_ALLOWED_MODALITIES: "${PHI_LUA_ALLOWED_MODALITIES}"
+      LUA_ANON_ORTHANC: "${COMMON_BASENAME}_anon_orthanc"
+      LUA_COLLECT_HOLOGIC: "${PHI_LUA_COLLECT_HOLOGIC}"
+      LUA_DENIED_MODALITIES: "${PHI_LUA_DENIED_MODALITIES}"
+      LUA_FLAG_ANON_BY_SERIES: "${PHI_LUA_FLAG_ANON_BY_SERIES}"
+      LUA_FLAG_ASSUME_ORIGINAL_PRIMARY: "${PHI_LUA_FLAG_ASSUME_ORIGINAL_PRIMARY}"
+      LUA_FLAG_AUTO_ANON_WHEN_STABLE: "${PHI_FLAG_AUTO_ANON_WHEN_STABLE}"
+      LUA_FLAG_EVERY_ACCESSION_A_PATIENT: "${PHI_LUA_FLAG_EVERY_ACCESSION_A_PATIENT}"
+      LUA_FLAG_KEEP_ORIGINAL_DATES: "${PHI_LUA_FLAG_KEEP_ORIGINAL_DATES}"
+      LUA_FLAG_KEEP_SIEMENS_MR_TAGS: "${PHI_LUA_FLAG_KEEP_SIEMENS_MR_TAGS}"
+      LUA_FLAG_MUST_BE_ORIGINAL: "${PHI_LUA_FLAG_MUST_BE_ORIGINAL}"
+      LUA_FLAG_PRESCREEN_BY_MODALITY: "${PHI_LUA_FLAG_PRESCREEN_BY_MODALITY}"
+      LUA_FLAG_PRESCREEN_ORIGINAL_PRIMARY: "${PHI_LUA_FLAG_PRESCREEN_ORIGINAL_PRIMARY}"
+      LUA_FLAG_REMOVE_PRIVATE_TAGS: "${PHI_LUA_FLAG_REMOVE_PRIVATE_TAGS}"
+      LUA_FLAG_SAVE_PATIENTNAME_ANON: "${PHI_LUA_FLAG_SAVE_PATIENTNAME_ANON}"
+      LUA_FLAG_SCREEN_FOR_REPORTS: "${PHI_LUA_FLAG_SCREEN_FOR_REPORTS}"
+      LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO: "${PHI_LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO}"
+      LUA_FLAG_SPLIT_SCREEN_DIAG: "${PHI_LUA_FLAG_SPLIT_SCREEN_DIAG}"
+      LUA_INTERNAL_NUMBER_TYPE: "${PHI_LUA_INTERNAL_NUMBER_TYPE}"
+      LUA_MAIL_ORIGIN: "${PHI_MAIL_ORIGIN}"
+      LUA_MAIL_AUTO: "${PHI_LUA_MAIL_AUTO}"
+      LUA_MAIL_SERVER: "${PHI_MAIL_SERVER}"
+      LUA_MAIL_TO: "${PHI_LUA_MAIL_TO}"
+      LUA_XREF_MODALITY: "AET_OF_MAIN_PACS"
+      LUA_X_REMOTE_IP_ALLOWED_TO_TRIGGER: "${PHI_X_REMOTE_IP_ALLOWED_TO_TRIGGER}"
+      LUA_X_REMOTE_USER_ALLOWED_TO_TRIGGER: "${PHI_X_REMOTE_USER_ALLOWED_TO_TRIGGER}"
+      # ================================
+      # Orthanc settings
+      # --------------------------------
+      # Basics
+      BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
+      ORTHANC__EXECUTE_LUA_ENABLED: "true"
+      ORTHANC__HTTP_PORT: "8042"
+      ORTHANC__HTTP_TIMEOUT: "10"
+      ORTHANC__LUA_SCRIPTS: '["/etc/orthanc/phi_scripts.lua"]'
+      ORTHANC__NAME: "${PHI_ORTHANC_WEBSITE_NAME}"
+      ORTHANC__SAVE_JOBS: "false"
+      ORTHANC__STABLE_AGE: "600"
+      ORTHANC__STORAGE_DIRECTORY: "/media/storage/OrthancDB"
+      LOGDIR: "/media/logs"
+      #LOGFILE: "/media/logs/orthanc.log"
+      VERBOSE_ENABLED: "false"
+      VERBOSE_STARTUP: "false"
+      # --------------------------------
+      # Dicom network
+      ORTHANC__DICOM_AET: "${PHI_DICOM_AET}"
+      ORTHANC__DICOM_ALWAYS_ALLOW_ECHO: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "false"
+      ORTHANC__DICOM_CHECK_CALLED_AET: "true"
+      ORTHANC__DICOM_CHECK_MODALITY_HOST: "false"
+      # If check modality is false, non-numeric computer names ok
+      ORTHANC__DICOM_MODALITIES: '{ "${ANON_ORTHANC_WEBSITE_NAME}" : [ "${ANON_DICOM_AET}", "${COMMON_BASENAME}_anon_orthanc",  ${ANON_DICOM_PORT} ] }'
+      # ELSE (MORE SECURE) if check modality is true, only numeric IP addresses.  
+      #ORTHANC__DICOM_MODALITIES: >
+      #  {
+      #    "Nickname1" : { "AET" : "SOMEAET1",
+      #                    "Host" : "#.#.#.#",
+      #                    "Port" : #,
+      #                    "AllowEcho" : true,
+      #                    "AllowFind" : false,
+      #                    "AllowMove" : false,
+      #                    "AllowGet" : false,
+      #                    "AllowStore" : true},
+      #    "Nickname2" : { "AET" : "SOMEAET2",
+      #                    "Host" : "#.#.#.#",
+      #                    "Port" : #,
+      #                    "AllowEcho" : true,
+      #                    "AllowFind" : false,
+      #                    "AllowMove" : false,
+      #                    "AllowGet" : false,
+      #                    "AllowStore" : true}
+      #  }
+      ORTHANC__DICOM_PORT: "${PHI_DICOM_PORT}"
+      ORTHANC__DEFLATED_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__JPEG_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__JPEG2000_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__JPEG_LOSSLESS_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__JPIP_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__MPEG2_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__RLE_TRANSFER_SYNTAX_ACCEPTED : "true"
+      # --------------------------------
+      # API/web security
+      ORTHANC__SSL_ENABLED: "true"
+      ORTHANC__SSL_CERTIFICATE: "/media/external/certificates/certificate.pem"
+      ORTHANC__AUTHENTICATION_ENABLED: "true"
+      ORTHANC__REGISTERED_USERS: "${PHI_REGISTERED_USERS}"
+      # --------------------------------
+      # Plugins
+      # GDCM: better dicom handling
+      GDCM_PLUGIN_ENABLED: "true"
+      # PostGRE
+      ORTHANC__POSTGRESQL__DATABASE: "${COMMON_BASENAME}_phi_orthanc_db"
+      ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
+      ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"
+      ORTHANC__POSTGRESQL__HOST: "${COMMON_BASENAME}_phi_postgres"
+      ORTHANC__POSTGRESQL__PASSWORD: "${PHI_PASSWORD_FOR_PG_USER_ORTHANC}"
+      ORTHANC__POSTGRESQL__USERNAME: "${COMMON_BASENAME}_phi_orthanc"
+      # Python
+      ORTHANC__PYTHON_SCRIPT: "/etc/orthanc/rest.py"
+      ORTHANC__PYTHON_VERBOSE: "false"
+      PYTHON_MAIL_SENDER: "${PHI_MAIL_SENDER}"
+      PYTHON_MAIL_ORIGIN: "${PHI_MAIL_ORIGIN}"
+      PYTHON_MAIL_AUTO: "${PHI_PYTHON_MAIL_AUTO}"
+      PYTHON_MAIL_SERVER: "${PHI_MAIL_SERVER}"
+      PYTHON_MAIL_TO: "${PHI_PYTHON_MAIL_TO}"
+      # Serve Folders
+      ORTHANC__SERVE_FOLDERS__FOLDERS: '{ "/extra" : "/media/html" }'
+      # Web viewer
+      ORTHANC__WEB_VIEWER__ANNOTATIONS_STORAGE_ENABLED: "false"
+      ORTHANC__WEB_VIEWER__STUDY_DOWNLOAD_ENABLED: "true"
+      ORTHANC__WEB_VIEWER__VIDEO_DISPLAY_ENABLED: "false"
+      OSIMIS_WEB_VIEWER1_PLUGIN_ENABLED: "true"
+      ## Dicom web
+      #DICOM_WEB_PLUGIN_ENABLED: "true"
+      ## Stone Of Orthanc viewer
+      #STONE_WEB_VIEWER_PLUGIN_ENABLED: "true"
+    depends_on: [phi_orthanc_index]
+    container_name: ${COMMON_BASENAME}_phi_orthanc
+    ports: ["${HOST_IP_FOR_DICOM}:${PHI_DICOM_PORT}:${PHI_DICOM_PORT}"]
+    volumes:
+      - type: bind
+        source: ./phi_files/mod_rest_api.py
+        target: /etc/orthanc/rest.py
+        volume:
+          read_only: true
+      - type: bind
+        source: ${PHI_HOST_DATA_DIR_ORTHANC}
+        target: /media
+      - type: bind
+        source: ./phi_files/phi_scripts.lua
+        target: /etc/orthanc/phi_scripts.lua
+        volume:
+          read_only: true
+      - type: bind
+        source: ./shared_files/make_certs_orthanc.sh
+        target: /scripts/make_certs_orthanc.sh
+        volume:
+          read_only: true
+      - type: bind
+        source: /etc/localtime
+        target: /etc/localtime
+        volume:
+          read_only: true
+    networks:
+      - nw_phi
+
+  phi_orthanc_index:
+    image: postgres:9.4
+    user: "999:999"
+    environment:
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+      PG_USER: "${COMMON_BASENAME}_phi_orthanc"
+      PG_DB: "${COMMON_BASENAME}_phi_orthanc_db"
+      POSTGRES_PASSWORD: "${PHI_PASSWORD_FOR_PG_USER_POSTGRES}"
+      PG_ORTHANC_PASSWORD: "${PHI_PASSWORD_FOR_PG_USER_ORTHANC}"
+    depends_on: [anon_orthanc]
+    container_name: ${COMMON_BASENAME}_phi_postgres
+    volumes: 
+      - type: bind
+        source: ./phi_files/postgresql-create-orthanc-user.sh
+        target: /docker-entrypoint-initdb.d/postgresql-create-orthanc-user.sh
+      - type: bind
+        source: ${PHI_HOST_DATA_DIR_POSTGRE}/main
+        target: /var/lib/postgresql/data/pgdata
+      - type: bind
+        source: ${PHI_HOST_DATA_DIR_POSTGRE}/backup
+        target: /backup
+      - type: bind
+        source: ./phi_files/postgres.cron
+        target: /var/spool/cron/crontabs/postgres
+        volume:
+          read_only: true
+    networks:
+      - nw_phi
+
+  anon_orthanc:
+    image: dcorthanc:python.uid1004
+    build:
+      context: .
+      dockerfile: Dockerfile.orthanc
+      args:
+        PROCESS_UID: ${ORTHANC_UID}
+        PROCESS_GID: ${ORTHANC_GID}
+    user: "${ORTHANC_UID}:${ORTHANC_GID}"
+#    entrypoint: 
+#       - tail
+#       - -f
+#       - /dev/null
+    environment:
+      # ================================
+      # Env variables for my scripts
+      # --------------------------------
+      HOST_FQDN: "${HOST_FQDN}"
+      # Generation of the certs
+      CERT_CITY: "${CERT_CITY}"
+      CERT_CONTACT_EMAIL: "${CERT_CONTACT_EMAIL}"
+      CERT_COUNTRY_CODE: "${CERT_COUNTRY_CODE}"
+      CERT_ORGANIZATION: "${CERT_ORGANIZATION}"
+      CERT_STATE_REGION: "${CERT_STATE_REGION}"
+      CERT_SURNAME: "${CERT_SURNAME}"
+      # ================================
+      # Orthanc settings
+      # --------------------------------
+      # Basics
+      BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
+      ORTHANC__EXECUTE_LUA_ENABLED: "false"
+      ORTHANC__HTTP_PORT: "8042"
+      ORTHANC__HTTP_TIMEOUT: "10"
+      ORTHANC__NAME: "${ANON_ORTHANC_WEBSITE_NAME}"
+      ORTHANC__SAVE_JOBS: "false"
+      ORTHANC__STABLE_AGE: "600"
+      ORTHANC__STORAGE_DIRECTORY: "/media/storage/OrthancDB"
+      LOGDIR: "/media/logs"
+      #LOGFILE: "/media/logs/orthanc.log"
+      VERBOSE_ENABLED: "false"
+      VERBOSE_PLUGINS: "false"
+      VERBOSE_STARTUP: "false"
+      # --------------------------------
+      # Webdav
+      ORTHANC__WEB_DAV_ENABLED: "false"
+      ORTHANC__WEB_DAV_DELETE_ALLOWED: "false"
+      ORTHANC__WEB_DAV_UPLOAD_ALLOWED: "false"
+      # --------------------------------
+      # Dicom network
+      ORTHANC__DICOM_AET: "${ANON_DICOM_AET}"
+      ORTHANC__DICOM_ALWAYS_ALLOW_ECHO: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "false"
+      ORTHANC__DICOM_CHECK_CALLED_AET: "true"
+      ORTHANC__DICOM_CHECK_MODALITY_HOST: "false"
+      # If check modality is false, non-numeric computer names ok
+      #ORTHANC__DICOM_MODALITIES: ''
+      # ELSE (MORE SECURE) if check modality is true, only numeric IP addresses.  
+      #ORTHANC__DICOM_MODALITIES: >
+      #  {
+      #    "Nickname1" : { "AET" : "SOMEAET1",
+      #                    "Host" : "#.#.#.#",
+      #                    "Port" : #,
+      #                    "AllowEcho" : true,
+      #                    "AllowFind" : false,
+      #                    "AllowMove" : false,
+      #                    "AllowGet" : false,
+      #                    "AllowStore" : true},
+      #    "Nickname2" : { "AET" : "SOMEAET2",
+      #                    "Host" : "#.#.#.#",
+      #                    "Port" : #,
+      #                    "AllowEcho" : true,
+      #                    "AllowFind" : false,
+      #                    "AllowMove" : false,
+      #                    "AllowGet" : false,
+      #                    "AllowStore" : true}
+      #  }
+      ORTHANC__DICOM_PORT: "${ANON_DICOM_PORT}"
+      ORTHANC__DEFLATED_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__JPEG_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__JPEG2000_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__JPEG_LOSSLESS_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__JPIP_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__MPEG2_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__RLE_TRANSFER_SYNTAX_ACCEPTED : "true"
+      # --------------------------------
+      # API/web security
+      ORTHANC__SSL_ENABLED: "true"
+      ORTHANC__SSL_CERTIFICATE: "/media/external/certificates/certificate.pem"
+      ORTHANC__AUTHENTICATION_ENABLED: "true"
+      ORTHANC__REGISTERED_USERS: "${ANON_REGISTERED_USERS}"
+      # --------------------------------
+      # Plugins
+      # GDCM: better dicom handling
+      GDCM_PLUGIN_ENABLED: "true"
+      # PostGRE
+      ORTHANC__POSTGRESQL__DATABASE: "${COMMON_BASENAME}_anon_orthanc_db"
+      ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
+      ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"
+      ORTHANC__POSTGRESQL__HOST: "${COMMON_BASENAME}_anon_postgres"
+      ORTHANC__POSTGRESQL__PASSWORD: "${ANON_PASSWORD_FOR_PG_USER_ORTHANC}"
+      ORTHANC__POSTGRESQL__USERNAME: "${COMMON_BASENAME}_anon_orthanc"
+      # Python
+      ORTHANC__PYTHON_SCRIPT: "/etc/orthanc/rest.py"
+      ORTHANC__PYTHON_VERBOSE: "false"
+      PYTHON_MAIL_SENDER: "${ANON_MAIL_SENDER}"
+      PYTHON_MAIL_ORIGIN: "${ANON_MAIL_ORIGIN}"
+      PYTHON_MAIL_AUTO: "${ANON_PYTHON_MAIL_AUTO}"
+      PYTHON_MAIL_SERVER: "${ANON_MAIL_SERVER}"
+      PYTHON_MAIL_TO: "${ANON_MAIL_TO}"
+      # Web viewer
+      ORTHANC__WEB_VIEWER__ANNOTATIONS_STORAGE_ENABLED: "false"
+      ORTHANC__WEB_VIEWER__STUDY_DOWNLOAD_ENABLED: "true"
+      ORTHANC__WEB_VIEWER__VIDEO_DISPLAY_ENABLED: "false"
+      OSIMIS_WEB_VIEWER1_PLUGIN_ENABLED: "true"
+      ## Dicom web
+      #DICOM_WEB_PLUGIN_ENABLED: "true"
+      ## Stone Of Orthanc viewer
+      #STONE_WEB_VIEWER_PLUGIN_ENABLED: "true"
+      # Folder Indexer
+      #ORTHANC__INDEXER__ENABLE: "true"
+      #ORTHANC__INDEXER__FOLDERS: '[ "/some_internal_folder/where_external_dicom_mounted" ]'
+    depends_on: [anon_orthanc_index]
+    container_name: ${COMMON_BASENAME}_anon_orthanc
+    ports: ["${HOST_IP_FOR_DICOM}:${ANON_DICOM_PORT}:${ANON_DICOM_PORT}"]
+    volumes:
+      - type: bind
+        source: ./anon_files/mod_rest_api.py
+        target: /etc/orthanc/rest.py
+        volume:
+          read_only: true
+      - type: bind
+        source: ${ANON_HOST_DATA_DIR_ORTHANC}
+        target: /media
+      #- type: bind
+      #  source: ./anon_files/configuration_orthanc.json
+      #  target: /etc/orthanc/configuration.json
+      #  volume:
+      #    read_only: true
+      - type: bind
+        source: ./shared_files/make_certs_orthanc.sh
+        target: /scripts/make_certs_orthanc.sh
+        volume:
+          read_only: true
+        #target: /usr/lib/orthanc/setup.d/make_certs_orthanc.sh
+      - type: bind
+        source: /etc/localtime
+        target: /etc/localtime
+        volume:
+          read_only: true
+    networks:
+      - nw_anon
+      - nw_phi
+
+  anon_orthanc_index:
+    image: postgres:9.4
+    user: "999:999"
+    environment:
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+      PG_USER: "${COMMON_BASENAME}_anon_orthanc"
+      PG_DB: "${COMMON_BASENAME}_anon_orthanc_db"
+      POSTGRES_PASSWORD: "${ANON_PASSWORD_FOR_PG_USER_POSTGRES}"
+      PG_ORTHANC_PASSWORD: "${ANON_PASSWORD_FOR_PG_USER_ORTHANC}"
+    container_name: ${COMMON_BASENAME}_anon_postgres
+    volumes: 
+      - type: bind
+        source: ./anon_files/postgresql-create-orthanc-user.sh
+        target: /docker-entrypoint-initdb.d/postgresql-create-orthanc-user.sh
+      - type: bind
+        source: ${ANON_HOST_DATA_DIR_POSTGRE}
+        target: /var/lib/postgresql/data/pgdata
+    networks:
+      - nw_anon
+
+  disk_orthanc:
+    image: dcorthanc:python.uid1004
+#    entrypoint: 
+#       - tail
+#       - -f 
+#       - /dev/null
+    build:
+      context: .
+      dockerfile: Dockerfile.orthanc
+      args:
+        PROCESS_UID: ${ORTHANC_UID}
+        PROCESS_GID: ${ORTHANC_GID}
+    user: "${ORTHANC_UID}:${ORTHANC_GID}"
+    environment:
+      # ================================
+      # Env variables for my scripts
+      # --------------------------------
+      HOST_FQDN: "${HOST_FQDN}"
+      # Generation of the certs
+      CERT_CITY: "${CERT_CITY}"
+      CERT_CONTACT_EMAIL: "${CERT_CONTACT_EMAIL}"
+      CERT_COUNTRY_CODE: "${CERT_COUNTRY_CODE}"
+      CERT_ORGANIZATION: "${CERT_ORGANIZATION}"
+      CERT_STATE_REGION: "${CERT_STATE_REGION}"
+      CERT_SURNAME: "${CERT_SURNAME}"
+      # ================================
+      # Orthanc settings
+      # --------------------------------
+      # Basics
+      BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
+      #ORTHANC__EXECUTE_LUA_ENABLED: "true"
+      ORTHANC__HTTP_PORT: "8042"
+      ORTHANC__HTTP_TIMEOUT: "10"
+      ORTHANC__NAME: "${DISK_ORTHANC_WEBSITE_NAME}"
+      ORTHANC__SAVE_JOBS: "false"
+      ORTHANC__STABLE_AGE: "600"
+      ORTHANC__STORAGE_DIRECTORY: "/media/storage/OrthancDB"
+      VERBOSE_ENABLED: "false"
+      VERBOSE_PLUGINS: "false"
+      VERBOSE_STARTUP: "false"
+      # --------------------------------
+      # Webdav
+      ORTHANC__WEB_DAV_ENABLED: "false"
+      ORTHANC__WEB_DELETE_ENABLED: "false"
+      ORTHANC__WEB_UPLOAD_ENABLED: "false"
+      # --------------------------------
+      # Dicom network
+      ORTHANC__DICOM_ALWAYS_ALLOW_ECHO: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "false"
+      ORTHANC__DICOM_AET: "${DISK_DICOM_AET}"
+      ORTHANC__DICOM_CHECK_CALLED_AET: "true"
+      ORTHANC__DICOM_CHECK_MODALITY_HOST: "false"
+      # If check modality is false, non-numeric computer names ok
+      ORTHANC__DICOM_MODALITIES: '{ "${ANON_ORTHANC_WEBSITE_NAME}" : [ "${ANON_DICOM_AET}", "${COMMON_BASENAME}_anon_orthanc",  ${ANON_DICOM_PORT} ]}'
+      # ELSE (MORE SECURE) if check modality is true, only numeric IP addresses.  
+      #ORTHANC__DICOM_MODALITIES: >
+      #  {
+      #    "Nickname1" : { "AET" : "SOMEAET1",
+      #                    "Host" : "#.#.#.#",
+      #                    "Port" : #,
+      #                    "AllowEcho" : true,
+      #                    "AllowFind" : false,
+      #                    "AllowMove" : false,
+      #                    "AllowGet" : false,
+      #                    "AllowStore" : true},
+      #    "Nickname2" : { "AET" : "SOMEAET2",
+      #                    "Host" : "#.#.#.#",
+      #                    "Port" : #,
+      #                    "AllowEcho" : true,
+      #                    "AllowFind" : false,
+      #                    "AllowMove" : false,
+      #                    "AllowGet" : false,
+      #                    "AllowStore" : true}
+      #  }
+      ORTHANC__DICOM_PORT: "${DISK_DICOM_PORT}"
+      ORTHANC__DEFLATED_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__JPEG_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__JPEG2000_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__JPEG_LOSSLESS_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__JPIP_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__MPEG2_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__RLE_TRANSFER_SYNTAX_ACCEPTED : "true"
+      # --------------------------------
+      # API/web security
+      ORTHANC__SSL_ENABLED: "true"
+      ORTHANC__SSL_CERTIFICATE: "/media/external/certificates/certificate.pem"
+      ORTHANC__AUTHENTICATION_ENABLED: "true"
+      ORTHANC__REGISTERED_USERS: "${DISK_REGISTERED_USERS}"
+      # --------------------------------
+      # Plugins
+      # GDCM: better dicom handling
+      GDCM_PLUGIN_ENABLED: "true"
+      # PostGRE
+      ORTHANC__POSTGRESQL__DATABASE: "${COMMON_BASENAME}_disk_orthanc_db"
+      ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
+      ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"
+      ORTHANC__POSTGRESQL__HOST: "${COMMON_BASENAME}_disk_postgres"
+      ORTHANC__POSTGRESQL__PASSWORD: "${DISK_PASSWORD_FOR_PG_USER_ORTHANC}"
+      ORTHANC__POSTGRESQL__USERNAME: "${COMMON_BASENAME}_disk_orthanc"
+      # Python
+      ORTHANC__PYTHON_SCRIPT: "/etc/orthanc/rest.py"
+      ORTHANC__PYTHON_VERBOSE: "false"
+      PYTHON_FLAG_AUTO_ANON_WHEN_STABLE: "${DISK_FLAG_AUTO_ANON_WHEN_STABLE}"
+      PYTHON_X_REMOTE_IP_ALLOWED_TO_TRIGGER: "${DISK_X_REMOTE_IP_ALLOWED_TO_TRIGGER}"
+      PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER: "${DISK_X_REMOTE_USER_ALLOWED_TO_TRIGGER}"
+      PYTHON_WRITE_DICOM_DEFAULT: "${DISK_WRITE_DICOM_DEFAULT}"
+      PYTHON_MAIL_SENDER: "${DISK_MAIL_SENDER}"
+      PYTHON_MAIL_ORIGIN: "${DISK_MAIL_ORIGIN}"
+      PYTHON_MAIL_AUTO: "${DISK_PYTHON_MAIL_AUTO}"
+      PYTHON_MAIL_SERVER: "${DISK_MAIL_SERVER}"
+      PYTHON_MAIL_TO: "${DISK_MAIL_TO}"
+      # Web viewer
+      ORTHANC__WEB_VIEWER__ANNOTATIONS_STORAGE_ENABLED: "false"
+      ORTHANC__WEB_VIEWER__STUDY_DOWNLOAD_ENABLED: "true"
+      ORTHANC__WEB_VIEWER__VIDEO_DISPLAY_ENABLED: "false"
+      OSIMIS_WEB_VIEWER1_PLUGIN_ENABLED: "true"
+      ## Dicom web
+      #DICOM_WEB_PLUGIN_ENABLED: "true"
+      ## Stone Of Orthanc viewer
+      #STONE_WEB_VIEWER_PLUGIN_ENABLED: "true"
+    depends_on: [disk_orthanc_index]
+    container_name: ${COMMON_BASENAME}_disk_orthanc
+    ports: ["${HOST_IP_FOR_DICOM}:${DISK_DICOM_PORT}:${DISK_DICOM_PORT}"]
+    volumes: 
+      - type: bind
+        source: ./disk_files/mod_rest_api.py
+        target: /etc/orthanc/rest.py
+        volume:
+          read_only: true
+      - type: bind
+        source: ${DISK_HOST_DATA_DIR_ORTHANC}
+        target: /media
+      - type: bind
+        source: ./shared_files/make_certs_orthanc.sh
+        target: /scripts/make_certs_orthanc.sh
+        volume:
+          read_only: true
+      - type: bind
+        source: /etc/localtime
+        target: /etc/localtime
+        volume:
+          read_only: true
+      - type: bind
+        source: ${DISK_HOST_DATA_DIR_DICOM}
+        target: /dicomout
+    networks:
+      - nw_disk
+
+  disk_orthanc_index:
+    image: postgres:9.4
+    user: "999:999"
+    environment:
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+      PG_USER: "${COMMON_BASENAME}_disk_orthanc"
+      PG_DB: "${COMMON_BASENAME}_disk_orthanc_db"
+      POSTGRES_PASSWORD: "${DISK_PASSWORD_FOR_PG_USER_POSTGRES}"
+      PG_ORTHANC_PASSWORD: "${DISK_PASSWORD_FOR_PG_USER_ORTHANC}"
+    container_name: ${COMMON_BASENAME}_disk_postgres
+    volumes: 
+      - type: bind
+        source: ./disk_files/postgresql-create-orthanc-user.sh
+        target: /docker-entrypoint-initdb.d/postgresql-create-orthanc-user.sh
+      - type: bind
+        source: ${DISK_HOST_DATA_DIR_POSTGRE}/main
+        target: /var/lib/postgresql/data/pgdata
+    networks:
+      - nw_disk
+
+networks:
+
+  nw_anon:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: ${ANON_NIC}
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+
+  nw_phi:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: ${PHI_NIC}
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+
+  nw_disk:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: ${DISK_NIC}
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+

@@ -1,0 +1,5 @@
+SHELL=/bin/bash
+MAILTO=""
+
+0 0 * * * /backup/backup_philookup.sh > /backup/backup.log 2>&1
+
