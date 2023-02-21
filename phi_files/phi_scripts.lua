@@ -3048,6 +3048,7 @@ function SendToRemoteFilter(aoInstanceID)
             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'dose'))
             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'screen'))
             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'report'))
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'exam protocol'))
         end
         if lFlagNonReport and loDicomTags['StudyDescription'] then
             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StudyDescription']), 'no rpt'))
@@ -3064,6 +3065,7 @@ function SendToRemoteFilter(aoInstanceID)
         end
         if lFlagNonReport and loDicomTags['StationName'] then
             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StationName']), 'rapid'))
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StationName']), 'sonosite'))
         end
         if lFlagNonReport and loDicomTags['Manufacturer'] then
             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['Manufacturer']), 'ischemaview'))
@@ -3765,7 +3767,7 @@ end
 --     end
 -- 
 -- end
- 
+
 -- ======================================================
 -- Use of this seems limited to the Illumeo testing scenario.
 -- Probably not necessary to convert this to python.

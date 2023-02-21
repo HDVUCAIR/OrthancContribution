@@ -23,6 +23,7 @@ echo "      AuthName \"$PHI_ORTHANC_WEBSITE_NAME\"" >> $file_phi
 echo "      #Require valid-user" >> $file_phi
 echo "      #            Privileged       " >> $file_phi
 echo "      Require user $PHI_X_REMOTE_USER_ALLOWED_TO_TRIGGER " >> $file_phi
+echo "   CASScope \"/$PHI_ORTHANC_WEBSITE_NAME/\"" >> $file_phi
 echo "   " >> $file_phi
 echo "      Order Deny,Allow" >> $file_phi
 echo "      Deny from all" >> $file_phi
@@ -66,6 +67,7 @@ echo "      AuthName \"$ANON_ORTHANC_WEBSITE_NAME\"" >> $file_anon
 echo "      #Require valid-user" >> $file_anon
 echo "      #            Privileged       " >> $file_anon
 echo "      Require user $ANON_X_REMOTE_USER_ALLOWED_TO_TRIGGER " >> $file_anon
+echo "   CASScope \"/$ANON_ORTHANC_WEBSITE_NAME/\"" >> $file_phi
 echo "   " >> $file_anon
 echo "      Order Deny,Allow" >> $file_anon
 echo "      Deny from all" >> $file_anon
@@ -109,6 +111,7 @@ echo "      AuthName \"$DISK_ORTHANC_WEBSITE_NAME\"" >> $file_disk
 echo "      #Require valid-user" >> $file_disk
 echo "      #            Priveleged       " >> $file_disk
 echo "      Require user $DISK_X_REMOTE_USER_ALLOWED_TO_TRIGGER " >> $file_disk
+echo "   CASScope \"/$DISK_ORTHANC_WEBSITE_NAME/\"" >> $file_phi
 echo "   " >> $file_disk
 echo "      Order Deny,Allow" >> $file_disk
 echo "      Deny from all" >> $file_disk

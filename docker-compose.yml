@@ -68,7 +68,9 @@ services:
       ORTHANC__STORAGE_DIRECTORY: "/media/storage/OrthancDB"
       LOGDIR: "/media/logs"
       #LOGFILE: "/media/logs/orthanc.log"
+      TRACE_ENABLED: "false"
       VERBOSE_ENABLED: "false"
+      VERBOSE_PLUGINS: "false"
       VERBOSE_STARTUP: "false"
       # --------------------------------
       # Dicom network
@@ -107,6 +109,7 @@ services:
       ORTHANC__JPIP_TRANSFER_SYNTAX_ACCEPTED : "true"
       ORTHANC__MPEG2_TRANSFER_SYNTAX_ACCEPTED : "true"
       ORTHANC__RLE_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__UNKNOWN_SOP_CLASS_ACCEPTED: "true"
       # --------------------------------
       # API/web security
       ORTHANC__SSL_ENABLED: "true"
@@ -127,6 +130,8 @@ services:
       # Python
       ORTHANC__PYTHON_SCRIPT: "/etc/orthanc/rest.py"
       ORTHANC__PYTHON_VERBOSE: "false"
+      PYTHON_X_REMOTE_IP_ALLOWED_TO_TRIGGER: "${PHI_X_REMOTE_IP_ALLOWED_TO_TRIGGER}"
+      PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER: "${PHI_X_REMOTE_USER_ALLOWED_TO_TRIGGER}"
       PYTHON_MAIL_SENDER: "${PHI_MAIL_SENDER}"
       PYTHON_MAIL_ORIGIN: "${PHI_MAIL_ORIGIN}"
       PYTHON_MAIL_AUTO: "${PHI_PYTHON_MAIL_AUTO}"
@@ -241,6 +246,7 @@ services:
       ORTHANC__STORAGE_DIRECTORY: "/media/storage/OrthancDB"
       LOGDIR: "/media/logs"
       #LOGFILE: "/media/logs/orthanc.log"
+      TRACE_ENABLED: "false"
       VERBOSE_ENABLED: "false"
       VERBOSE_PLUGINS: "false"
       VERBOSE_STARTUP: "false"
@@ -286,6 +292,7 @@ services:
       ORTHANC__JPIP_TRANSFER_SYNTAX_ACCEPTED : "true"
       ORTHANC__MPEG2_TRANSFER_SYNTAX_ACCEPTED : "true"
       ORTHANC__RLE_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__UNKNOWN_SOP_CLASS_ACCEPTED: "true"
       # --------------------------------
       # API/web security
       ORTHANC__SSL_ENABLED: "true"
@@ -306,6 +313,8 @@ services:
       # Python
       ORTHANC__PYTHON_SCRIPT: "/etc/orthanc/rest.py"
       ORTHANC__PYTHON_VERBOSE: "false"
+      PYTHON_X_REMOTE_IP_ALLOWED_TO_TRIGGER: "${ANON_X_REMOTE_IP_ALLOWED_TO_TRIGGER}"
+      PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER: "${ANON_X_REMOTE_USER_ALLOWED_TO_TRIGGER}"
       PYTHON_MAIL_SENDER: "${ANON_MAIL_SENDER}"
       PYTHON_MAIL_ORIGIN: "${ANON_MAIL_ORIGIN}"
       PYTHON_MAIL_AUTO: "${ANON_PYTHON_MAIL_AUTO}"
@@ -412,6 +421,7 @@ services:
       ORTHANC__SAVE_JOBS: "false"
       ORTHANC__STABLE_AGE: "600"
       ORTHANC__STORAGE_DIRECTORY: "/media/storage/OrthancDB"
+      TRACE_ENABLED: "false"
       VERBOSE_ENABLED: "false"
       VERBOSE_PLUGINS: "false"
       VERBOSE_STARTUP: "false"
@@ -457,6 +467,7 @@ services:
       ORTHANC__JPIP_TRANSFER_SYNTAX_ACCEPTED : "true"
       ORTHANC__MPEG2_TRANSFER_SYNTAX_ACCEPTED : "true"
       ORTHANC__RLE_TRANSFER_SYNTAX_ACCEPTED : "true"
+      ORTHANC__UNKNOWN_SOP_CLASS_ACCEPTED: "true"
       # --------------------------------
       # API/web security
       ORTHANC__SSL_ENABLED: "true"

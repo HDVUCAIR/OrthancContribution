@@ -265,7 +265,7 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
            'PYTHON_MAIL_ORIGIN' not in os.environ or \
            'PYTHON_MAIL_SERVER' not in os.environ:
             return{'status':1, 'error_text': 'Environmental variables for python mail not declared'}
-        recipients = os.environ['PYTHON_MAIL_TO']
+        recipients = os.getenv('PYTHON_MAIL_TO').split(',')
     else:
         if 'PYTHON_MAIL_ORIGIN' not in os.environ or \
            'PYTHON_MAIL_SERVER' not in os.environ:
@@ -1650,7 +1650,7 @@ def user_permitted(uri, remote_user):
 # -------------------------------------------------------
 
     orthanc.LogWarning('Checking whether remote user (%s) is permitted to \n%s' % (remote_user,uri))
-    permissions = os.getenv('LUA_X_REMOTE_USER_ALLOWED_TO_TRIGGER')
+    permissions = os.getenv('PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER')
     if permissions is None:
         orthanc.LogWarning('Rejecting anon due to missing permissions')
         return False

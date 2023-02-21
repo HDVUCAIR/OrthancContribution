@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 CERT_HOST_IP_ADDRESS=`ifconfig | sed -n "s/.*addr:\([0-9\.]\+\).*255.255.*/\1/p"`
 cd /media
 if [ ! -d external ]; then
@@ -9,11 +9,11 @@ if [ ! -d certificates ]; then
    mkdir certificates
 fi
 cd certificates
-# Generate a new cert every 360 days or so
+# Generate a new cert every 350 days or so
 if [ -e "certificate.pem" ]; then
    let diffInSeconds=$(date +%s)-$(date -r certificate.pem +%s)
    let diffInDays=$(expr $diffInSeconds / 86400)
-   if (( $diffInDays > 360 )); then
+   if [ "$diffInDays" -gt 350 ]; then
       rm -f certificate.pem private.key certificate.crt
    fi
 fi

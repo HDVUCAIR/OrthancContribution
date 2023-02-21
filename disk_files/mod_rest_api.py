@@ -421,12 +421,12 @@ def user_permitted(uri, remote_user):
 # -------------------------------------------------------
 
     orthanc.LogWarning('Checking whether remote user (%s) is permitted to \n%s' % (remote_user,uri))
-    permissions = os.getenv('LUA_X_REMOTE_USER_ALLOWED_TO_TRIGGER')
+    permissions = os.getenv('PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER')
     if permissions is None:
         orthanc.LogWarning('Rejecting anon due to missing permissions')
         return False
     allowed_to_trigger = []
-    for permitted in permissions.split('.'):
+    for permitted in permissions.split(','):
         if permitted.strip() not in allowed_to_trigger:
             allowed_to_trigger += [permitted.strip()]
     orthanc.LogWarning('Allowed users: %s' % ' '.join(allowed_to_trigger))
