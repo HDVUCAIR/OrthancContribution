@@ -76,6 +76,7 @@ services:
       # Dicom network
       ORTHANC__DICOM_AET: "${PHI_DICOM_AET}"
       ORTHANC__DICOM_ALWAYS_ALLOW_ECHO: "false"
+      # Note that if STORE is false here, you need to turn it on per node in the modalities list
       ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "false"
       ORTHANC__DICOM_CHECK_CALLED_AET: "true"
       ORTHANC__DICOM_CHECK_MODALITY_HOST: "false"

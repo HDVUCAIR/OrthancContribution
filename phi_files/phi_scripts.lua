@@ -2726,6 +2726,10 @@ function RecursiveReplaceUID(aParent, aLevelIn)
     local lElement
     local lLevelIn = (aLevelIn) or gMaxRecurseDepth
     local lLevelOut = lLevelIn - 1
+    if not aLevelIn then
+        gAddressConstructor = {}
+        gAddressList = {}
+    end
     if (lLevelIn<1) then return {}, lLevelOut end;
     local lParentType = type(aParent);
     lElement = {}
@@ -2735,6 +2739,7 @@ function RecursiveReplaceUID(aParent, aLevelIn)
     if aParent['Value'] then
         if type(aParent['Value']) == "table" then
             for k,lChild in pairs(aParent['Value']) do  
+                table.insert(gAddressConstructor, aParent['Name'] .. "[" .. tostring(k-1) .. "]")
                 lValue, iLevelOut = RecursiveReplaceUID(lChild, lLevelIn-1)
                 if (lLevelOut < 0) then break end
                 if type(lValue) == "table" then
@@ -2742,15 +2747,28 @@ function RecursiveReplaceUID(aParent, aLevelIn)
                 else
                     if string.len(lValue) > 0 then lElement[k] = lValue end
                 end
+                table.remove(gAddressConstructor)
             end
         else
             if string.find(aParent['Name'],'UID') then
+                table.insert(gAddressConstructor, aParent['Name'])
                 lUIDNew = aParent['Value']
                 while gUIDMap[lUIDNew] do
                     if lUIDNew == gUIDMap[lUIDNew] then break end
                     lUIDNew = gUIDMap[lUIDNew]
                 end
+                local lAddressEntry = ""
+                local lNAddressStub = #gAddressConstructor
+                for k, lAddressStub in pairs(gAddressConstructor) do
+                    if (k < lNAddressStub) then
+                        lAddressEntry = lAddressEntry .. lAddressStub .. "."
+                    else
+                        lAddressEntry = lAddressEntry .. lAddressStub
+                    end
+                end
+                gAddressList[lAddressEntry] = lUIDNew
                 aParent['Value'] = lUIDNew
+                table.remove(gAddressConstructor)
             end
             return aParent['Value'], iLevelOut
         end
@@ -2957,7 +2975,12 @@ function ShiftDateTimePatAgeOfInstances(aoInstancesMeta, aShiftEpoch, aReplaceRo
                     if type(loDicomTags[lTagKey]['Value']) == 'table' then
                         local iReplaceValue, lLevelOut
                         iReplaceValue, lLevelOut = RecursiveReplaceUID(loDicomTags[lTagKey])
-                        lReplace[lTagKey] = iReplaceValue
+                        if gAddressList then
+                            for lAddressKey, lAddressVal in pairs(gAddressList) do
+                                lReplace[lAddressKey] = lAddressVal
+                            end
+                        end
+                        --lReplace[lTagKey] = iReplaceValue
                     else
                         local lUIDNew = gUIDMap[loDicomTags[lTagKey]['Value']]
                         while gUIDMap[lUIDNew] do
@@ -3051,7 +3074,7 @@ function SendToRemoteFilter(aoInstanceID)
             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'exam protocol'))
         end
         if lFlagNonReport and loDicomTags['StudyDescription'] then
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StudyDescription']), 'no rpt'))
+            -- lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StudyDescription']), 'no rpt'))
             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['StudyDescription'], 'SecurView'))
         end
         if lFlagNonReport and loDicomTags['SecondaryCaptureDeviceManufacturer'] then
@@ -3092,7 +3115,6 @@ function SendToRemoteFilter(aoInstanceID)
             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Blackford'))
         end
     end
-
     -- Consider both original and primary
     if (os.getenv('LUA_FLAG_MUST_BE_ORIGINAL') == 'true') then 
        return lFlagOriginalPrimary and lFlagNonReport

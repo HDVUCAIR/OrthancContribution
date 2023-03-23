@@ -6,6 +6,7 @@ import datetime
 import os
 import smtplib
 import time
+import threading
 from email.message import EmailMessage
 from email.headerregistry import Address
 try:
@@ -1894,6 +1895,21 @@ def OnChange(change_type, level, resource_id):
                 orthanc.LogWarning('Sent onstable study report')
 
 # ============================================================================
+def OnChangeThreaded(change_type, level, resource_id):
+    """
+    PURPOSE: An attempt to use threading to avoid the locks I see when 
+                invoking Lua from OnChange.  Subsequent OnChange can break
+                previous ongoing Lua calls.
+    INPUT:   structures routed by way of the python plugin
+    OUTPUT:  Designated action
+    """
+# ----------------------------------------------------------------------------
+
+    # Invoke the actual "OnChange()" function in a separate thread
+    t = threading.Timer(0, function = OnChange, args = (change_type, level, resource_id))
+    t.start()
+
+# ============================================================================
 def PrepareDataForAnonymizeGUI(output, uri, **request):
     """Setup data for javascript anonymizer."""
 # ----------------------------------------------------------------------------
@@ -2264,7 +2280,7 @@ def UpdateLookupTable(output, uri, **request):
 # ============================================================================
 # Main
 orthanc.RegisterIncomingHttpRequestFilter(IncomingFilter)
-orthanc.RegisterOnChangeCallback(OnChange)
+orthanc.RegisterOnChangeCallback(OnChangeThreaded)
 orthanc.RegisterRestCallback('/confirm_or_create_lookup_table_sql', ConfirmOrCreateLookupTableSQL)
 orthanc.RegisterRestCallback('/construct_patient_name', ConstructPatientName)
 orthanc.RegisterRestCallback('/email_message', EmailSubjectMessage)

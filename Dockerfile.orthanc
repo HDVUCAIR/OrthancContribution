@@ -4,18 +4,27 @@ FROM osimis/orthanc:latest
 ARG PROCESS_UID
 ARG PROCESS_GID
 
+# We need to add extra repositories to get 
+#    lua-sql-postgres to match the Orthanc 
+#    embedded lua version.
+RUN echo "deb http://deb.debian.org/debian bullseye-backports main" >> /etc/apt/sources.list.d/syncwithorthanc.list
+
 # We need to add the lua postgres interface
-RUN apt-get update && \
-    apt-get install -y \
+RUN apt-get update \
+    && apt-get install -y \
        apt-utils \
-       lua-sql-postgres lua-socket lua-posix \
+       lua-sql-postgres* lua-socket lua-posix \
        html2text net-tools \
-       python3-bs4 python3-psycopg2 python3-pydicom && \
-    mkdir /scripts
+       python3-bs4 python3-psycopg2 python3-pydicom \
+    && apt-get install -y \
+       -t bullseye-backports \
+       lua-sql-postgres* lua-socket lua-posix \
+    && mkdir /scripts
 
 # Fix the entry file to force umask
 RUN sed -i.bak -e "s/^.*Orthanc .verb.*/umask 0007\n&/g" /docker-entrypoint.sh 
 
 RUN chown -R $PROCESS_UID:$PROCESS_GID /usr/share/orthanc /etc/orthanc /scripts
 
+RUN hostid > /etc/hostid && chmod ugo+r /etc/hostid
 
