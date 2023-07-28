@@ -2,7 +2,7 @@ version: "3.2"
 services:
 
   phi_orthanc:
-    image: dcorthanc:python.uid1004umask
+    image: dcorthanc:python.uid${ORTHANC_UID}gid${ORTHANC_GID}
 #    entrypoint:
 #       - tail
 #       - -f
@@ -73,9 +73,18 @@ services:
       VERBOSE_PLUGINS: "false"
       VERBOSE_STARTUP: "false"
       # --------------------------------
+      # Webdav
+      ORTHANC__WEB_DAV_ENABLED: "false"
+      ORTHANC__WEB_DAV_DELETE_ALLOWED: "false"
+      ORTHANC__WEB_DAV_UPLOAD_ALLOWED: "false"
+      # --------------------------------
       # Dicom network
       ORTHANC__DICOM_AET: "${PHI_DICOM_AET}"
       ORTHANC__DICOM_ALWAYS_ALLOW_ECHO: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_FIND: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_FIND_WORKLIST: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_GET: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_MOVE: "false"
       # Note that if STORE is false here, you need to turn it on per node in the modalities list
       ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "false"
       ORTHANC__DICOM_CHECK_CALLED_AET: "true"
@@ -90,17 +99,24 @@ services:
       #                    "Port" : #,
       #                    "AllowEcho" : true,
       #                    "AllowFind" : false,
-      #                    "AllowMove" : false,
+      #                    "AllowFindWorklist" : false,
       #                    "AllowGet" : false,
-      #                    "AllowStore" : true},
+      #                    "AllowMove" : false,
+      #                    "AllowStorageCommitment" : true,
+      #                    "AllowStore" : true,
+      #                    "AllowTranscoding" : true,
+      #                    "Timeout" : 480},
       #    "Nickname2" : { "AET" : "SOMEAET2",
       #                    "Host" : "#.#.#.#",
       #                    "Port" : #,
       #                    "AllowEcho" : true,
       #                    "AllowFind" : false,
-      #                    "AllowMove" : false,
+      #                    "AllowFindWorklist" : false,
       #                    "AllowGet" : false,
-      #                    "AllowStore" : true}
+      #                    "AllowMove" : false,
+      #                    "AllowStorageCommitment" : true,
+      #                    "AllowStore" : true,
+      #                    "AllowTranscoding" : true}
       #  }
       ORTHANC__DICOM_PORT: "${PHI_DICOM_PORT}"
       ORTHANC__DEFLATED_TRANSFER_SYNTAX_ACCEPTED : "true"
@@ -116,18 +132,20 @@ services:
       ORTHANC__SSL_ENABLED: "true"
       ORTHANC__SSL_CERTIFICATE: "/media/external/certificates/certificate.pem"
       ORTHANC__AUTHENTICATION_ENABLED: "true"
-      ORTHANC__REGISTERED_USERS: "${PHI_REGISTERED_USERS}"
+      # 20230704 JAR: Moved registered users to secrets file
+      #ORTHANC__REGISTERED_USERS: "${PHI_REGISTERED_USERS}"
       # --------------------------------
       # Plugins
       # GDCM: better dicom handling
       GDCM_PLUGIN_ENABLED: "true"
-      # PostGRE
-      ORTHANC__POSTGRESQL__DATABASE: "${COMMON_BASENAME}_phi_orthanc_db"
-      ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
-      ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"
-      ORTHANC__POSTGRESQL__HOST: "${COMMON_BASENAME}_phi_postgres"
-      ORTHANC__POSTGRESQL__PASSWORD: "${PHI_PASSWORD_FOR_PG_USER_ORTHANC}"
-      ORTHANC__POSTGRESQL__USERNAME: "${COMMON_BASENAME}_phi_orthanc"
+      # 20230704 JAR: Moved postgres settings to secrets file
+      ## PostGRE
+      #ORTHANC__POSTGRESQL__DATABASE: "${COMMON_BASENAME}_phi_orthanc_db"
+      #ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
+      #ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"
+      #ORTHANC__POSTGRESQL__HOST: "${COMMON_BASENAME}_phi_postgres"
+      #ORTHANC__POSTGRESQL__PASSWORD: "${PHI_PASSWORD_FOR_PG_USER_ORTHANC}"
+      #ORTHANC__POSTGRESQL__USERNAME: "${COMMON_BASENAME}_phi_orthanc"
       # Python
       ORTHANC__PYTHON_SCRIPT: "/etc/orthanc/rest.py"
       ORTHANC__PYTHON_VERBOSE: "false"
@@ -149,6 +167,11 @@ services:
       #DICOM_WEB_PLUGIN_ENABLED: "true"
       ## Stone Of Orthanc viewer
       #STONE_WEB_VIEWER_PLUGIN_ENABLED: "true"
+    secrets:
+      - source: phi.orthanc.secret.json
+        uid: "${ORTHANC_UID}"
+        gid: "${ORTHANC_GID}"
+        mode: 0400
     depends_on: [phi_orthanc_index]
     container_name: ${COMMON_BASENAME}_phi_orthanc
     ports: ["${HOST_IP_FOR_DICOM}:${PHI_DICOM_PORT}:${PHI_DICOM_PORT}"]
@@ -156,26 +179,22 @@ services:
       - type: bind
         source: ./phi_files/mod_rest_api.py
         target: /etc/orthanc/rest.py
-        volume:
-          read_only: true
+        read_only: true
       - type: bind
         source: ${PHI_HOST_DATA_DIR_ORTHANC}
         target: /media
       - type: bind
         source: ./phi_files/phi_scripts.lua
         target: /etc/orthanc/phi_scripts.lua
-        volume:
-          read_only: true
+        read_only: true
       - type: bind
         source: ./shared_files/make_certs_orthanc.sh
         target: /scripts/make_certs_orthanc.sh
-        volume:
-          read_only: true
+        read_only: true
       - type: bind
         source: /etc/localtime
         target: /etc/localtime
-        volume:
-          read_only: true
+        read_only: true
     networks:
       - nw_phi
 
@@ -190,7 +209,7 @@ services:
       PG_ORTHANC_PASSWORD: "${PHI_PASSWORD_FOR_PG_USER_ORTHANC}"
     depends_on: [anon_orthanc]
     container_name: ${COMMON_BASENAME}_phi_postgres
-    volumes: 
+    volumes:
       - type: bind
         source: ./phi_files/postgresql-create-orthanc-user.sh
         target: /docker-entrypoint-initdb.d/postgresql-create-orthanc-user.sh
@@ -203,8 +222,7 @@ services:
       - type: bind
         source: ./phi_files/postgres.cron
         target: /var/spool/cron/crontabs/postgres
-        volume:
-          read_only: true
+        read_only: true
     networks:
       - nw_phi
 
@@ -260,6 +278,11 @@ services:
       # Dicom network
       ORTHANC__DICOM_AET: "${ANON_DICOM_AET}"
       ORTHANC__DICOM_ALWAYS_ALLOW_ECHO: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_FIND: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_FIND_WORKLIST: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_GET: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_MOVE: "false"
+      # Note that if STORE is false here, you need to turn it on per node in the modalities list
       ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "false"
       ORTHANC__DICOM_CHECK_CALLED_AET: "true"
       ORTHANC__DICOM_CHECK_MODALITY_HOST: "false"
@@ -273,17 +296,24 @@ services:
       #                    "Port" : #,
       #                    "AllowEcho" : true,
       #                    "AllowFind" : false,
-      #                    "AllowMove" : false,
+      #                    "AllowFindWorklist" : false,
       #                    "AllowGet" : false,
-      #                    "AllowStore" : true},
+      #                    "AllowMove" : false,
+      #                    "AllowStorageCommitment" : true,
+      #                    "AllowStore" : true,
+      #                    "AllowTranscoding" : true,
+      #                    "Timeout" : 480},
       #    "Nickname2" : { "AET" : "SOMEAET2",
       #                    "Host" : "#.#.#.#",
       #                    "Port" : #,
       #                    "AllowEcho" : true,
       #                    "AllowFind" : false,
-      #                    "AllowMove" : false,
+      #                    "AllowFindWorklist" : false,
       #                    "AllowGet" : false,
-      #                    "AllowStore" : true}
+      #                    "AllowMove" : false,
+      #                    "AllowStorageCommitment" : true,
+      #                    "AllowStore" : true,
+      #                    "AllowTranscoding" : true}
       #  }
       ORTHANC__DICOM_PORT: "${ANON_DICOM_PORT}"
       ORTHANC__DEFLATED_TRANSFER_SYNTAX_ACCEPTED : "true"
@@ -434,6 +464,11 @@ services:
       # --------------------------------
       # Dicom network
       ORTHANC__DICOM_ALWAYS_ALLOW_ECHO: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_FIND: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_FIND_WORKLIST: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_GET: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_MOVE: "false"
+      # Note that if STORE is false here, you need to turn it on per node in the modalities list
       ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "false"
       ORTHANC__DICOM_AET: "${DISK_DICOM_AET}"
       ORTHANC__DICOM_CHECK_CALLED_AET: "true"
@@ -448,17 +483,24 @@ services:
       #                    "Port" : #,
       #                    "AllowEcho" : true,
       #                    "AllowFind" : false,
-      #                    "AllowMove" : false,
+      #                    "AllowFindWorklist" : false,
       #                    "AllowGet" : false,
-      #                    "AllowStore" : true},
+      #                    "AllowMove" : false,
+      #                    "AllowStorageCommitment" : true,
+      #                    "AllowStore" : true,
+      #                    "AllowTranscoding" : true,
+      #                    "Timeout" : 480},
       #    "Nickname2" : { "AET" : "SOMEAET2",
       #                    "Host" : "#.#.#.#",
       #                    "Port" : #,
       #                    "AllowEcho" : true,
       #                    "AllowFind" : false,
-      #                    "AllowMove" : false,
+      #                    "AllowFindWorklist" : false,
       #                    "AllowGet" : false,
-      #                    "AllowStore" : true}
+      #                    "AllowMove" : false,
+      #                    "AllowStorageCommitment" : true,
+      #                    "AllowStore" : true,
+      #                    "AllowTranscoding" : true}
       #  }
       ORTHANC__DICOM_PORT: "${DISK_DICOM_PORT}"
       ORTHANC__DEFLATED_TRANSFER_SYNTAX_ACCEPTED : "true"
@@ -554,6 +596,10 @@ services:
         target: /var/lib/postgresql/data/pgdata
     networks:
       - nw_disk
+
+secrets:
+   phi.orthanc.secret.json:
+      file: ./phi_files/orthanc.secret.json
 
 networks:
 

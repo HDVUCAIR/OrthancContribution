@@ -13,6 +13,162 @@ address_re = re.compile('([^<]+)<([^@]+)@([^>]+)>.*')
 website = os.getenv('ORTHANC__NAME', default='UnknownOrthanc')
 fqdn = os.getenv('HOST_FQDN', default='Unknown.Host')
 
+# ============================================================================
+# Modify the GUI
+# ----------------------------------------------------------------------------
+# Attempt to add logout button:  Work in progress.
+# ----------------------------------------------------------------------------
+#logout_button_js = "$('#lookup').live('pagebeforecreate', function() {" + \
+#                       " var b = $('<a>')" + \
+#                         " .attr('data-role', 'button')" + \
+#                         " .attr('href', '#')" + \
+#                         " .attr('data-icon', 'action')" + \
+#                         " .attr('data-theme', 'e')" + \
+#                         " .text('Logout');" + \
+#                       " b.insertAfter($('#content').parent());" + \
+#                       " b.click(function() {" + \
+#                         " var uuid='none'; " + \
+#                         " if ($.mobile.pageData) {" + \
+#                         "   uuid = $.mobile.pageData.uuid" + \
+#                         " };" + \
+#                         " window.open('https://go.utah.edu/cas/logout', '_self');" + \
+#                         "}" + \
+#                       ");" + \
+#                     "});"
+#orthanc.ExtendOrthancExplorer(logout_button_js)
+
+# ----------------------------------------------------------------------------
+# Buttons on patient page
+# ----------------------------------------------------------------------------
+# Same as API patients/uid
+button_js_patient_meta = "$('#patient').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-icon', 'action')" + \
+                         " .attr('data-theme', 'e')" + \
+                         " .text('Patient Metadata');" + \
+                       " b.insertBefore($('#patient-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/patients/' + uuid);" % website + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# Same as API patients/uid/statistics
+button_js_patient_stats = "$('#patient').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-icon', 'action')" + \
+                         " .attr('data-theme', 'e')" + \
+                         " .text('Patient Stats');" + \
+                       " b.insertBefore($('#patient-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/patients/' + uuid + '/statistics');" % website + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# ----------------------------------------------------------------------------
+# Buttons on study page
+# ----------------------------------------------------------------------------
+# Same as API studies/uid
+button_js_study_meta = "$('#study').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-icon', 'action')" + \
+                         " .attr('data-theme', 'e')" + \
+                         " .text('Study Metadata');" + \
+                       " b.insertBefore($('#study-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/studies/' + uuid);" % website + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# Same as API studies/uid/statistics
+button_js_study_stats = "$('#study').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-icon', 'action')" + \
+                         " .attr('data-theme', 'e')" + \
+                         " .text('Study Stats');" + \
+                       " b.insertBefore($('#study-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/studies/' + uuid + '/statistics');" % website + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# ----------------------------------------------------------------------------
+# Buttons on series page
+# ----------------------------------------------------------------------------
+# Same as API series/uid
+button_js_series_meta = "$('#series').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-icon', 'action')" + \
+                         " .attr('data-theme', 'e')" + \
+                         " .text('Series Metadata');" + \
+                       " b.insertBefore($('#series-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/series/' + uuid);" % website + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# Same as API series/uid/statistics
+button_js_series_stats = "$('#series').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-icon', 'action')" + \
+                         " .attr('data-theme', 'e')" + \
+                         " .text('Series Stats');" + \
+                       " b.insertBefore($('#series-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/series/' + uuid + '/statistics');" % website + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# ----------------------------------------------------------------------------
+# Inserting the above button definitions into the explorer
+# ----------------------------------------------------------------------------
+orthanc.ExtendOrthancExplorer(' '.join([button_js_patient_meta, button_js_patient_stats, \
+                                        button_js_study_meta, button_js_study_stats, \
+                                        button_js_series_meta, button_js_series_stats]))
+
+
+
 # =======================================================
 def email_message(subject, message_body, subtype='plain', alternates=None, cc=None):
     """
@@ -70,7 +226,10 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
     msg['To'] = addresses
 
     smtp_server = os.environ['PYTHON_MAIL_SERVER']
-    s = smtplib.SMTP(smtp_server)
+    try:
+        s = smtplib.SMTP(smtp_server)
+    except:
+        return {'status':3, 'error_text':'email_message: Is the smtp down?'}
     s.send_message(msg)
     s.quit()
 
