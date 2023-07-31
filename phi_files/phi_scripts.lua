@@ -15,69 +15,69 @@ end
 --    return t
 -- end
 -- 
--- ======================================================
-function OpenSQL()
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    local lTime0 = os.time()
-    local lOrthancConfig = GetOrthancConfiguration()
-    local lUser, lPass, lHost, lPort
-    if lOrthancConfig['PostgreSQL'] then
-        lUser = lOrthancConfig['PostgreSQL']['Username']
-        lPass = lOrthancConfig['PostgreSQL']['Password']
-        lHost = lOrthancConfig['PostgreSQL']['Host']
-        lPort = math.floor(lOrthancConfig['PostgreSQL']['Port']+0.5)
-    else
-        lUser = os.getenv('ORTHANC__POSTGRESQL__USERNAME')
-        lPass = os.getenv('ORTHANC__POSTGRESQL__PASSWORD')
-        lHost = os.getenv('ORTHANC__POSTGRESQL__HOST')        
-        lPort = 5432
-    end
-    local lSQLStatus
-    if not gSQLOpen then
-        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Loading postgres engine') end
-        gSQLEngine = require "luasql.postgres"
-        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Calling postgres engine') end
-        lSQLStatus, gSQLEnviron = pcall(gSQLEngine.postgres)
-        if not lSQLStatus then error("Problem starting SQL engine") end
-        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Connecting to database') end
-        lSQLStatus, gSQLConn = pcall(gSQLEnviron.connect,gSQLEnviron,
-                                 'philookup', lUser, lPass, lHost,lPort)
-        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Connection status', lSQLStatus) end
-        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Database', gSQLConn) end
-        if not lSQLStatus then error("Problem connecting to remote postgres") end
-        gSQLOpen = true
-    end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-
-end
-
--- ======================================================
-function CloseSQL()
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    local lTime0 = os.time()
-    if gSQLOpen then
-        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Setting autocommit to true') end
-        gSQLConn:setautocommit(true)
-        if not pcall(gSQLConn.close,gSQLConn) then 
-            error("Problem closing sql connection") 
-        end
-        if not pcall(gSQLEnviron.close,gSQLEnviron) then
-            error("Problem closing sql environment")
-        end
-        gSQLConn = nil
-        gSQLEnviron = nil
-        gSQLOpen = false
-    end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-
-end 
-
+-- -- ======================================================
+-- function OpenSQL()
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     local lTime0 = os.time()
+--     local lOrthancConfig = GetOrthancConfiguration()
+--     local lUser, lPass, lHost, lPort
+--     if lOrthancConfig['PostgreSQL'] then
+--         lUser = lOrthancConfig['PostgreSQL']['Username']
+--         lPass = lOrthancConfig['PostgreSQL']['Password']
+--         lHost = lOrthancConfig['PostgreSQL']['Host']
+--         lPort = math.floor(lOrthancConfig['PostgreSQL']['Port']+0.5)
+--     else
+--         lUser = os.getenv('ORTHANC__POSTGRESQL__USERNAME')
+--         lPass = os.getenv('ORTHANC__POSTGRESQL__PASSWORD')
+--         lHost = os.getenv('ORTHANC__POSTGRESQL__HOST')        
+--         lPort = 5432
+--     end
+--     local lSQLStatus
+--     if not gSQLOpen then
+--         if gVerbose then print(string.rep(' ', gIndent+3) .. 'Loading postgres engine') end
+--         gSQLEngine = require "luasql.postgres"
+--         if gVerbose then print(string.rep(' ', gIndent+3) .. 'Calling postgres engine') end
+--         lSQLStatus, gSQLEnviron = pcall(gSQLEngine.postgres)
+--         if not lSQLStatus then error("Problem starting SQL engine") end
+--         if gVerbose then print(string.rep(' ', gIndent+3) .. 'Connecting to database') end
+--         lSQLStatus, gSQLConn = pcall(gSQLEnviron.connect,gSQLEnviron,
+--                                  'philookup', lUser, lPass, lHost,lPort)
+--         if gVerbose then print(string.rep(' ', gIndent+3) .. 'Connection status', lSQLStatus) end
+--         if gVerbose then print(string.rep(' ', gIndent+3) .. 'Database', gSQLConn) end
+--         if not lSQLStatus then error("Problem connecting to remote postgres") end
+--         gSQLOpen = true
+--     end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+-- 
+-- end
+-- 
+-- -- ======================================================
+-- function CloseSQL()
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     local lTime0 = os.time()
+--     if gSQLOpen then
+--         if gVerbose then print(string.rep(' ', gIndent+3) .. 'Setting autocommit to true') end
+--         gSQLConn:setautocommit(true)
+--         if not pcall(gSQLConn.close,gSQLConn) then 
+--             error("Problem closing sql connection") 
+--         end
+--         if not pcall(gSQLEnviron.close,gSQLEnviron) then
+--             error("Problem closing sql environment")
+--         end
+--         gSQLConn = nil
+--         gSQLEnviron = nil
+--         gSQLOpen = false
+--     end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+-- 
+-- end 
+-- 
 -- -- ======================================================
 -- function CreateLookupTablesSQL()
 -- 
@@ -2382,8 +2382,8 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
     if lSQLInternalNumberResult['internal_number'] then
         lSQLInternalNumber = lSQLInternalNumberResult['internal_number']
     else
-        gSQLConn:rollback()
-        CloseSQL()
+--         gSQLConn:rollback()
+--         CloseSQL()
         error(lSQLInternalNumberResult['status']['error_text'])
     end
     -- local ldPatientNameAnon = ConstructPatientName(lSQLInternalNumber)
@@ -2479,8 +2479,8 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
                                                   DumpJson(lModifyPostData,true), false)
         if not lSuccess then
             PrintRecursive(lModifyPostData)
-            gSQLConn:rollback()
-            CloseSQL()
+--             gSQLConn:rollback()
+--             CloseSQL()
             error('Could not complete modify statement')
         end
         local loStudyModMeta = ParseJson(loStudyModMetaJson)
@@ -2491,8 +2491,8 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
                                                     DumpJson(lModifyPostData,true), false)
         if not lSuccess then 
             PrintRecursive(lModifyPostData)
-            gSQLConn:rollback()
-            CloseSQL()
+--             gSQLConn:rollback()
+--             CloseSQL()
             error('Could no complete modify statement')
         end
         local loSeriesModMeta = ParseJson(loSeriesModMetaJson)
@@ -2519,8 +2519,8 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
                                                     DumpJson(lAnonPostData,true), false)
         if not lSuccess then
             PrintRecursive(lAnonPostData)
-            gSQLConn:rollback()
-            CloseSQL()
+--             gSQLConn:rollback()
+--             CloseSQL()
             error('Problem calling anonymize')
         end
        
@@ -2533,8 +2533,8 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
                                                      DumpJson(lAnonPostData,true), false)
         if not lSuccess then 
             PrintRecursive(lAnonPostData)
-            gSQLConn:rollback()
-            CloseSQL()
+--             gSQLConn:rollback()
+--             CloseSQL()
             error('Problem calling anonymize')
         end
         local loSeriesAnonMeta = ParseJson(loSeriesAnonMetaJson)
@@ -2883,75 +2883,75 @@ end
 -- 
 -- end
 -- 
--- ======================================================
-function RecursiveReplaceUID(aParent, aLevelIn)
-
-    gMaxRecurseDepth = 20
-    local lElement
-    local lLevelIn = (aLevelIn) or gMaxRecurseDepth
-    local lLevelOut = lLevelIn - 1
-    if not aLevelIn then
-        gAddressConstructor = {}
-        gAddressList = {}
-    end
-    if (lLevelIn<1) then return {}, lLevelOut end;
-    local lParentType = type(aParent);
-    lElement = {}
-    if (lParentType ~= "table") then return lElement, lLevelOut end
-    local lUIDNew
-    local lValue
-    if aParent['Value'] then
-        if type(aParent['Value']) == "table" then
-            for k,lChild in pairs(aParent['Value']) do  
-                table.insert(gAddressConstructor, aParent['Name'] .. "[" .. tostring(k-1) .. "]")
-                lValue, iLevelOut = RecursiveReplaceUID(lChild, lLevelIn-1)
-                if (lLevelOut < 0) then break end
-                if type(lValue) == "table" then
-                    if next(lValue) then lElement[k] = lValue end
-                else
-                    if string.len(lValue) > 0 then lElement[k] = lValue end
-                end
-                table.remove(gAddressConstructor)
-            end
-        else
-            if string.find(aParent['Name'],'UID') then
-                table.insert(gAddressConstructor, aParent['Name'])
-                lUIDNew = aParent['Value']
-                while gUIDMap[lUIDNew] do
-                    if lUIDNew == gUIDMap[lUIDNew] then break end
-                    lUIDNew = gUIDMap[lUIDNew]
-                end
-                local lAddressEntry = ""
-                local lNAddressStub = #gAddressConstructor
-                for k, lAddressStub in pairs(gAddressConstructor) do
-                    if (k < lNAddressStub) then
-                        lAddressEntry = lAddressEntry .. lAddressStub .. "."
-                    else
-                        lAddressEntry = lAddressEntry .. lAddressStub
-                    end
-                end
-                gAddressList[lAddressEntry] = lUIDNew
-                aParent['Value'] = lUIDNew
-                table.remove(gAddressConstructor)
-            end
-            return aParent['Value'], iLevelOut
-        end
-    else
-        for k,lChild in pairs(aParent) do  
-            lValue, iLevelOut = RecursiveReplaceUID(lChild, lLevelIn-1)
-            if (lLevelOut < 0) then break end
-            if type(lValue) == "table" then
-                if next(lValue) then lElement[k] = lValue end
-            else
-                if string.len(lValue) > 0 then lElement[k] = lValue end
-            end
-        end
-    end
-    return lElement, iLevelOut
-
-end
-
 -- -- ======================================================
+-- function RecursiveReplaceUID(aParent, aLevelIn)
+-- 
+--     gMaxRecurseDepth = 20
+--     local lElement
+--     local lLevelIn = (aLevelIn) or gMaxRecurseDepth
+--     local lLevelOut = lLevelIn - 1
+--     if not aLevelIn then
+--         gAddressConstructor = {}
+--         gAddressList = {}
+--     end
+--     if (lLevelIn<1) then return {}, lLevelOut end;
+--     local lParentType = type(aParent);
+--     lElement = {}
+--     if (lParentType ~= "table") then return lElement, lLevelOut end
+--     local lUIDNew
+--     local lValue
+--     if aParent['Value'] then
+--         if type(aParent['Value']) == "table" then
+--             for k,lChild in pairs(aParent['Value']) do  
+--                 table.insert(gAddressConstructor, aParent['Name'] .. "[" .. tostring(k-1) .. "]")
+--                 lValue, iLevelOut = RecursiveReplaceUID(lChild, lLevelIn-1)
+--                 if (lLevelOut < 0) then break end
+--                 if type(lValue) == "table" then
+--                     if next(lValue) then lElement[k] = lValue end
+--                 else
+--                     if string.len(lValue) > 0 then lElement[k] = lValue end
+--                 end
+--                 table.remove(gAddressConstructor)
+--             end
+--         else
+--             if string.find(aParent['Name'],'UID') then
+--                 table.insert(gAddressConstructor, aParent['Name'])
+--                 lUIDNew = aParent['Value']
+--                 while gUIDMap[lUIDNew] do
+--                     if lUIDNew == gUIDMap[lUIDNew] then break end
+--                     lUIDNew = gUIDMap[lUIDNew]
+--                 end
+--                 local lAddressEntry = ""
+--                 local lNAddressStub = #gAddressConstructor
+--                 for k, lAddressStub in pairs(gAddressConstructor) do
+--                     if (k < lNAddressStub) then
+--                         lAddressEntry = lAddressEntry .. lAddressStub .. "."
+--                     else
+--                         lAddressEntry = lAddressEntry .. lAddressStub
+--                     end
+--                 end
+--                 gAddressList[lAddressEntry] = lUIDNew
+--                 aParent['Value'] = lUIDNew
+--                 table.remove(gAddressConstructor)
+--             end
+--             return aParent['Value'], iLevelOut
+--         end
+--     else
+--         for k,lChild in pairs(aParent) do  
+--             lValue, iLevelOut = RecursiveReplaceUID(lChild, lLevelIn-1)
+--             if (lLevelOut < 0) then break end
+--             if type(lValue) == "table" then
+--                 if next(lValue) then lElement[k] = lValue end
+--             else
+--                 if string.len(lValue) > 0 then lElement[k] = lValue end
+--             end
+--         end
+--     end
+--     return lElement, iLevelOut
+-- 
+-- end
+-- 
+-- -- -- ======================================================
 -- function ShiftDateTimeString(aShiftEpoch,aYYYYMMDDString,aHHMMSSString)
 --    
 --     local lYear = tonumber(string.sub(aYYYYMMDDString, 1, 4))
@@ -3045,190 +3045,197 @@ end
 -- 
 -- end
 --    
--- ======================================================
-function ShiftDateTimePatAgeOfInstances(aoInstancesMeta, aShiftEpoch, aReplaceRoot)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local lDicomFields = { 'Study', 'Series', 'Acquisition', 
-                          'Content', 'InstanceCreation',
-                          'PerformedProcedureStepStart' }
-    local lDateTimeFields = { 'AcquisitionDateTime' }
-    local lDateTimeFieldsRadio = { 'RadiopharmaceuticalStartDateTime', 'RadiopharmaceuticalStopDateTime' }
-    local loInstanceIDNew = {}
-    local lNumInstances = 0
-    for i, loInstanceMeta in pairs(aoInstancesMeta) do lNumInstances = lNumInstances+1 end
-    local lTenPercent = math.ceil(lNumInstances / 10)
-    local lPostData = {}
-    lPostData['orthanc_instance_ids'] = {}
-    for i, loInstanceMeta in pairs(aoInstancesMeta) do
-        table.insert(lPostData['orthanc_instance_ids'], loInstanceMeta['ID'])
-    end
-    local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
-    if not lResults then
-       error('Problem calling send_instances_to_remote_filter_lua')
-    end 
-    -- for i, loInstanceMeta in pairs(aoInstancesMeta) do
-    local i = 0
-    for loInstanceID, lFlagSendToRemote in pairs(lResults) do
-        i = i + 1
-        if gVerbose and (((i-1) % lTenPercent) == 0) then print(string.rep(' ', gIndent) .. 'Progress', i, 'of', lNumInstances) end
-        local lReplace = {}
-        for lReplaceRootKey, lReplaceRootVal in pairs(aReplaceRoot) do
-            lReplace[lReplaceRootKey] = lReplaceRootVal
-        end
-        -- local loInstanceID = (loInstanceMeta['ID'])
-        -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
-        local loDicomTags
-        if lFlagSendToRemote then
-            loDicomTags = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/simplified-tags', false))
-        else
-            loDicomTags = {}
-            if gVerbose then print(string.rep(' ', gIndent) .. 'Shift date will skip non orig/prim /instances/' .. loInstanceID .. '/simplified-tags') end
-        end
-        for j, lDicomField in pairs(lDicomFields) do
-            local lDateField = lDicomField .. 'Date'
-            local lTimeField = lDicomField .. 'Time'
-            if loDicomTags[lDateField] and string.len(trim(loDicomTags[lDateField])) > 0 then
-                if loDicomTags[lTimeField] and string.len(trim(loDicomTags[lTimeField])) > 0 then
-                    -- local lNewDateString, lNewTimeString
-                    -- lNewDateString, lNewTimeString = 
-                    --     ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateField], loDicomTags[lTimeField])
-                    local lPostData = {}
-                    lPostData['ShiftEpoch'] = aShiftEpoch
-                    lPostData['YYYYMMDD'] = loDicomTags[lDateField]
-                    lPostData['HHMMSS'] = loDicomTags[lTimeField]
-                    local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
-                    lReplace[lDateField] = lResults['NewDateString']
-                    lReplace[lTimeField] = lResults['NewTimeString']
-                else
-                    if gVerbose then 
-                        print ('No matching time for date: ' .. lDateField .. ', ' .. lTimeField)
-                        -- PrintRecursive(loDicomTags)
-                    end
-                end
-            end
-        end -- loop over lDicomFields
-        for j, lDateTimeField in pairs(lDateTimeFields) do 
-            if loDicomTags[lDateTimeField] and string.len(trim(loDicomTags[lDateTimeField])) > 0 then
-                -- lReplace[lDateTimeField] = ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateTimeField])
-                local lPostData = {}
-                lPostData['ShiftEpoch'] = aShiftEpoch
-                lPostData['YYYYMMDD'] = loDicomTags[lDateTimeField]
-                local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
-                lReplace[lDateTimeField] = lResults['NewDateString']
-                -- lReplace[lDateTimeField] = ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateTimeField])
-            end
-        end -- loop over lDateTimeFields
-        local lRadio = 'RadiopharmaceuticalInformationSequence'
-        if loDicomTags[lRadio] then
-            lReplace[lRadio] = loDicomTags[lRadio]
-            for lItem, lTags in pairs(loDicomTags[lRadio]) do
-                for j, lDateTimeField in pairs(lDateTimeFieldsRadio) do 
-                    if lTags[lDateTimeField] and string.len(trim(lTags[lDateTimeField])) > 0 then
-                        -- lReplace[lRadio][lItem][lDateTimeField] = ShiftDateTimeString(aShiftEpoch, lTags[lDateTimeField])
-                        local lPostData = {}
-                        lPostData['ShiftEpoch'] = aShiftEpoch
-                        lPostData['YYYYMMDD'] = lTags[lDateTimeField]
-                        local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
-                        lReplace[lRadio][lItem][lDateTimeField] = lResults['NewDateString']
-                    end
-                end -- loop over lDateTimeFields
-            end
-        end
-
-        if loDicomTags['PatientBirthDate'] then
-            -- lReplace['PatientBirthDate'] = ShiftDateTimeString(aShiftEpoch, loDicomTags['PatientBirthDate'])
-            local lPostData = {}
-            lPostData['ShiftEpoch'] = aShiftEpoch
-            lPostData['YYYYMMDD'] = loDicomTags['PatientBirthDate']
-            local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
-            lReplace['PatientBirthDate'] = lResults['NewDateString']
-        end
-        if loDicomTags['PatientAge'] then
-            local lAgeNumber = tonumber(string.sub(loDicomTags['PatientAge'], 1, 3))
-            local lAgeUnit = string.sub(loDicomTags['PatientAge'],4)
-            if lAgeUnit == 'Y' then
-                if lAgeNumber > 89 then
-                    lAgeNumber = 90
-                    lReplace['PatientAge'] = string.format("%03dY", lAgeNumber)
-                end
-            end
-        end
-        if loDicomTags['SOPInstanceUID'] then
-            local ldSOPInstanceUIDNew = gUIDMap[loDicomTags['SOPInstanceUID']]
-            while gUIDMap[ldSOPInstanceUIDNew] do
-                ldSOPInstanceUIDNew = gUIDMap[ldSOPInstanceUIDNew]
-            end
-            lReplace['SOPInstanceUID'] = ldSOPInstanceUIDNew
-        end
-        if lFlagSendToRemote then
-            loDicomTags = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
-            for lTagKey, lTagVal in pairs(gTopLevelTagToKeep) do 
-                if loDicomTags[lTagKey] then
-                    --if type(loDicomTags[lTagKey]) == 'table' then
-                    if type(loDicomTags[lTagKey]['Value']) == 'table' then
-                        local iReplaceValue, lLevelOut
-                        iReplaceValue, lLevelOut = RecursiveReplaceUID(loDicomTags[lTagKey])
-                        if gAddressList then
-                            for lAddressKey, lAddressVal in pairs(gAddressList) do
-                                lReplace[lAddressKey] = lAddressVal
-                            end
-                        end
-                        --lReplace[lTagKey] = iReplaceValue
-                    else
-                        local lUIDNew = gUIDMap[loDicomTags[lTagKey]['Value']]
-                        while gUIDMap[lUIDNew] do
-                            if lUIDNew == gUIDMap[lUIDNew] then break end
-                            lUIDNew = gUIDMap[lUIDNew]
-                        end
-                        lReplace[lTagKey] = lUIDNew
-                    end
-                end
-            end
-        end
-
-        if next(loDicomTags) then
-            local lPostData = {}
-            lPostData['Replace'] = lReplace
-            -- lPostData['DicomVersion'] = '2017c'
-            -- lPostData['DicomVersion'] = '2008'
-            lPostData['Force'] = true
-            lPostDataJson = DumpJson(lPostData,true)
-            local lSuccess, lModifiedDICOMBlob = pcall(RestApiPost,
-                                                       '/instances/' .. loInstanceID .. '/modify', 
-                                                       lPostDataJson, false)
-            if not lSuccess then
-                PrintRecursive(lPostDataJson)
-                gSQLConn:rollback()
-                CloseSQL()
-                error('Unable to adjust dates')
-            end
-            -- Upload the lModifiedDICOMBlob
-            local lSuccess, loModifiedInstanceIDJson = pcall(RestApiPost,
-                                                             '/instances/', lModifiedDICOMBlob, false)
-            if not lSuccess then
-                gSQLConn:rollback()
-                CloseSQL()
-                error('Problem uploading new image blob')
-            end
-            --local loModifiedInstanceID = ParseJson(RestApiPost('/instances/', lModifiedDICOMBlob, false))['ID']
-            local loModifiedInstanceID = ParseJson(loModifiedInstanceIDJson)['ID']
-            -- Store new ID
-            loInstanceIDNew[i] = loModifiedInstanceID
-        end
-    
-    end -- loop over aoInstancesMeta
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if (gIndent > 0) then gIndent = gIndent - 3 end
-    return loInstanceIDNew
-
-end
- 
+-- -- ======================================================
+-- function ShiftDateTimePatAgeOfInstances(aoInstancesMeta, aShiftEpoch, aReplaceRoot)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local lDicomFields = { 'Study', 'Series', 'Acquisition', 
+--                            'Content', 'InstanceCreation',
+--                            'PerformedProcedureStepStart' }
+--     local lDateTimeFields = { 'AcquisitionDateTime' }
+--     local lDateTimeFieldsRadio = { 'RadiopharmaceuticalStartDateTime', 'RadiopharmaceuticalStopDateTime' }
+--     local loInstanceIDNew = {}
+--     local lNumInstances = 0
+--     for i, loInstanceMeta in pairs(aoInstancesMeta) do lNumInstances = lNumInstances+1 end
+--     local lTenPercent = math.ceil(lNumInstances / 10)
+--     local lPostData = {}
+--     lPostData['orthanc_instance_ids'] = {}
+--     for i, loInstanceMeta in pairs(aoInstancesMeta) do
+--         table.insert(lPostData['orthanc_instance_ids'], loInstanceMeta['ID'])
+--     end
+--     local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
+--     if not lResults then
+--        error('Problem calling send_instances_to_remote_filter_lua')
+--     end 
+--     -- for i, loInstanceMeta in pairs(aoInstancesMeta) do
+--     local i = 0
+--     for loInstanceID, lFlagSendToRemote in pairs(lResults) do
+--         i = i + 1
+--         if gVerbose and (((i-1) % lTenPercent) == 0) then print(string.rep(' ', gIndent) .. 'Progress', i, 'of', lNumInstances) end
+--         local lReplace = {}
+--         for lReplaceRootKey, lReplaceRootVal in pairs(aReplaceRoot) do
+--             lReplace[lReplaceRootKey] = lReplaceRootVal
+--         end
+--         -- local loInstanceID = (loInstanceMeta['ID'])
+--         -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
+--         local loDicomTags
+--         if lFlagSendToRemote then
+--             loDicomTags = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/simplified-tags', false))
+--         else
+--             loDicomTags = {}
+--             if gVerbose then print(string.rep(' ', gIndent) .. 'Shift date will skip non orig/prim /instances/' .. loInstanceID .. '/simplified-tags') end
+--         end
+--         for j, lDicomField in pairs(lDicomFields) do
+--             local lDateField = lDicomField .. 'Date'
+--             local lTimeField = lDicomField .. 'Time'
+--             if loDicomTags[lDateField] and string.len(trim(loDicomTags[lDateField])) > 0 then
+--                 if loDicomTags[lTimeField] and string.len(trim(loDicomTags[lTimeField])) > 0 then
+--                     -- local lNewDateString, lNewTimeString
+--                     -- lNewDateString, lNewTimeString = 
+--                     --     ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateField], loDicomTags[lTimeField])
+--                     local lPostData = {}
+--                     lPostData['ShiftEpoch'] = aShiftEpoch
+--                     lPostData['YYYYMMDD'] = loDicomTags[lDateField]
+--                     lPostData['HHMMSS'] = loDicomTags[lTimeField]
+--                     local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+--                     lReplace[lDateField] = lResults['NewDateString']
+--                     lReplace[lTimeField] = lResults['NewTimeString']
+--                 else
+--                     if gVerbose then 
+--                         print ('No matching time for date: ' .. lDateField .. ', ' .. lTimeField)
+--                         -- PrintRecursive(loDicomTags)
+--                     end
+--                 end
+--             end
+--         end -- loop over lDicomFields
+--         for j, lDateTimeField in pairs(lDateTimeFields) do 
+--             if loDicomTags[lDateTimeField] and string.len(trim(loDicomTags[lDateTimeField])) > 0 then
+--                 -- lReplace[lDateTimeField] = ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateTimeField])
+--                 local lPostData = {}
+--                 lPostData['ShiftEpoch'] = aShiftEpoch
+--                 lPostData['YYYYMMDD'] = loDicomTags[lDateTimeField]
+--                 local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+--                 lReplace[lDateTimeField] = lResults['NewDateString']
+--                 -- lReplace[lDateTimeField] = ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateTimeField])
+--             end
+--         end -- loop over lDateTimeFields
+--         local lRadio = 'RadiopharmaceuticalInformationSequence'
+--         if loDicomTags[lRadio] then
+--             lReplace[lRadio] = loDicomTags[lRadio]
+--             for lItem, lTags in pairs(loDicomTags[lRadio]) do
+--                 for j, lDateTimeField in pairs(lDateTimeFieldsRadio) do 
+--                     if lTags[lDateTimeField] and string.len(trim(lTags[lDateTimeField])) > 0 then
+--                         -- lReplace[lRadio][lItem][lDateTimeField] = ShiftDateTimeString(aShiftEpoch, lTags[lDateTimeField])
+--                         local lPostData = {}
+--                         lPostData['ShiftEpoch'] = aShiftEpoch
+--                         lPostData['YYYYMMDD'] = lTags[lDateTimeField]
+--                         local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+--                         lReplace[lRadio][lItem][lDateTimeField] = lResults['NewDateString']
+--                     end
+--                 end -- loop over lDateTimeFields
+--             end
+--         end
+-- 
+--         if loDicomTags['PatientBirthDate'] then
+--             -- lReplace['PatientBirthDate'] = ShiftDateTimeString(aShiftEpoch, loDicomTags['PatientBirthDate'])
+--             local lPostData = {}
+--             lPostData['ShiftEpoch'] = aShiftEpoch
+--             lPostData['YYYYMMDD'] = loDicomTags['PatientBirthDate']
+--             local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+--             lReplace['PatientBirthDate'] = lResults['NewDateString']
+--         end
+--         if loDicomTags['PatientAge'] then
+--             local lAgeNumber = tonumber(string.sub(loDicomTags['PatientAge'], 1, 3))
+--             local lAgeUnit = string.sub(loDicomTags['PatientAge'],4)
+--             if lAgeUnit == 'Y' then
+--                 if lAgeNumber > 89 then
+--                     lAgeNumber = 90
+--                     lReplace['PatientAge'] = string.format("%03dY", lAgeNumber)
+--                 end
+--             end
+--         end
+--         if loDicomTags['SOPInstanceUID'] then
+--             local ldSOPInstanceUIDNew = gUIDMap[loDicomTags['SOPInstanceUID']]
+--             while gUIDMap[ldSOPInstanceUIDNew] do
+--                 ldSOPInstanceUIDNew = gUIDMap[ldSOPInstanceUIDNew]
+--             end
+--             lReplace['SOPInstanceUID'] = ldSOPInstanceUIDNew
+--         end
+--         if lFlagSendToRemote then
+--             loDicomTags = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
+--             local lPostData = {}
+--             lPostData['UIDMap'] = gUIDMap
+--             for lTagKey, lTagVal in pairs(gTopLevelTagToKeep) do 
+--                 if loDicomTags[lTagKey] then
+--                     --if type(loDicomTags[lTagKey]) == 'table' then
+--                     if type(loDicomTags[lTagKey]['Value']) == 'table' then
+--                         local iReplaceValue, lLevelOut
+--                         -- iReplaceValue, lLevelOut = RecursiveReplaceUID(loDicomTags[lTagKey])
+--                         lPostData['Parent'] = loDicomTags[lTagKey]
+--                         local lResults = ParseJson(RestApiPost('/recursive_replace_uid_lua', DumpJson(lPostData), false))
+--                         iReplaceValue = lResults['ReplaceValue']
+--                         lLevelOut = lResults['LevelOut']
+--                         gAddressList = lResults['AddressList']
+--                         if gAddressList then
+--                             for lAddressKey, lAddressVal in pairs(gAddressList) do
+--                                 lReplace[lAddressKey] = lAddressVal
+--                             end
+--                         end
+--                         --lReplace[lTagKey] = iReplaceValue
+--                     else
+--                         local lUIDNew = gUIDMap[loDicomTags[lTagKey]['Value']]
+--                         while gUIDMap[lUIDNew] do
+--                             if lUIDNew == gUIDMap[lUIDNew] then break end
+--                             lUIDNew = gUIDMap[lUIDNew]
+--                         end
+--                         lReplace[lTagKey] = lUIDNew
+--                     end
+--                 end
+--             end
+--         end
+-- 
+--         if next(loDicomTags) then
+--             local lPostData = {}
+--             lPostData['Replace'] = lReplace
+--             -- lPostData['DicomVersion'] = '2017c'
+--             -- lPostData['DicomVersion'] = '2008'
+--             lPostData['Force'] = true
+--             lPostDataJson = DumpJson(lPostData,true)
+--             local lSuccess, lModifiedDICOMBlob = pcall(RestApiPost,
+--                                                        '/instances/' .. loInstanceID .. '/modify', 
+--                                                        lPostDataJson, false)
+--             if not lSuccess then
+--                 PrintRecursive(lPostDataJson)
+-- --                 gSQLConn:rollback()
+-- --                 CloseSQL()
+--                 error('Unable to adjust dates')
+--             end
+--             -- Upload the lModifiedDICOMBlob
+--             local lSuccess, loModifiedInstanceIDJson = pcall(RestApiPost,
+--                                                              '/instances/', lModifiedDICOMBlob, false)
+--             if not lSuccess then
+-- --                 gSQLConn:rollback()
+-- --                 CloseSQL()
+--                 error('Problem uploading new image blob')
+--             end
+--             --local loModifiedInstanceID = ParseJson(RestApiPost('/instances/', lModifiedDICOMBlob, false))['ID']
+--             local loModifiedInstanceID = ParseJson(loModifiedInstanceIDJson)['ID']
+--             -- Store new ID
+--             loInstanceIDNew[i] = loModifiedInstanceID
+--         end
+--     
+--     end -- loop over aoInstancesMeta
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if (gIndent > 0) then gIndent = gIndent - 3 end
+--     return loInstanceIDNew
+-- 
+-- end
+--  
 -- -- ======================================================
 -- function SendToRemoteFilter(aoInstanceID)
 -- 
@@ -3438,65 +3445,65 @@ end
 -- 
 -- end
 -- 
--- ======================================================
-function CheckSplit2DFromCViewTomo(aoStudyID)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local loSeriesMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID .. '/series', false))
-
-    -- We need R/L CC, R/L MLO for 2D and C-View (others are extra)
-    local lSearchStrings = { 'r cc', 'l cc', 'r mlo', 'l mlo' }
-    local lCount2D = {0, 0, 0, 0}
-    local lCountCView = {0, 0, 0, 0}
-    for i, loSeriesData in pairs(loSeriesMeta) do
-        local lFlagCView = false
-        local lFlagNon2D = false
-        if loSeriesData['MainDicomTags']['SeriesDescription'] then
-            local lDescriptionLower = string.lower(loSeriesData['MainDicomTags']['SeriesDescription'])
-            lFlagCView = lFlagCView or string.find(lDescriptionLower, 'c-view')
-            lFlagNon2D = lFlagNon2D or lFlagCView
-            lFlagNon2D = lFlagNon2D or string.find(lDescriptionLower, 'tomo')
-            if lFlagCView or (not lFlagNon2D) then
-                for j = 1, 4 do 
-                    local lFoundStr = string.find(lDescriptionLower, lSearchStrings[j])
-                    if lFoundStr then
-                        if lFlagCView then
-                            lCountCView[j] = 1
-                        else
-                            lCount2D[j] = 1
-                        end
-                    end
-                end
-            end
-        end
-    end -- Initial loop over all series descriptions
-    local lSum2D = 0
-    local lSumCView = 0
-    for i = 1, 4 do 
-        lSum2D = lSum2D + lCount2D[i]
-        lSumCView = lSumCView + lCountCView[i]
-    end
-
-    if (lSum2D < 4) or (lSumCView < 4) then
-        print('Incomplete number of either 2D or C-View')
-        PrintRecursive(lCount2D)
-        PrintRecursive(lCountCView)
-        gIndent = gIndent - 3
-        print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0)
-        if gIndent > 0 then gIndent = gIndent - 3 end
-        return false
-    else
-        gIndent = gIndent - 3
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-        if gIndent > 0 then gIndent = gIndent - 3 end
-        return true
-    end
-
-end
-
+-- -- ======================================================
+-- function CheckSplit2DFromCViewTomo(aoStudyID)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local loSeriesMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID .. '/series', false))
+-- 
+--     -- We need R/L CC, R/L MLO for 2D and C-View (others are extra)
+--     local lSearchStrings = { 'r cc', 'l cc', 'r mlo', 'l mlo' }
+--     local lCount2D = {0, 0, 0, 0}
+--     local lCountCView = {0, 0, 0, 0}
+--     for i, loSeriesData in pairs(loSeriesMeta) do
+--         local lFlagCView = false
+--         local lFlagNon2D = false
+--         if loSeriesData['MainDicomTags']['SeriesDescription'] then
+--             local lDescriptionLower = string.lower(loSeriesData['MainDicomTags']['SeriesDescription'])
+--             lFlagCView = lFlagCView or string.find(lDescriptionLower, 'c-view')
+--             lFlagNon2D = lFlagNon2D or lFlagCView
+--             lFlagNon2D = lFlagNon2D or string.find(lDescriptionLower, 'tomo')
+--             if lFlagCView or (not lFlagNon2D) then
+--                 for j = 1, 4 do 
+--                     local lFoundStr = string.find(lDescriptionLower, lSearchStrings[j])
+--                     if lFoundStr then
+--                         if lFlagCView then
+--                             lCountCView[j] = 1
+--                         else
+--                             lCount2D[j] = 1
+--                         end
+--                     end
+--                 end
+--             end
+--         end
+--     end -- Initial loop over all series descriptions
+--     local lSum2D = 0
+--     local lSumCView = 0
+--     for i = 1, 4 do 
+--         lSum2D = lSum2D + lCount2D[i]
+--         lSumCView = lSumCView + lCountCView[i]
+--     end
+-- 
+--     if (lSum2D < 4) or (lSumCView < 4) then
+--         print('Incomplete number of either 2D or C-View')
+--         PrintRecursive(lCount2D)
+--         PrintRecursive(lCountCView)
+--         gIndent = gIndent - 3
+--         print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0)
+--         if gIndent > 0 then gIndent = gIndent - 3 end
+--         return false
+--     else
+--         gIndent = gIndent - 3
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--         if gIndent > 0 then gIndent = gIndent - 3 end
+--         return true
+--     end
+-- 
+-- end
+-- 
 -- ======================================================
 function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
 
@@ -3516,13 +3523,13 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
     local lFlagNewStudyInstanceUIDBySeries = {}
     for i, loSeriesID in pairs(aoStudyMeta['Series']) do
 
-        if gSQLOpen then
-            if gSQLConn then
-                CloseSQL()
-            end
-        end
-        gSQLOpen = false
-        OpenSQL()
+--         if gSQLOpen then
+--             if gSQLConn then
+--                 CloseSQL()
+--             end
+--         end
+--         gSQLOpen = false
+--         OpenSQL()
 
         -- Get series meta
         local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
@@ -3533,7 +3540,7 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
         local lFlagSplit2DFromCViewTomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO') == 'true'
         if lFlagSplit2DFromCViewTomo then 
             -- lPatientIDModifier = Set2DOrCViewTomo(loSeriesMeta)
-            lPatientIDModifier = RestApiGet('/series/' .. loSeriesID .. '/set_2d_or_cview_tomo', false)
+            lPatientIDModifier = RestApiGet('/series/' .. loSeriesID .. '/set_2d_or_cview_tomo_lua', false)
         end
         local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
         if lFlagEveryAccessionAPatient then lPatientIDModifier = '_' .. aoStudyMeta['MainDicomTags']['AccessionNumber'] end
@@ -3550,8 +3557,8 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
         local lResults
         lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
         if lResults['status'] and lResults['status'] > 0 then
-            gSQLConn:rollback()
-            CloseSQL()
+--             gSQLConn:rollback()
+--             CloseSQL()
             error(lResults['error_text'])
         end
         local lFlagNewPatientID = lResults['FlagPatientNewID']
@@ -3577,7 +3584,7 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
         lSQLsiuidBySeries[loSeriesID] = lSQLsiuid
         ldStudyInstanceUIDAnonBySeries[loSeriesID] = ldStudyInstanceUIDAnon
 
-        CloseSQL()
+--        CloseSQL()
         
     end -- First loop over series to get modifiers and series specific IDs
 
@@ -3621,13 +3628,13 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
     local lFlagImagesSent = false
     for lPatientIDModifier, loSeriesIDs in pairs(lPatientIDModifierUnique) do
 
-        if gSQLOpen then
-            if gSQLConn then
-                CloseSQL()
-            end
-        end
-        gSQLOpen = false
-        OpenSQL()
+--         if gSQLOpen then
+--             if gSQLConn then
+--                 CloseSQL()
+--             end
+--         end
+--         gSQLOpen = false
+--         OpenSQL()
 
         -- We're not going to bother anonymizing unless either a new patient or study
         local lFlagNonOriginalDetected = false
@@ -3661,8 +3668,8 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
                     local lResults
                     lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
                     if lResults['status'] and  lResults['status'] > 0 then
-                        gSQLConn:rollback()
-                        CloseSQL()
+--                         gSQLConn:rollback()
+--                         CloseSQL()
                         error(lResults['error_text'])
                     end
                     local lFlagNewPatientIDTemp = lResults['FlagPatientNewID']
@@ -3763,8 +3770,21 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
             -- ------------------------------------------------
             -- Second pass anonymization creates files modified by lShiftEpoch
             -- Deletes First pass anonymized files following lShiftEpoch modification
-            local loInstanceIDNew = ShiftDateTimePatAgeOfInstances(loInstancesAnonMeta, lShiftEpoch, lReplaceRoot)
-    
+            local lPostData = {}
+            lPostData['InstancesMeta'] = loInstancesAnonMeta
+            lPostData['ShiftEpoch'] = lShiftEpoch
+            lPostData['ReplaceRoot'] = lReplaceRoot
+            lPostData['UIDMap'] = gUIDMap
+            lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep
+            lPostData['AddressList'] = gAddressList
+            lPostData['KeptUID'] = gKeptUID
+            -- local loInstanceIDNew = ShiftDateTimePatAgeOfInstances(loInstancesAnonMeta, lShiftEpoch, lReplaceRoot)
+            local lResults = ParseJson(RestApiPost('/shift_date_time_patage_of_instances_lua', DumpJson(lPostData), false))
+            if lResults['status'] ~= 0 then
+                error('Problem calling python shift date time patage')
+            end
+            loInstanceIDNew = lResults['InstanceIDNew']
+
             -- Delete the original instance
             for i, loInstanceAnonMeta in pairs(loInstancesAnonMeta) do
                 loInstanceID = (loInstanceAnonMeta['ID'])
@@ -3807,7 +3827,7 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
             if gVerbose then print('Some non-original images were not sent') end
         end
 
-        CloseSQL()
+--        CloseSQL()
         
     end -- loop over sets of Orthanc series with the same modifier
 
@@ -3934,7 +3954,8 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
         if lFlagAnonymizeBySeries then
             local lFlagSplit2DFromCViewTomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO') == 'true'
             if lFlagSplit2DFromCViewTomo then
-                local lFlagComplete = CheckSplit2DFromCViewTomo(aoStudyID)
+                -- local lFlagComplete = CheckSplit2DFromCViewTomo(aoStudyID)
+                lFlagComplete = ParseJson(RestApiPost('/check_split_2d_from_cview_tomo_lua', DumpJson(aoStudyID), false))
                 if not lFlagComplete then return end
             end
             AnonymizeStudyBySeries(aoStudyID, loStudyMeta)
@@ -3944,13 +3965,13 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
             return
         end
 
-        if gSQLOpen then
-            if gSQLConn then
-                CloseSQL()
-            end
-        end
-        gSQLOpen = false
-        OpenSQL()
+--         if gSQLOpen then
+--             if gSQLConn then
+--                 CloseSQL()
+--             end
+--         end
+--         gSQLOpen = false
+--         OpenSQL()
 
         -- We modify the incoming patientIDs based on descriptions
         -- If "screen" appears in the description, the modifier is 's' else 'd' for diagnostic
@@ -3974,8 +3995,8 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
         local lResults
         lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
         if lResults['status'] and lResults['status'] > 0 then
-            gSQLConn:rollback()
-            CloseSQL()
+--             gSQLConn:rollback()
+--             CloseSQL()
             error(lResults['error_text'])
         end
         local lFlagNewPatientID = lResults['FlagPatientNewID']
@@ -4049,7 +4070,20 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
 
             -- Second pass anonymization creates files modified by lShiftEpoch
             -- Deletes First pass anonymized files following lShiftEpoch modification
-            local loInstanceIDNew = ShiftDateTimePatAgeOfInstances(loInstancesAnonMeta, lShiftEpoch, lReplaceRoot)
+            local lPostData = {}
+            lPostData['InstancesMeta'] = loInstancesAnonMeta
+            lPostData['ShiftEpoch'] = lShiftEpoch
+            lPostData['ReplaceRoot'] = lReplaceRoot
+            lPostData['UIDMap'] = gUIDMap
+            lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep
+            lPostData['AddressList'] = gAddressList
+            lPostData['KeptUID'] = gKeptUID
+            -- local loInstanceIDNew = ShiftDateTimePatAgeOfInstances(loInstancesAnonMeta, lShiftEpoch, lReplaceRoot)
+            local lResults = ParseJson(RestApiPost('/shift_date_time_patage_of_instances_lua', DumpJson(lPostData), false))
+            if lResults['status'] ~= 0 then
+                error('Problem calling python shift date time patage')
+            end
+            loInstanceIDNew = lResults['InstanceIDNew']
     
             -- Delete the original instance
             for i, loInstanceAnonMeta in pairs(loInstancesAnonMeta) do
@@ -4102,7 +4136,7 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
             if gVerbose then print('Some non-original images were not sent') end
         end
 
-        CloseSQL()
+        -- CloseSQL()
         
     end -- endif no nonanonymized data detected
 
@@ -4135,75 +4169,75 @@ end
 -- 
 -- end
 
--- ======================================================
--- Use of this seems limited to the Illumeo testing scenario.
--- Probably not necessary to convert this to python.
-function ReAnonymizeStudy(aoStudyID)
-
-    gIndent=0
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Reanon ' .. aoStudyID) end
-    local lTime0 = os.time()
-    local loStudyMetadata = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
-    local lSIUID = loStudyMetadata['MainDicomTags']['StudyInstanceUID']
-
-    local lFlagSQLAlreadyOpen = gSQLOpen
-    if not lFlagSQLAlreadyOpen then OpenSQL() end
-    -- ConfirmLookupTablesSQL()
-    local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql_lua', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
-    if lStatus['error_text'] then
-        error(lStatus['error_text'])
-    end
-
-    local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
-    -- Check for associated anonymized ID
-    lSQLQuery = string.format(
-                [[SELECT value 
-                  FROM studyinstanceuid_anon
-                  WHERE siuid in (SELECT siuid
-                                  FROM studyinstanceuid
-                                  WHERE value='%s')]],
-                gSQLConn:escape(lSIUID))
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-    if not lSQLStatus then 
-        CloseSQL()
-        error("Problem querying pid, parent_pid")
-    end
-    local lFlagReAnon = true
-    if lSQLCursor then
-        if lSQLCursor:numrows() > 0 then
-            lSQLRow = lSQLCursor:fetch({}, "a")
-            while lSQLRow do
-                local loStudyIDAnon = ParseJson(RestApiPost('/tools/lookup', lSQLRow.value, false))
-                if loStudyIDAnon then
-                    if #loStudyIDAnon > 0 then
-                        -- Check for existence of study on Orthanc
-                        if RestApiGet('/studies/' .. loStudyIDAnon[1]['ID'], false) then
-                            lFlagReAnon = false
-                        end
-                    end
-                end
-                lSQLRow = lSQLCursor:fetch({}, "a")
-            end
-        end
-    end
-    if not lFlagReAnon then
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Anon study exists on Orthanc.  Skipping.') end
-    else
-        gFlagForceAnon = true
-        SendEmailUpdate('IllumeoPhi Triggered Re-Anon', 'Manual re-anonymization triggered.  Look for update upon success.')
-        local tags = {} 
-        OnStableStudyMain(aoStudyID, tags, loStudyMetadata)           
-        gFlagForceAnon = false
-    end
-    if not lFlagSQLAlreadyOpen then CloseSQL() end
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    gIndent = nil
-
-end
-   
+-- -- ======================================================
+-- -- Use of this seems limited to the Illumeo testing scenario.
+-- -- Probably not necessary to convert this to python.
+-- function ReAnonymizeStudy(aoStudyID)
+-- 
+--     gIndent=0
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Reanon ' .. aoStudyID) end
+--     local lTime0 = os.time()
+--     local loStudyMetadata = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+--     local lSIUID = loStudyMetadata['MainDicomTags']['StudyInstanceUID']
+-- 
+--     local lFlagSQLAlreadyOpen = gSQLOpen
+--     if not lFlagSQLAlreadyOpen then OpenSQL() end
+--     -- ConfirmLookupTablesSQL()
+--     local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql_lua', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
+--     if lStatus['error_text'] then
+--         error(lStatus['error_text'])
+--     end
+-- 
+--     local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
+--     -- Check for associated anonymized ID
+--     lSQLQuery = string.format(
+--                 [[SELECT value 
+--                   FROM studyinstanceuid_anon
+--                   WHERE siuid in (SELECT siuid
+--                                   FROM studyinstanceuid
+--                                   WHERE value='%s')]],
+--                 gSQLConn:escape(lSIUID))
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--     if not lSQLStatus then 
+--         CloseSQL()
+--         error("Problem querying pid, parent_pid")
+--     end
+--     local lFlagReAnon = true
+--     if lSQLCursor then
+--         if lSQLCursor:numrows() > 0 then
+--             lSQLRow = lSQLCursor:fetch({}, "a")
+--             while lSQLRow do
+--                 local loStudyIDAnon = ParseJson(RestApiPost('/tools/lookup', lSQLRow.value, false))
+--                 if loStudyIDAnon then
+--                     if #loStudyIDAnon > 0 then
+--                         -- Check for existence of study on Orthanc
+--                         if RestApiGet('/studies/' .. loStudyIDAnon[1]['ID'], false) then
+--                             lFlagReAnon = false
+--                         end
+--                     end
+--                 end
+--                 lSQLRow = lSQLCursor:fetch({}, "a")
+--             end
+--         end
+--     end
+--     if not lFlagReAnon then
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Anon study exists on Orthanc.  Skipping.') end
+--     else
+--         gFlagForceAnon = true
+--         SendEmailUpdate('IllumeoPhi Triggered Re-Anon', 'Manual re-anonymization triggered.  Look for update upon success.')
+--         local tags = {} 
+--         OnStableStudyMain(aoStudyID, tags, loStudyMetadata)           
+--         gFlagForceAnon = false
+--     end
+--     if not lFlagSQLAlreadyOpen then CloseSQL() end
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     gIndent = nil
+-- 
+-- end
+--    
 -- -- ======================================================
 -- Replaced with /jsanon link in python mod_rest_api.py
 -- function AnonymizeStudy(aoStudyID)

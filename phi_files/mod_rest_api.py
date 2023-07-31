@@ -3,6 +3,7 @@ import inspect
 import numbers
 import json
 import re
+import copy
 import pprint
 import datetime
 import os
@@ -11,28 +12,37 @@ import time
 import threading
 from email.message import EmailMessage
 from email.headerregistry import Address
+
+global_var = {'flag' : {}, 're': {}}
 try:
     from bs4 import BeautifulSoup
-    flag_beautiful_soup = True
+    global_var['flag']['beautiful_soup'] = True
 except:
-    flag_beautiful_soup = False
+    global_var['flag']['beautiful_soup'] = False
 try:
     import psycopg2
-    flag_psycopg2 = True
+    global_var['flag']['psycopg2'] = True
 except:
-    flag_psycopg2 = False
+    global_var['flag']['psycopg2'] = False
 
 # Regular expressions
-address_re = re.compile('([^<]+)<([^@]+)@([^>]+)>.*')
+global_var['re']['address_re'] = re.compile('([^<]+)<([^@]+)@([^>]+)>.*')
 
-# Common variables
-orthanc_configuration = json.loads(orthanc.GetConfiguration())
-website = orthanc_configuration['Name']
-fqdn = os.getenv('HOST_FQDN', default='Unknown.Host')
-patient_name_base = None
+# Global variables
 python_verbose_logwarning = os.getenv('PYTHON_VERBOSE_LOGWARNING', default='false') == 'true' or \
                             os.getenv('ORTHANC__PYTHON_VERBOSE', default='false') == 'true'
-log_indent_level = 0
+global_var['orthanc_configuration'] = json.loads(orthanc.GetConfiguration())
+global_var['website'] = global_var['orthanc_configuration']['Name']
+global_var['fqdn'] = os.getenv('HOST_FQDN', default='Unknown.Host')
+
+global_var['address_constructor'] = []
+global_var['address_list'] = {}
+global_var['kept_uid'] = None
+global_var['log_indent_level'] = 0
+global_var['max_recurse_depth'] = 20
+global_var['patient_name_base'] = None
+global_var['top_level_tag_to_keep'] = None
+global_var['uid_map'] = None
 
 # ============================================================================
 # Modify the GUI
@@ -75,7 +85,7 @@ button_js_patient_meta = "$('#patient').live('pagebeforecreate', function() {" +
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/patients/' + uuid);" % website + \
+                         " window.open('/%s/patients/' + uuid);" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -94,7 +104,7 @@ button_js_patient_stats = "$('#patient').live('pagebeforecreate', function() {" 
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/patients/' + uuid + '/statistics');" % website + \
+                         " window.open('/%s/patients/' + uuid + '/statistics');" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -116,7 +126,7 @@ button_js_study_meta = "$('#study').live('pagebeforecreate', function() {" + \
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/studies/' + uuid);" % website + \
+                         " window.open('/%s/studies/' + uuid);" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -135,7 +145,7 @@ button_js_study_stats = "$('#study').live('pagebeforecreate', function() {" + \
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/studies/' + uuid + '/statistics');" % website + \
+                         " window.open('/%s/studies/' + uuid + '/statistics');" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -157,7 +167,7 @@ button_js_series_meta = "$('#series').live('pagebeforecreate', function() {" + \
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/series/' + uuid);" % website + \
+                         " window.open('/%s/series/' + uuid);" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -176,7 +186,7 @@ button_js_series_stats = "$('#series').live('pagebeforecreate', function() {" + 
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/series/' + uuid + '/statistics');" % website + \
+                         " window.open('/%s/series/' + uuid + '/statistics');" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -193,10 +203,11 @@ def anonymize_study(orthanc_study_id):
     """Replaces the lua AnonymizeStudy"""
 # ----------------------------------------------------------------------------
 
-    global log_indent_level
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Entering anonymize_study')
-        log_indent_level += 3
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
     response_system = orthanc.RestApiGet('/system')
     meta_system = json.loads(response_system)
     aet = meta_system['DicomAet']
@@ -207,25 +218,72 @@ def anonymize_study(orthanc_study_id):
     meta_study = json.loads(response_study)
     if ('ModifiedFrom' not in meta_study) and ('AnonymizedFrom' not in meta_study):
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Non-anonymized study stable.  Initiating auto anon')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Non-anonymized study stable.  Initiating auto anon')
         email_message('%s Triggered Anonymization' % aet, 'Manual anonymization triggered.  Look for an update upon completion.')
         response_post = orthanc.RestApiPost('/tools/execute-script', 'OnStableStudyMain(\'%s\', nil, nil)' % orthanc_study_id)
     else:
         email_message('%s Triggered Anonymization' % aet, 'Manual anonymization triggered on anonymized data.  Skipping further anonymization.')
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Already anonymized data.  Skipping reanon')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Already anonymized data.  Skipping reanon')
     response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=false')
     if python_verbose_logwarning:
-        log_indent_level -= 3
+        global_var['log_indent_level'] -= 3
+
+# ============================================================================
+def check_split_2d_from_cview_tomo(orthanc_study_id):
+    """ In the tomologic study, we separated 2D series from Tomo derived series"""
+# ----------------------------------------------------------------------------
+
+    if python_verbose_logwarning:
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+
+    meta_series_data = json.loads(orthanc.RestApiGet('/studies/%s/series' % orthanc_study_id))
+
+    # We need R/L CC, R/L MLO for 2D and C-View (others are extra)
+    search_strings = [ 'r cc', 'l cc', 'r mlo', 'l mlo' ]
+    counts = {'2d' : {}, 'cview': {}}
+    for search_string in search_strings:
+        for count in ['2d', 'cview']:
+            counts[count][search_string] = 0
+
+    for meta_series in meta_series_data:
+        flag = {'cview' : false, 'non2d' : false }
+        if 'SeriesDescription' in meta_series['MainDicomTags']:
+            series_description = meta_series['MainDicomTags']['SeriesDescription'].lower()
+            flag['cview'] = flag['cview'] or series_description.find('c-view') >= 0
+            flag['non2d'] = flag['non2d'] or flag['cview']
+            flag['non2d'] = flag['non2d'] or series_description.find('tomo') >= 0
+            if flag['cview'] or (not flag['non2d']):
+                for search_string in search_strings:
+                    if series_description.find(search_string) >= 0:
+                        if flag['cview']:
+                            counts['cview'][search_string] += 1
+                        else:
+                            counts['2d'][search_string] += 1
+
+    local_sum = {'2d' : 0, 'cview': 0}
+    for type_str, count_dict in counts.items():
+        for search_string, search_count in count_dict.items():
+            local_sum[type_str] += search_count
+
+    if (local_sum['2d'] < 4) or (local_sum['cview'] < 4):
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Incomplete number of either 2D or C-View')
+            orthanc.LogWarning(json.dumps(counts, indent=3), 'application/json')
+        return False
+    else:
+        return True
 
 # ============================================================================
 def check_xref_modality():
     """Check for environmental variable defining xref modality"""
 # ----------------------------------------------------------------------------
 
-    global log_indent_level
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Entering check_xref_modality')
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
     flag_xref_modality=False
     xref_modality=None
     if 'LUA_XREF_MODALITY' in os.environ:
@@ -242,10 +300,11 @@ def confirm_or_create_lookup_table_sql(pg_connection=None, pg_cursor=None):
     """Confirm existence of our lookup table in the database and create if necessary"""
 # ----------------------------------------------------------------------------
 
-    global log_indent_level
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Entering confirm_or_create_lookup_table_sql')
-        log_indent_level += 3
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     # Connect to the database
     flag_local_db = False
@@ -258,12 +317,12 @@ def confirm_or_create_lookup_table_sql(pg_connection=None, pg_cursor=None):
             if pg_connection is not None:
                 pg_connection.close()
             if python_verbose_logwarning:
-                log_indent_level -= 3
+                global_var['log_indent_level'] -= 3
             return status
     else:
         if pg_connection is None or pg_cursor is None:
             if python_verbose_logwarning:
-                log_indent_level -= 3
+                global_var['log_indent_level'] -= 3
             return {'status':1, 'error_text': 'confirm_or_create_lookup_table: Must provide both con and cur'}
 
     # Check for existence of key table
@@ -278,7 +337,7 @@ def confirm_or_create_lookup_table_sql(pg_connection=None, pg_cursor=None):
             pg_cursor.close()
             pg_connection.close()
         if python_verbose_logwarning:
-            log_indent_level -= 3
+            global_var['log_indent_level'] -= 3
         return {'status':1, 'error_text':'confirm_or_create_lookup_table: Problem querying for patientid table'}
 
     if pg_cursor.rowcount != 1:
@@ -290,7 +349,7 @@ def confirm_or_create_lookup_table_sql(pg_connection=None, pg_cursor=None):
                 pg_cursor.close()
                 pg_connection.close()
             if python_verbose_logwarning:
-                log_indent_level -= 3
+                global_var['log_indent_level'] -= 3
             return status
 
     pg_connection.commit()
@@ -298,8 +357,8 @@ def confirm_or_create_lookup_table_sql(pg_connection=None, pg_cursor=None):
         pg_cursor.close()
         pg_connection.close()
     if python_verbose_logwarning:
-        log_indent_level -= 3
-        orthanc.LogWarning(' ' * log_indent_level + 'Leaving confirm_or_create_lookup_table_sql')
+        global_var['log_indent_level'] -= 3
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Leaving confirm_or_create_lookup_table_sql')
     return {'status': 0}
         
 # ============================================================================
@@ -307,16 +366,17 @@ def connect_to_database():
     """Make connection to our postgres database"""
 # ----------------------------------------------------------------------------
 
-    global log_indent_level
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Entering connect_to_database')
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
 
     # Get the login parameters
-    if 'PostgreSQL' in orthanc_configuration:
-        pg_username = orthanc_configuration['PostgreSQL']['Username']
-        pg_password = orthanc_configuration['PostgreSQL']['Password']
-        pg_host = orthanc_configuration['PostgreSQL']['Host']
-        pg_port = orthanc_configuration['PostgreSQL']['Port']
+    if 'PostgreSQL' in global_var['orthanc_configuration']:
+        pg_username = global_var['orthanc_configuration']['PostgreSQL']['Username']
+        pg_password = global_var['orthanc_configuration']['PostgreSQL']['Password']
+        pg_host = global_var['orthanc_configuration']['PostgreSQL']['Host']
+        pg_port = global_var['orthanc_configuration']['PostgreSQL']['Port']
     else:
         if 'ORTHANC__POSTGRESQL__USERNAME' not in os.environ or \
             'ORTHANC__POSTGRESQL__PASSWORD' not in os.environ or \
@@ -372,9 +432,10 @@ def create_lookup_table_sql(pg_connection=None, pg_cursor=None):
     """Create the lookup tables"""
 # ----------------------------------------------------------------------------
 
-    global log_indent_level
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Entering creat_lookup_table_sql')
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
 
     # Connect to the database
     flag_local_db = False
@@ -458,9 +519,10 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
     """
 # -------------------------------------------------------
 
-    global log_indent_level
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Entering email_message')
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
  
     if alternates is None:
         if 'PYTHON_MAIL_TO' not in os.environ or \
@@ -481,13 +543,13 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
     addresses = []
     for address_text in recipients:
         address_trim = address_text.strip()
-        address_res = address_re.match(address_trim)
+        address_res = global_var['re']['address_re'].match(address_trim)
         if address_res is not None:
             addresses += [Address(address_res.group(1),address_res.group(2),address_res.group(3))]
     if cc is not None:
         for address_text in cc.split(','):
             address_trim = address_text.strip()
-            address_res = address_re.match(address_trim)
+            address_res = global_var['re']['address_re'].match(address_trim)
             if address_res is not None:
                 addresses += [Address(address_res.group(1),address_res.group(2),address_res.group(3))]
         
@@ -517,9 +579,10 @@ def email_study_report(orthanc_study_id):
     """Generate email of study statistics"""
 # -------------------------------------------------------
 
-    global log_indent_level
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Entering email_study_report')
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
 
     response_system = orthanc.RestApiGet('/system')
     meta_system = json.loads(response_system)
@@ -554,9 +617,9 @@ def email_study_report(orthanc_study_id):
     # Main study info
     message_body += [' '*4 + '<table border=1>']
     message_body += [' '*6 + '<tr><th>Item</th><th>Value</th></tr>']
-    message_body += [' '*6 + '<tr><td>Study</td><td><a href="https://%s/%s/app/explorer.html#study?uuid=%s">%s</a></td></tr>' % (fqdn, website, orthanc_study_id,study_description)]
+    message_body += [' '*6 + '<tr><td>Study</td><td><a href="https://%s/%s/app/explorer.html#study?uuid=%s">%s</a></td></tr>' % (global_var['fqdn'], global_var['website'], orthanc_study_id,study_description)]
     if flag_anonymized:
-        message_body += [' '*6 + '<tr><td>Patient</td><td><a href="https://%s/%s/app/explorer.html#patient?uuid=%s">%s</a></td></tr>' % (fqdn, website, orthanc_patient_id,patient_name)]
+        message_body += [' '*6 + '<tr><td>Patient</td><td><a href="https://%s/%s/app/explorer.html#patient?uuid=%s">%s</a></td></tr>' % (global_var['fqdn'], global_var['website'], orthanc_patient_id,patient_name)]
 
     for key in ['InstitutionName', 'ReferringPhysicianName']:
         if key in meta_study['MainDicomTags']:
@@ -595,7 +658,7 @@ def email_study_report(orthanc_study_id):
         line_of_text += '<td align="center">%d</td>' % series_data[series_number]['Instances']
         for key in ['StationName', 'BodyPartExamined', 'SeriesDescription']:
             if key == 'SeriesDescription' and len(series_data[series_number][key]) > 0:
-                line_of_text += '<td><a href="https://%s/%s/app/explorer.html#series?uuid=%s">%s</a></td>' % (fqdn, website, series_data[series_number]['orthanc_series_id'],series_data[series_number][key])
+                line_of_text += '<td><a href="https://%s/%s/app/explorer.html#series?uuid=%s">%s</a></td>' % (global_var['fqdn'], global_var['website'], series_data[series_number]['orthanc_series_id'],series_data[series_number][key])
             else:
                 line_of_text += '<td>%s</td>' % series_data[series_number][key]
         line_of_text += '</tr>'
@@ -627,7 +690,7 @@ def filter_and_delete_instances(orthanc_study_id):
         if not flag_keep:
             counts['instances']['end'] -= 1
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'Prefilter is deleting %s' % orthanc_instance_id)
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Prefilter is deleting %s' % orthanc_instance_id)
             orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
 
     # Refresh study info after deletion
@@ -670,7 +733,7 @@ def filter_and_delete_series_by_modality(orthanc_study_id):
                 flag_allowed = flag_allowed and (modality_series != modality_denied)
             if not flag_allowed:
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + 'Deleting denied modality %s %s' % (modality_series, orthanc_series_id))
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Deleting denied modality %s %s' % (modality_series, orthanc_series_id))
                 orthanc.RestApiDelete('/series/%s' % orthanc_series_id)
                 flag_deleted = True
                 counts['end'] -= 1
@@ -775,7 +838,7 @@ def find_pacs_in_lookup_table(lookup_table, id_to_match, type_match='siuid'):
     if not found:
         return found, pacs_data
 
-    #orthanc.LogWarning(' ' * log_indent_level + '%d %d' % (found, i_row_match))
+    #orthanc.LogWarning(' ' * global_var['log_indent_level'] + '%d %d' % (found, i_row_match))
     patient_name = None
     if i_row_match in lookup_table['Name']:
         if isinstance(lookup_table['Name'][i_row_match], list):
@@ -861,10 +924,10 @@ def find_pacs_in_lookup_table_from_siuid(lookup_table, study_instance_uid):
         i_row_match = i_row_temp
         if isinstance(study_instance_uid_list, list):
             found = study_instance_uid in study_instance_uid_list
-            #orthanc.LogWarning(' ' * log_indent_level + '%d %s %s' % (found, study_instance_uid, ' '.join(study_instance_uid_list)))
+            #orthanc.LogWarning(' ' * global_var['log_indent_level'] + '%d %s %s' % (found, study_instance_uid, ' '.join(study_instance_uid_list)))
         else:
             found = study_instance_uid == study_instance_uid_list
-            #orthanc.LogWarning(' ' * log_indent_level + '%d %s %s' % (found, study_instance_uid, study_instance_uid_list))
+            #orthanc.LogWarning(' ' * global_var['log_indent_level'] + '%d %s %s' % (found, study_instance_uid, study_instance_uid_list))
         if found:
             break
 
@@ -1034,11 +1097,11 @@ def get_patient_ids(orthanc_study_id=None,
 def get_patient_name_base():
 # ----------------------------------------------------------------------------
 
-    global patient_name_base
-    if patient_name_base is None:
+    global global_var
+    if global_var['patient_name_base'] is None:
         meta_system = json.loads(orthanc.RestApiGet('/system'))
-        patient_name_base = meta_system['Name']
-    return patient_name_base
+        global_var['patient_name_base'] = meta_system['Name']
+    return global_var['patient_name_base']
 
 # ============================================================================
 def get_remote_user(request_headers):
@@ -1060,14 +1123,15 @@ def load_lookup_table(file_lookup, make_backup=False):
     """Parse the lookup table.  Make backup if directed."""
 # ----------------------------------------------------------------------------
 
-    global log_indent_level
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Entering load_lookup_table')
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
 
     if not os.path.exists(file_lookup):
         return {'status': 0}, None
 
-    if not flag_beautiful_soup:
+    if not global_var['flag']['beautiful_soup']:
         return {'status':1, 'error_text':'load_lookup_table: No Beautiful soup'}, None
 
     try:
@@ -1142,9 +1206,10 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
     """Query the postgres database for phi to anon maps"""
 # ----------------------------------------------------------------------------
 
-    global log_indent_level
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Entering load_phi_to_anon_map')
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
 
     # Connect to the database
     flag_local_db = False
@@ -1394,11 +1459,12 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
     """Create a dict of what is on Orthanc currently"""
 # ----------------------------------------------------------------------------
 
-    global log_indent_level
+    global global_var
     python_verbose_local = False
     if python_verbose_logwarning and python_verbose_local:
-        orthanc.LogWarning(' ' * log_indent_level + 'Entering on_orthanc')
-        log_indent_level += 3
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     # Connect to the database
     flag_local_db = False
@@ -1409,12 +1475,12 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
             if pg_connection is not None:
                 pg_connection.close()
             if python_verbose_logwarning and python_verbose_local:
-                log_indent_level -= 3
+                global_var['log_indent_level'] -= 3
             return status, None
     else:
         if pg_connection is None or pg_cursor is None:
             if python_verbose_logwarning and python_verbose_local:
-                log_indent_level -= 3
+                global_var['log_indent_level'] -= 3
             return {'status':1, 'error_text': 'on_orthanc:Must provide both con and cur'}, None
 
     # Confirm our lookup tables
@@ -1426,12 +1492,12 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
             pg_cursor.close()
             pg_connection.close()
         if python_verbose_logwarning and python_verbose_local:
-            log_indent_level -= 3
+            global_var['log_indent_level'] -= 3
         return status, None
 
     # Collect orthanc patientids
     if python_verbose_logwarning and python_verbose_local:
-        orthanc.LogWarning(' ' * log_indent_level + 'Assembling all patient ids')
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Assembling all patient ids')
     orthanc_patient_ids = json.loads(orthanc.RestApiGet('/patients'))
     n_patients = len(orthanc_patient_ids)
 
@@ -1442,18 +1508,18 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
 
     # Assemble dict
     if python_verbose_logwarning and python_verbose_local:
-        orthanc.LogWarning(' ' * log_indent_level + 'Assembling now_on_orthanc dict')
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Assembling now_on_orthanc dict')
     now_on_orthanc = {}
     for dict_str in ['ByPatientID', 'StudyInstanceUID2PatientID', 'PatientID2oPatientID', 'StudyUID2oStudyUID']:
         now_on_orthanc[dict_str] = {}
     if python_verbose_logwarning and python_verbose_local:
-        log_indent_level += 3
+        global_var['log_indent_level'] += 3
     i_patient = 0
     n_patients = len(orthanc_patient_ids)
     for orthanc_patient_id in orthanc_patient_ids:
         i_patient += 1
         if python_verbose_logwarning and python_verbose_local:
-            orthanc.LogWarning(' ' * log_indent_level + 'Patient %d of %d: %s' % (i_patient, n_patients, orthanc_patient_id))
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Patient %d of %d: %s' % (i_patient, n_patients, orthanc_patient_id))
         row_of_data = {}
         meta_patient = json.loads(orthanc.RestApiGet('/patients/%s' % orthanc_patient_id))
         if 'PatientName' in meta_patient['MainDicomTags'] and len(meta_patient['MainDicomTags']['PatientName'].strip()) > 0:
@@ -1464,7 +1530,7 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
         patient_id_temp = meta_patient['MainDicomTags']['PatientID']
         sql_query = "SELECT value FROM patientid WHERE pid IN (SELECT parent_pid FROM patientid WHERE value = %s)"
         if python_verbose_logwarning and python_verbose_local:
-            orthanc.LogWarning(' ' * (log_indent_level+3) + 'Querying sql')
+            orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Querying sql')
         try:
             pg_cursor.execute(sql_query, (patient_id_temp,))
         except:
@@ -1472,25 +1538,25 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
                 pg_cursor.close()
                 pg_connection.close()
             if python_verbose_logwarning and python_verbose_local:
-                log_indent_level -= 3
+                global_var['log_indent_level'] -= 3
             return {'status': 2, 'error_text' : 'on_orthanc:Problem querying pid'}, None
         if python_verbose_logwarning and python_verbose_local:
-            orthanc.LogWarning(' ' * (log_indent_level+3) + 'Examining results')
+            orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Examining results')
         row = pg_cursor.fetchone()
         while row is not None:
             patient_id = row[0]
             row = pg_cursor.fetchone()
         if python_verbose_logwarning and python_verbose_local:
-            orthanc.LogWarning(' ' * (log_indent_level+3) + 'Patient ID selected')
+            orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Patient ID selected')
         for dict_str in ['StudyDate', 'AccessionNumber', 'StudyInstanceUID']:
             row_of_data[dict_str] = []
         if python_verbose_logwarning and python_verbose_local:
-            orthanc.LogWarning(' ' * (log_indent_level+3) + 'Querying studies')
+            orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Querying studies')
         meta_studies = json.loads(orthanc.RestApiGet('/patients/%s/studies' % orthanc_patient_id))
         for meta_study in meta_studies:
             orthanc_study_id = meta_study['ID']
             if python_verbose_logwarning and python_verbose_local:
-                orthanc.LogWarning(' ' * (log_indent_level+6) + 'Processing study %s' % orthanc_study_id)
+                orthanc.LogWarning(' ' * (global_var['log_indent_level']+6) + 'Processing study %s' % orthanc_study_id)
             patient_id_modifier = ''
             if flag_split_screen_from_diagnostic and row_of_data['PatientName'].lower().find(meta_system['Name'].lower()) < 0:
                 patient_id_modifier = set_screen_or_diagnostic(orthanc_study_id)
@@ -1506,7 +1572,7 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
         now_on_orthanc['ByPatientID'][patient_id_modified] = row_of_data
 
     if python_verbose_logwarning and python_verbose_local:
-        log_indent_level -= 3
+        global_var['log_indent_level'] -= 3
 
     pg_connection.commit()
     if flag_local_db:
@@ -1514,12 +1580,12 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
         pg_connection.close()
 
     if python_verbose_logwarning and python_verbose_local:
-        log_indent_level -= 3
-        orthanc.LogWarning(' ' * log_indent_level + 'Leaving on_orthanc')
+        global_var['log_indent_level'] -= 3
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Leaving on_orthanc')
     return {'status': 0}, now_on_orthanc
 
 # ============================================================================
-def recursive_find_uid_to_keep(parent, level_in=20, kept_uid={}, top_level_tag_to_keep = {}, parent_key=None):
+def recursive_find_uid_to_keep(parent, level_in=global_var['max_recurse_depth'], kept_uid={}, top_level_tag_to_keep = {}, parent_key=None):
     """
     PURPOSE: Tunnel down orthanc instance meta data cataloging 
                  UID for processing.
@@ -1552,23 +1618,86 @@ def recursive_find_uid_to_keep(parent, level_in=20, kept_uid={}, top_level_tag_t
     if parent_type == type_dict:
         for key, child in parent.items():
             if 'Name' in child and 'Value' in child:
-                if type(child['Value']) in [type_dict, type_list] and level_in == 20:
+                if type(child['Value']) in [type_dict, type_list] and level_in == global_var['max_recurse_depth']:
                     parent_key = key
                 if child['Name'].find('UID') > 0: 
                     kept_uid[child['Value']] = {}
                     kept_uid[child['Value']]['Numeric'] = key
                     kept_uid[child['Value']]['Name'] = child['Name']
-                    if level_in < 20:
+                    if level_in < global_var['max_recurse_depth']:
                         top_level_tag_to_keep[parent_key] = True
-                    if level_in == 20 and child['Name'] not in ['StudyInstanceUID', 'SeriesInstanceUID', 'SOPInstanceUID']:
+                    if level_in == global_var['max_recurse_depth'] and child['Name'] not in ['StudyInstanceUID', 'SeriesInstanceUID', 'SOPInstanceUID']:
                         top_level_tag_to_keep[key] = True
             level_out, kept_uid, top_level_tag_to_keep, parent_key = \
                 recursive_find_uid_to_keep(child['Value'], level_in-1, kept_uid, top_level_tag_to_keep, parent_key)
-            if type(child['Value']) in [type_dict, type_list] and level_in == 20:
+            if type(child['Value']) in [type_dict, type_list] and level_in == global_var['max_recurse_depth']:
                 parent_key = None
             if level_out < 0:
                 break
         return level_out, kept_uid, top_level_tag_to_keep, parent_key
+
+# ============================================================================
+def recursive_replace_uid(parent, level_entry=None):
+# ----------------------------------------------------------------------------
+
+    global global_var 
+
+    type_dict = type({})
+    type_list = type([])
+    level_in = level_entry if level_entry is not None else global_var['max_recurse_depth']
+    level_out = level_in - 1
+    if level_entry is None:
+        global_var['address_constructor'] = []
+        global_var['address_list'] = {}
+    if level_in < 1:
+         return {}, level_out
+    parent_type = type(parent)
+    element = {}
+    if parent_type not in [type_dict, type_list]:
+        return element, level_out
+    if 'Value' in parent:
+        if type(parent['Value']) == type_list:
+            for k in range(len(parent['Value'])):
+                child = parent['Value'][k]
+                global_var['address_constructor'] += ['%s[%d]' % (parent['Name'],k)]
+                value, level_out = recursive_replace_uid(child, level_in-1)
+                if level_out < 0:
+                    break 
+                if len(value) > 0:
+                    element[k] = value
+                global_var['address_constructor'].pop()
+        else:
+            if parent['Name'].find('UID') >= 0:
+                global_var['address_constructor'] += [parent['Name']]
+                uid_new = parent['Value']
+                while uid_new in global_var['uid_map']:
+                    if uid_new == global_var['uid_map'][uid_new]:
+                        break
+                    uid_new = global_var['uid_map'][uid_new]
+                address_entry = ''
+                n_address_stub = len(global_var['address_constructor'])
+                for k in range(n_address_stub):
+                    address_stub = global_var['address_constructor'][k]
+                    if k < (n_address_stub-1):
+                        address_entry = address_entry + address_stub + '.'
+                    else:
+                        address_entry = address_entry + address_stub
+                global_var['address_list'][address_entry] = uid_new
+                parent['Value'] = uid_new
+                global_var['address_constructor'].pop()
+            return parent['Value'], level_out
+    else:
+        if parent_type == type_dict:
+            for key, child in parent.items():
+                value, level_out = recursive_replace_uid(child, level_in-1)
+                if level_out < 0:
+                    break
+                if len(value) > 0:
+                    element[key] = value
+        elif parent_type == type_list:
+            orthanc.LogWarning('Should not reach this point\n%s' % json.dumps(parent,indent=3))
+
+    return element, level_out
 
  # ============================================================================
 def recursive_search_dicom_dict_for_group_element(gggg_comma_eeee_tag, value_dict, type_match='gggg-odd', match_list=[]):
@@ -1633,8 +1762,8 @@ def recursive_search_dicom_dict_for_group_element(gggg_comma_eeee_tag, value_dic
 # ============================================================================
 def reset_patient_name_base():
 # ----------------------------------------------------------------------------
-    global patient_name_base
-    patient_name_base = None
+    global global_var
+    global_var['patient_name_base'] = None
 
 # ============================================================================
 def save_patient_ids_anon_to_db(sql_pid, orthanc_study_id=None, 
@@ -1957,7 +2086,7 @@ def save_patient_name_anon_to_db(patient_name_anon, sql_siuid,
             pg_cursor.close()
             pg_connection.close()
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Tried to insert patientname anon into nonexistent siuid2patientname_anon')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Tried to insert patientname anon into nonexistent siuid2patientname_anon')
         return {'status' : 0, 'error_text' : 'siuid2patientname_anon does not exist'}
 
     # Insert into database
@@ -2326,8 +2455,8 @@ def set_2d_or_cview_tomo(orthanc_series_id):
 # ============================================================================
 def set_patient_name_base(patient_name_base_in):
 # ----------------------------------------------------------------------------
-    global patient_name_base
-    patient_name_base = patient_name_base_in
+    global global_var
+    global_var['patient_name_base'] = patient_name_base_in
 
 # =======================================================
 def set_screen_or_diagnostic(orthanc_study_id):
@@ -2336,12 +2465,12 @@ def set_screen_or_diagnostic(orthanc_study_id):
 
     flag_screening = False
     meta_instances = json.loads(orthanc.RestApiGet('/studies/%s/instances' % orthanc_study_id))
-    dicom_fields = ['Study', 'Series', 'PerformedProcedureStep', 'RequestedProcedure']
+    dicom_field_bases = ['Study', 'Series', 'PerformedProcedureStep', 'RequestedProcedure']
     for meta_instance in meta_instances:
         orthanc_instance_id = meta_instance['ID']
         meta_instance = json.loads(orthanc.RestApiGet('/instances/%s/simplified-tags' % orthanc_instance_id))
-        for dicom_field in dicom_fields:
-            description_field = '%s%s' % (dicom_field, 'Description')
+        for dicom_field_base in dicom_field_bases:
+            description_field = '%s%s' % (dicom_field_base, 'Description')
             if description_field in meta_instance:
                 description_lower = meta_instance[description_field].lower()
                 flag_screening = flag_screening or (description_lower.find('screen') >= 0)
@@ -2364,6 +2493,145 @@ def set_screen_or_diagnostic(orthanc_study_id):
         patient_id_modifier = 'd'
     return patient_id_modifier
            
+# ============================================================================
+def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_root):
+# ----------------------------------------------------------------------------
+    type_dict = type({})
+    type_list = type([])
+
+    if python_verbose_logwarning:
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+
+    dicom_field_bases = [ 'Study', 'Series', 'Acquisition', 
+                          'Content', 'InstanceCreation',
+                          'PerformedProcedureStepStart' ]
+    date_time_fields = [ 'AcquisitionDateTime' ]
+    date_time_fields_radio = [ 'RadiopharmaceuticalStartDateTime', 'RadiopharmaceuticalStopDateTime' ]
+    orthanc_instance_ids_new = []
+    n_instances = len(meta_instances)
+    ten_percent = n_instances // 10
+    
+    # Weed out instances that will be held back
+    orthanc_instance_ids = []
+    for meta_instance in meta_instances:
+        orthanc_instance_ids += [meta_instance['ID']]
+    flag_by_instance = filter_what_instances_to_keep(orthanc_instance_ids=orthanc_instance_ids)
+
+    i = 0
+    for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
+
+        # Show progress
+        i = i + 1
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Progress %d of %d' % (i,n_instances))
+
+        # Assemble the base replacment dict
+        replace_dict = {}
+        for replace_root_key, replace_root_val in replace_root.items():
+            replace_dict[replace_root_key] = replace_root_val
+        
+        # Gather Dicom meta
+        if flag_send_to_remote:
+            dicom_tags = json.loads(orthanc.RestApiGet('/instances/%s/simplified-tags' % orthanc_instance_id))
+        else:
+            dicom_tags = {}
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Shift date will skip non orig/prim /instances/%s/simplified-tags' % orthanc_instance_id)
+
+        # Loop through separate date/time tags looking for fields to update
+        for dicom_field_base in dicom_field_bases:
+            date_field = '%sDate' % dicom_field_base
+            time_field = '%sTime' % dicom_field_base
+            if date_field in dicom_tags and len(dicom_tags[date_field].strip()) > 0:
+                if time_field in dicom_tags and len(dicom_tags[time_field].strip()) > 0:
+                    date_string_new, time_string_new = shift_date_time_string(shift_epoch, dicom_tags[date_field], dicom_tags[time_field])
+                    replace_dict[date_field] = date_string_new
+                    replace_dict[time_field] = time_string_new
+                else:
+                    if python_verbose_logwarning:
+                        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'No matching time for date: %s, %s'  % (date_field, time_field))
+
+        # Loop through combo date/time tags looking for fields to update
+        for date_time_field in date_time_fields:
+            if date_time_field in dicom_tags and len(dicom_tags[date_time_field].strip()) > 0:
+                date_string_new = shift_date_time_string(shift_epoch, dicom_tags[date_time_field])
+                replace_dict[date_time_field] = date_string_new
+
+        # Loop over radiopharm fields
+        radio_sequence = 'RadiopharmaceuticalInformationSequence'
+        if radio_sequence in dicom_tags:
+            replace_dict[radio_sequence] = copy.copy(dicom_tags[radio_sequence])
+            for seq_item, seq_tags in dicom_tags[radio_sequence].items():
+                for date_time_field_radio in date_time_fields_radio:
+                    if date_time_Field_radio in seq_tags and len(seq_tags[date_time_field_radio].strip()) > 0:
+                        date_string_new = shift_date_time_string(shift_epoch, seq_tags[date_time_field_radio])
+                        replace_dict[radio_sequence][seq_item][date_time_field_radio] = date_string_new
+
+        # Handle birthdate / age
+        if 'PatientBirthDate' in dicom_tags:
+            date_string_new = shift_date_time_string(shift_epoch, dicom_tags['PatientBirthDate'])
+            replace_dict['PatientBirthDate'] = date_string_new
+        if 'PatientAge' in dicom_tags:
+            age_number = int(dicom_tags['PatientAge'][0:3])
+            age_unit = dicom_tags['PatientAge'][3]
+            if age_unit == 'Y':
+                if age_number > 89:
+                    age_number = 90
+                    replace_dict['PatientAge'] = '03dY' %  age_number
+
+        # Handle non-date/time replacements that take place at this stage
+        if 'SOPInstanceUID' in dicom_tags:
+            sop_instance_uid_new = global_var['uid_map'][dicom_tags['SOPInstanceUID']]
+            while sop_instance_uid_new in global_var['uid_map']:
+                sop_instance_uid_new = global_var['uid_map'][sop_instance_uid_new]
+            replace_dict['SOPInstanceUID'] = sop_instance_uid_new
+
+        # Need to work through numeric tags now
+        if flag_send_to_remote:
+            dicom_tags = json.loads(orthanc.RestApiGet('/instances/%s/tags' % orthanc_instance_id))
+            for tag_key, tag_val in global_var['top_level_tag_to_keep'].items():
+                if tag_key in dicom_tags:
+                    if type(dicom_tags[tag_key]['Value']) in [type_dict, type_list]:
+                        iReplaceValue, lLevelOut = recursive_replace_uid(dicom_tags[tag_key])
+                        if global_var['address_list'] is not None:
+                            for address_key, address_val in global_var['address_list'].items():
+                                replace_dict[address_key] = address_val
+                    else:
+                        uid_new = global_var['uid_map'][dicom_tags[tag_key]['Value']]
+                        while uid_new in global_var['uid_map']:
+                            if uid_new == global_var['uid_map'][uid_new]:
+                                break
+                            uid_new = global_var['uid_map'][uid_new]
+                        replace_dict[tag_key] = uid_new
+
+        if len(dicom_tags) > 0:
+            post_data = {}
+            post_data['Replace'] = replace_dict
+            # post_data['DicomVersion'] = '2017c'
+            # post_data['DicomVersion'] = '2008'
+            post_data['Force'] = True
+            try:
+                modified_dicom_blob = orthanc.RestApiPost('/instances/%s/modify' % orthanc_instance_id, json.dumps(post_data))
+            except:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + json.dumps(post_data,indent=3))
+                return {'status' : 1, 'error_text' : 'Unable to adjust dates'}, None
+
+            # Upload the modified_dicom_blob (need to confirm this for python post
+            try:
+                meta_instance_modified = orthanc.RestApiPost('/instances/', modified_dicom_blob)
+            except:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem uploading new image blob')
+                return {'status' : 2, 'error_text' : 'Problem uploading new image blob'}, None
+            orthanc_instance_id_new = json.loads(meta_instance_modified)['ID']
+
+            # Store new ID
+            orthanc_instance_ids_new += [orthanc_instance_id_new]
+    
+    return {'status': 0}, orthanc_instance_ids_new
+
 # =======================================================
 def shift_date_time_string(shift_epoch,incoming_yyyymmdd,incoming_hhmmss=None):
     """Shift time stamp and return shifted values"""
@@ -2429,10 +2697,11 @@ def update_lookup_html():
     """ Update the html lookup table  """
 # -------------------------------------------------------
 
-    global log_indent_level
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Entering update_lookup_html')
-        log_indent_level += 3
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     flag_keep_original_dates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES', default='false') == 'true'
 
@@ -2461,7 +2730,7 @@ def update_lookup_html():
 
     # Prepare to output the new
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Preparing to write new lookup file')
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Preparing to write new lookup file')
     with open(file_lookup, 'w') as lun:
 
         lun.write('<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">\n')
@@ -2638,7 +2907,7 @@ def update_lookup_html():
                         if pacs_data_local is None:
                             #orthanc.LogWarning(study_instance_uid)
                             if python_verbose_logwarning:
-                                orthanc.LogWarning(' ' * log_indent_level + 'Not found in lookup: ' + study_instance_uid)
+                                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Not found in lookup: ' + study_instance_uid)
                             #return {'status': 1, 'error_text':'update_lookup_table: Not found in lookup %s' % study_instance_uid }
                     #compute_times[50]['count'] += 1
                     #compute_times[50]['value'] += time.time() - time0
@@ -2810,14 +3079,14 @@ def update_lookup_html():
             #for c_id, compute_time in compute_times.items():
             #    if compute_time['value'] == 0 or compute_time['count'] == 0:
             #        continue
-            #    orthanc.LogWarning(' ' * log_indent_level + 'Compute time %d %f' % (c_id, compute_time['value'] / compute_time['count']))
+            #    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Compute time %d %f' % (c_id, compute_time['value'] / compute_time['count']))
         lun.write('</tbody>\n')
         lun.write('</table>\n')
         lun.write('</body>\n')
         lun.write('</html>\n')
 
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'update_lookup_table complete')
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'update_lookup_table complete')
 
     return {'status': 0}
 
@@ -2826,28 +3095,38 @@ def user_permitted(uri, remote_user):
     """ Check remote user against list of permitted users """
 # -------------------------------------------------------
 
-    global log_indent_level
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Checking whether remote user (%s) is permitted to act on %s' % (remote_user,uri))
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Checking whether remote user (%s) is permitted to act on %s' % (remote_user,uri))
     permissions = os.getenv('PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER')
     if permissions is None:
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Rejecting anon due to missing permissions')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Rejecting anon due to missing permissions')
         return False
     allowed_to_trigger = []
     for permitted in permissions.split('.'):
         if permitted.strip() not in allowed_to_trigger:
             allowed_to_trigger += [permitted.strip()]
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Allowed users: %s' % ' '.join(allowed_to_trigger))
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Allowed users: %s' % ' '.join(allowed_to_trigger))
     if remote_user not in allowed_to_trigger:
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Operation not permitted to user: %s %s' % (uri, remote_user))
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Operation not permitted to user: %s %s' % (uri, remote_user))
         return False
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Remote user is permitted (%s)' % remote_user)
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Remote user is permitted (%s)' % remote_user)
 
     return True
+
+# ============================================================================
+def CheckSplit2DFromCViewTomoLua(output, uri, **request):
+    """API interface to Replace lua CheckSplit2DFromCViewTomo"""
+# ----------------------------------------------------------------------------
+    if request['method'] == 'POST':
+        orthanc_study_id = json.loads(request['body'])
+        output.AnswerBuffer(json.dumps(check_split_2d_from_cview_tomo(orthanc_study_id)), 'application/json')
+    else:
+        output.SendMethodNotAllowed('POST')
 
 # ============================================================================
 def ConfirmOrCreateLookupTableSQLLua(output, uri, **request):
@@ -2987,15 +3266,15 @@ def IncomingFilter(uri, **request):
     """Set up rights based actions"""
 # ----------------------------------------------------------------------------
 
-    global log_indent_level
-    log_indent_level = 0
+    global global_var
+    global_var['log_indent_level'] = 0
 
     headers_str = ''
     for key,value in request['headers'].items():
         headers_str = '%s %s.%s' % (headers_str, key, value)
     if not('x-remote-user' in request['headers'] and 'x-forwarded-for' in request['headers']):
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Rejecting incoming access: %s' % headers_str)
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Rejecting incoming access: %s' % headers_str)
         return False
 
     remote_user = get_remote_user(request['headers'])
@@ -3018,7 +3297,7 @@ def IncomingFilter(uri, **request):
 
     if uri.find('images') < 0:
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + '%s %s %s %s' % (remote_user, remote_ip, method, uri))
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + '%s %s %s %s' % (remote_user, remote_ip, method, uri))
 
     if method in ['DELETE', 'PUT']:
         return user_permitted(uri, remote_user)
@@ -3030,11 +3309,11 @@ def IncomingFilter(uri, **request):
 
         if not user_permitted(uri, remote_user):
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'User not permitted to anonymize: %s' % remote_user)
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'User not permitted to anonymize: %s' % remote_user)
             return False
         else: 
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'User permitted to anonymize: %s' % remote_user)
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'User permitted to anonymize: %s' % remote_user)
 
         # Note that we have to capture anonymize this way as opposed to registering a callback
         # That's because registering a callback would proceed with both OUR anonymization and the standard Orthanc anon
@@ -3043,32 +3322,32 @@ def IncomingFilter(uri, **request):
             study_res = re.match('.*studies/([^/]+)/anonymize', uri)
             if study_res is None:
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + 'User does not appear to be anonymizing at the series level:\n%s' % uri)
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'User does not appear to be anonymizing at the series level:\n%s' % uri)
                 return False
             flag_js = False
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'User triggered web anonymize')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'User triggered web anonymize')
         if uri.find('/jsanon') >= 0:
             study_res = re.match('.*studies/([^/]+)/jsanon', uri)
             if study_res is None:
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + 'User does not appear to be anonymizing at the series level:\n%s' % uri)
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'User does not appear to be anonymizing at the series level:\n%s' % uri)
                 return False
             flag_js = True
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'User triggered form based anonymize')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'User triggered form based anonymize')
 
         if study_res is not None:
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'Starting anon')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Starting anon')
             ## Temporarily allow old style orthanc anon
             #if not flag_js:
-            #    orthanc.LogWarning(' ' * log_indent_level + 'Starting old style anon')
+            #    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Starting old style anon')
             #    return True
             orthanc_study_id = study_res.group(1)
             anonymize_study(orthanc_study_id)
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'Anon returned.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Anon returned.')
             if flag_js:
                 return True
             else:
@@ -3079,7 +3358,8 @@ def IncomingFilter(uri, **request):
 
     if uri.find('/extra/lookup/master/updatelookup.html') >= 0:
         if user_permitted(uri, remote_user):
-            response_post = orthanc.RestApiPost('/tools/execute-script', 'UpdateLookupHTML()')
+            # response_post = orthanc.RestApiPost('/tools/execute-script', 'UpdateLookupHTML()')
+            status = update_lookup_html()
         else:
             return False
 
@@ -3173,7 +3453,7 @@ def OnChange(change_type, level, resource_id):
             meta_study = json.loads(response_study)
             if ('ModifiedFrom' not in meta_study) and ('AnonymizedFrom' not in meta_study):
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + 'Non-anonymized study stable.  Initiating auto anon')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Non-anonymized study stable.  Initiating auto anon')
                 response_post = orthanc.RestApiPost('/tools/execute-script', 'OnStableStudyMain(\'%s\', nil, nil)' % resource_id)
 
         # Email updates
@@ -3184,7 +3464,7 @@ def OnChange(change_type, level, resource_id):
                     orthanc.LogWarning(status['error_text'])
             else:
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + 'Sent onstable study report')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Sent onstable study report')
 
 # ============================================================================
 def OnChangeThreaded(change_type, level, resource_id):
@@ -3215,12 +3495,12 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
         answer = {'status': 0}
 
         # Check inputs
-        if not flag_beautiful_soup:
+        if not global_var['flag']['beautiful_soup']:
             answer['status'] = 1
             answer['error_text'] = 'PrepareDataForAnonymize: No beautiful soup.  Needed to parse lookup.'
             output.AnswerBuffer(json.dumps(answer, indent=3), 'application/json')
 
-        if not flag_psycopg2:
+        if not global_var['flag']['psycopg2']:
             answer['status'] = 2
             answer['error_text'] = 'No psycopg2'
             output.AnswerBuffer(json.dumps(answer, indent=3), 'application/json')
@@ -3443,12 +3723,15 @@ def PreScreenSeriesByModalityLua(output, uri, **request):
 def RecursiveFindUIDToKeepLua(output, uri, **request):
     """API interface meant to replace Lua routine RecursiveFindUIDToKeep"""
 # ----------------------------------------------------------------------------
+    global global_var
     if request['method'] == 'GET':
         orthanc_instance_id = request['groups'][0]
         meta_instance = json.loads(orthanc.RestApiGet('/instances/%s/tags' % orthanc_instance_id))
         try:
             level_out, kept_uid, top_level_tag_to_keep, parent_key = recursive_find_uid_to_keep(meta_instance)
             result = {'status' : 0}
+            global_var['kept_uid'] = kept_uid
+            global_var['top_level_tag_to_keep'] = top_level_tag_to_keep
             result['KeptUID'] = kept_uid
             result['TopLevelTagToKeep'] = top_level_tag_to_keep
         except:
@@ -3456,6 +3739,25 @@ def RecursiveFindUIDToKeepLua(output, uri, **request):
         output.AnswerBuffer(json.dumps(result), 'application/json')
     else:
         output.SendMethodNotAllowed('GET')
+
+# ============================================================================
+def RecursiveReplaceUIDLua(output, uri, **request):
+    """Replace Lua RecursiveReplaceUIDLua"""
+# ----------------------------------------------------------------------------
+
+    global global_var
+    if request['method'] == 'POST':
+        incoming_data = json.loads(request['body'])
+        parent = incoming_data['Parent']
+        global_var['uid_map'] = incoming_data['UIDMap'] if 'UIDMap' in incoming_data else None
+        element, level_out = recursive_replace_uid(parent)
+        result = {}
+        result['ReplaceValue'] = element
+        result['LevelOut'] = level_out
+        result['AddressList'] = global_var['address_list']
+        output.AnswerBuffer(json.dumps(result), 'application/json')
+    else:
+        output.SendMethodNotAllowed('POST')
 
 # ============================================================================
 def SavePatientIDsAnonToDBLua(output, uri, **request):
@@ -3674,7 +3976,7 @@ def ScanStudyForOddGroups(output, uri, **request):
         output.SendMethodNotAllowed('GET')
 
 # ============================================================================
-def Set2DOrCViewTomo(output, uri, **request):
+def Set2DOrCViewTomoLua(output, uri, **request):
 # ----------------------------------------------------------------------------
     if request['method'] == 'GET':
         orthanc_series_id = request['groups'][0]
@@ -3706,6 +4008,29 @@ def SetScreenOrDiagnostic(output, uri, **request):
         output.SendMethodNotAllowed('GET')
 
 # ============================================================================
+def ShiftDateTimePatAgeOfInstancesLua(output, uri, **request):
+    """API interface meant to replace Lua routine ShiftDateTimePatAgeOfInstances"""
+# ----------------------------------------------------------------------------
+    global global_var
+    if request['method'] == 'POST':
+        incoming_data = json.loads(request['body'])
+        meta_instances = incoming_data['InstancesMeta']
+        shift_epoch = int(incoming_data['ShiftEpoch'])
+        replace_root = incoming_data['ReplaceRoot']
+        global_var['uid_map'] = incoming_data['UIDMap']
+        global_var['top_level_tag_to_keep'] = incoming_data['TopLevelTagToKeep']
+        global_var['address_list'] = incoming_data['AddressList'] if 'AddressList' in incoming_data else None
+        global_var['kept_uid'] = incoming_data['KeptUID'] if 'KeptUID' in incoming_data else None
+        status, orthanc_instance_ids_new = shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_root)
+        data_outgoing = {}
+        data_outgoing['status'] = status['status']
+        if status['status'] == 0:
+            data_outgoing['InstanceIDNew'] = orthanc_instance_ids_new
+        output.AnswerBuffer(json.dumps(data_outgoing), 'application/json')
+    else:
+        output.SendMethodNotAllowed('POST')
+
+# ============================================================================
 def ShiftDateTimeStringLua(output, uri, **request):
     """API interface meant to replace Lua routine ShiftDateTimeString"""
 # ----------------------------------------------------------------------------
@@ -3735,17 +4060,17 @@ def ToggleLuaFlagAssumeOriginalPrimary(output, uri, **request):
             flag_current = os.getenv('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY')
             if flag_current == 'true':
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + 'LUA_FLAG_ASSUME_ORIGINAL_PRIMARY is true, turning false...')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'LUA_FLAG_ASSUME_ORIGINAL_PRIMARY is true, turning false...')
                 os.environ['LUA_FLAG_ASSUME_ORIGINAL_PRIMARY'] = 'false'
                 output.AnswerBuffer('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY was true, now false', 'text/plain')
             else:
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + 'LUA_FLAG_ASSUME_ORIGINAL_PRIMARY is false, turning true...')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'LUA_FLAG_ASSUME_ORIGINAL_PRIMARY is false, turning true...')
                 os.environ['LUA_FLAG_ASSUME_ORIGINAL_PRIMARY'] = 'true'
                 output.AnswerBuffer('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY was false, now true', 'text/plain')
         except:
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'Problem getting LUA_FLAG_ASSUME_ORIGINAL_PRIMARY state')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem getting LUA_FLAG_ASSUME_ORIGINAL_PRIMARY state')
             output.AnswerBuffer('Problem getting LUA_FLAG_ASSUME_ORIGINAL_PRIMARY state', 'text/plain')
 
 # ============================================================================
@@ -3759,17 +4084,17 @@ def ToggleLuaVerbose(output, uri, **request):
             state = json.loads(response_post)
             if state == 1:
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + 'gVerbose is ON, turning OFF...')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'gVerbose is ON, turning OFF...')
                 orthanc.RestApiPost('/tools/execute-script', 'gVerbose=nil')
                 output.AnswerBuffer('gVerbose was ON, now OFF', 'text/plain')
             else:
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + 'gVerbose is OFF, turning ON...')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'gVerbose is OFF, turning ON...')
                 orthanc.RestApiPost('/tools/execute-script', 'gVerbose=1')
                 output.AnswerBuffer('gVerbose was OFF, now ON', 'text/plain')
         except:
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'Problem getting gVerbose state')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem getting gVerbose state')
             output.AnswerBuffer('Problem getting gVerbose state', 'text/plain')
         
 # ============================================================================
@@ -3781,14 +4106,14 @@ def TogglePythonMailAuto(output, uri, **request):
         'PYTHON_MAIL_AUTO' in os.environ:
         python_mail_auto_prev = os.environ['PYTHON_MAIL_AUTO']
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Previous PYTHON_MAIL_AUTO: %s' % python_mail_auto_prev)
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Previous PYTHON_MAIL_AUTO: %s' % python_mail_auto_prev)
         if python_mail_auto_prev == 'true':
             os.environ['PYTHON_MAIL_AUTO'] = 'false'
         else:
             os.environ['PYTHON_MAIL_AUTO'] = 'true'
         python_mail_auto = os.environ['PYTHON_MAIL_AUTO']
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Current PYTHON_MAIL_AUTO: %s' % python_mail_auto)
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Current PYTHON_MAIL_AUTO: %s' % python_mail_auto)
         if python_mail_auto == 'true':
             output.AnswerBuffer('Previous PYTHON_MAIL_AUTO: %s\nCurrent PYTHON_MAIL_AUTO: %s\nYou WILL receive email updates until this setting is reversed.' % (python_mail_auto_prev, python_mail_auto), 'text/plain')
         else:
@@ -3818,6 +4143,7 @@ def UpdateLookupTableHTMLLua(output, uri, **request):
 # Main
 orthanc.RegisterIncomingHttpRequestFilter(IncomingFilter)
 orthanc.RegisterOnChangeCallback(OnChangeThreaded)
+orthanc.RegisterRestCallback('/check_split_2d_from_cview_tomo_lua', CheckSplit2DFromCViewTomoLua)
 orthanc.RegisterRestCallback('/confirm_or_create_lookup_table_sql_lua', ConfirmOrCreateLookupTableSQLLua)
 orthanc.RegisterRestCallback('/construct_patient_name', ConstructPatientName)
 orthanc.RegisterRestCallback('/studies/(.*)/email_report', EmailStudyReport)
@@ -3834,6 +4160,7 @@ orthanc.RegisterRestCallback('/prepare_data_for_anonymize', PrepareDataForAnonym
 orthanc.RegisterRestCallback('/prescreen_send_to_remote_lua', PreScreenSendToRemoteLua)
 orthanc.RegisterRestCallback('/prescreen_series_by_modality_lua', PreScreenSeriesByModalityLua)
 orthanc.RegisterRestCallback('/instances/(.*)/recursive_find_uid_to_keep_lua', RecursiveFindUIDToKeepLua)
+orthanc.RegisterRestCallback('/recursive_replace_uid_lua', RecursiveReplaceUIDLua)
 orthanc.RegisterRestCallback('/save_patient_ids_anon_to_db_lua', SavePatientIDsAnonToDBLua)
 orthanc.RegisterRestCallback('/save_patient_ids_to_db_lua', SavePatientIDsToDBLua)
 orthanc.RegisterRestCallback('/save_patient_name_anon_to_db_lua', SavePatientNameAnonToDBLua)
@@ -3848,9 +4175,10 @@ orthanc.RegisterRestCallback('/series/(.*)/group(.*)recursive_search', ScanSerie
 orthanc.RegisterRestCallback('/series/(.*)/odd_group_recursive_search', ScanSeriesForOddGroups)
 orthanc.RegisterRestCallback('/studies/(.*)/group(.*)recursive_search', ScanStudyForGroupElement)
 orthanc.RegisterRestCallback('/studies/(.*)/odd_group_recursive_search', ScanStudyForOddGroups)
-orthanc.RegisterRestCallback('/series/(.*)/set_2d_or_cview_tomo', Set2DOrCViewTomo)
+orthanc.RegisterRestCallback('/series/(.*)/set_2d_or_cview_tomo_lua', Set2DOrCViewTomoLua)
 orthanc.RegisterRestCallback('/set_patient_name_base', SetPatientNameBase)
 orthanc.RegisterRestCallback('/studies/(.*)/set_screen_or_diagnostic', SetScreenOrDiagnostic)
+orthanc.RegisterRestCallback('/shift_date_time_patage_of_instances_lua', ShiftDateTimePatAgeOfInstancesLua)
 orthanc.RegisterRestCallback('/toggle_lua_flag_assume_original_primary', ToggleLuaFlagAssumeOriginalPrimary)
 orthanc.RegisterRestCallback('/toggle_lua_verbose', ToggleLuaVerbose)
 orthanc.RegisterRestCallback('/toggle_python_mail_auto', TogglePythonMailAuto)
