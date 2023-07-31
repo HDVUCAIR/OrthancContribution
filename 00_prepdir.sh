@@ -88,9 +88,9 @@ fi
 # ------------------------------------------------------
 # Preparation of PHI files mapped into containers
 # ------------------------------------------------------
-chown $ORTHANC_UID:$ORTHANC_GID ./shared_files/make_certs_orthanc.sh
 chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/mod_rest_api.py
 chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/phi_scripts.lua
+chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/orthanc.secret.json.template
 chown 999:999 ./phi_files/postgresql-create-orthanc-user.sh
 chown 999:999 ./phi_files/postgres.cron
 
@@ -127,6 +127,7 @@ fi
 # Preparation of DISK files mapped into containers
 # ------------------------------------------------------
 chown $ORTHANC_UID:$ORTHANC_GID ./shared_files/make_certs_orthanc.sh
+chmod ug+rx ./shared_files/make_certs_orthanc.sh
 chown $ORTHANC_UID:$ORTHANC_GID ./disk_files/mod_rest_api.py
 chown 999:999 ./disk_files/postgresql-create-orthanc-user.sh
 

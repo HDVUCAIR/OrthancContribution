@@ -1,0 +1,771 @@
+#!/bin/python
+import sys
+import csv
+import os
+import datetime
+from dateutil.relativedelta import relativedelta 
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+from email.mime.text import MIMEText
+import html
+import smtplib
+import subprocess
+import re
+import glob
+import numpy as np
+
+# =======================================================
+def email_message(subject, message_body, subtype='plain',  email_recipients = None, files_csv=None):
+# -------------------------------------------------------
+
+    if email_recipients is None or len(email_recipients) == 0:
+        email_recipients = 'PHI_PYTHON_MAIL_TO'.split(',')
+                        
+    email_sender = 'PHI_MAIL_SENDER'
+    email_origin = 'PHI_MAIL_ORIGIN'
+    email_from = 'PHI_MAIL_SENDER <PHI_MAIL_SENDER@PHI_MAIL_ORIGION>'
+
+    if files_csv is None or len(files_csv) == 0:
+        msg = MIMEText(message_body, subtype)
+    else:
+        body_part = MIMEText(message_body, subtype)
+        msg = MIMEMultipart()
+
+    msg['Subject'] = subject
+    msg['From'] = email_from 
+    msg['To'] = ','.join(email_recipients)
+    if files_csv is not None and len(files_csv) > 0:
+        msg.attach(body_part)
+        for file_csv in files_csv:
+            with open(file_csv, 'rb') as lun:
+                msg.attach(MIMEApplication(lun.read(), Name=os.path.basename(file_csv)))
+
+    smtp_server = 'localhost' 
+    s = smtplib.SMTP(smtp_server)
+    s.sendmail(email_from, email_recipients, msg.as_string())
+    s.quit()
+
+    return {'status':0}
+
+# =======================================================
+# Main
+# -------------------------------------------------------
+orthanc_info = {'url'  : 'https://HOST_FQDN/PHI_ORTHANC_WEBSITE_NAME',
+                'name' : 'PHI_ORTHANC_WEBSITE_NAME',
+                'directory' : {'data' : 'PHI_HOST_DATA_DIR_ORTHANC'},
+                'email' : {'error' : ['PHI_MAIL_SENDER <PHI_MAIL_SENDER@PHI_MAIL_ORIGION>'],
+                           'usage' : ['PHI_MAIL_SENDER <PHI_MAIL_SENDER@PHI_MAIL_ORIGION>']}
+                }
+orthanc_info['directory']['logs'] = '%s/logs' % orthanc_info['directory']['data']
+orthanc_info['directory']['reports'] = '%s/html/reports' % orthanc_info['directory']['data']
+if not os.path.exists(orthanc_info['directory']['reports']):
+    os.makedirs(orthanc_info['directory']['reports'])
+
+file_logs = glob.glob('%s/Orthanc.log.*' % orthanc_info['directory']['logs'])
+file_logs.sort()
+
+# Determine start time of each log file
+map_logs_by_time = {}
+for file_log in file_logs:
+    file_base = os.path.basename(file_log)
+    file_start_time = datetime.datetime.strptime(file_base.split('.')[2], '%Y%m%d-%H%M%S')
+    map_logs_by_time[file_start_time] = file_log
+
+# Assemble statistics
+re_log_entry = re.compile('^[EW]([0-9]+) ([0-9:]+)\.([0-9]+) (.*)')
+re_error = re.compile('^E([0-9]+) ([0-9:]+)\.([0-9]+) ([^:]+):([0-9]+). (.*)')
+re_user_api = re.compile('^W([0-9]+) ([0-9:]+)\.([0-9]+) ([^:]+):([0-9]+). ([^ ]+) ([^ ]+) (GET|POST|DELETE|PUT) (.*)')
+re_warning = re.compile('^W([0-9]+) ([0-9:]+)\.([0-9]+) ([^:]+):([0-9]+). (.*)')
+re_radiology = re.compile('^(155\.100|10\.111)\.6[0-3]\.[0-9]+$')
+
+# Audit buckets
+date_today = datetime.datetime.strptime(datetime.datetime.now().strftime('%Y%m%d'),'%Y%m%d')
+audit_buckets = {0  : {'type' : 'Previous week',     'range' : {'start' : date_today - relativedelta(days=7), 'end' : date_today + relativedelta(days=1)}},
+                 10 : {'type' : 'Previous month',    'range' : {'start' : date_today - relativedelta(months=1), 'end' : date_today + relativedelta(days=1)}},
+                 20 : {'type' : 'Previous 6 months', 'range' : {'start' : date_today - relativedelta(months=6), 'end' : date_today + relativedelta(days=1)}},
+                 30 : {'type' : 'All time',          'range' : {'start' : datetime.datetime(1950,1,1), 'end' : date_today + relativedelta(days=1)}}}
+order_bucket = list(audit_buckets.keys())
+order_bucket.sort()
+#order_bucket = order_bucket[::-1]
+order_bucket = [order_bucket[0]]
+#order_bucket = [order_bucket[-1]]
+flag_report_includes_previous_week = 0 in order_bucket
+
+api_str_colors = {'POST': 'lightyellow',
+                  'DELETE': 'pink',
+                  'GET' : 'lightgreen',
+                  'PUT' : 'pink'}
+
+flag_generate_csv = False
+
+# ----------------------------
+# The error logs
+# ----------------------------
+flag_error_report = True
+re_skip = re.compile('(' + 
+                     '.*Inexistent path to plugins: /run/orthanc/plugins.*' + 
+                     '|.*permission denied to create extension "pg_trgm".*' +
+                     ')')
+if flag_error_report:
+    print('Generating error reports')
+    html_body = ['<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">']
+    if flag_report_includes_previous_week:
+        message_body = [html_body[-1]]
+    html_body += [' '*2 + '<head>']
+    html_body += [' '*4 + '<link rel="stylesheet" href="style.css" type="text/css" id="" media="print, projection, screen" />']
+    html_body += [' '*4 + '<link rel="stylesheet" href="theme.blue.min.css">']
+    html_body += [' '*4 + '<script type="text/javascript" src="../../app/libs/jquery.min.js"></script>']
+    html_body += [' '*4 + '<script type="text/javascript" src="jquery.tablesorter.combined.min.js"></script>']
+    html_body += [' '*4 + '<script type="text/javascript">']
+    html_body += [' '*4 + '$(document).ready(function() { ']
+    html_body += [' '*4 + '    // call the tablesorter plugin ']
+    html_body += [' '*4 + '    $("table").tablesorter({']
+    html_body += [' '*4 + '        theme: "blue",']
+    html_body += [' '*4 + '        widgets: ["zebra", "filter"],']
+    html_body += [' '*4 + '        widgetOptions : {']
+    html_body += [' '*4 + '            filter_columnFilters: true,']
+    html_body += [' '*4 + '            filter_reset: ".reset",']
+    html_body += [' '*4 + '            zebra : [ "normal-row", "alt-row" ]']
+    html_body += [' '*4 + '        },']
+    html_body += [' '*4 + '        sortList : [[6,1]]']
+    html_body += [' '*4 + '    }); ']
+    html_body += [' '*4 + '}); ']
+    html_body += [' '*4 + '</script>']
+    html_body += [' '*2 + '</head>']
+    html_body += [' '*2 + '<body>']
+    html_body += [' '*4 + '<h1>Log Error log for <a href="%s/">%s</a></h1>' % (orthanc_info['url'], orthanc_info['name'])]
+    if flag_report_includes_previous_week:
+        message_body += html_body[-2:]
+        message_body += [' '*4 + '<p>Full error log report at <a href="FULL_REPORT_URL">FULL_REPORT_NAME</a></h1>']
+    for i_bucket in order_bucket:
+        audit_bucket = audit_buckets[i_bucket]
+        html_body += [' '*4 + '<a href="#%s">Jump to report: %s</a><br>' % (audit_bucket['type'].replace(' ','-'),audit_bucket['type'])]
+    
+    files_log_error = []
+    for i_bucket in order_bucket:
+    
+        audit_bucket = audit_buckets[i_bucket]
+        print('   Processing: %s' % audit_bucket['type'])
+    
+        html_body += [' '*4 + '<hr>']
+        html_body += [' '*4 + '<h2><a id="%s">%s</a></h2>' % (audit_bucket['type'].replace(' ','-'),audit_bucket['type'])]
+        if audit_bucket['type'] == 'Previous week':
+            message_body += html_body[-2:]
+    
+        log_error = {}
+        for file_start_time, file_log in map_logs_by_time.items():
+            with open(file_log) as lun:
+                lines_of_text = lun.readlines()
+            lines_of_text_new = []
+            line_of_text_current = []
+            i_line = 0
+            while i_line < len(lines_of_text):
+                line_of_text = lines_of_text[i_line]
+                if re_log_entry.match(line_of_text) is not None:
+                    if len(line_of_text_current) > 0:
+                        lines_of_text_new += [' '.join(line_of_text_current)]
+                        line_of_text_current = []
+                line_of_text_current += [line_of_text.strip().strip('\n')]
+                i_line += 1
+            if len(line_of_text_current) > 0:
+                lines_of_text_new += [' '.join(line_of_text_current)]
+            lines_of_text = lines_of_text_new
+            user_ip = None
+            user_date_entry = None
+            for line_of_text in lines_of_text:
+                res_skip = re_skip.match(line_of_text)
+                if res_skip is not None:
+                    continue
+                res_error = re_error.match(line_of_text)
+                res_user_api = re_user_api.match(line_of_text)
+                res_warning = re_warning.match(line_of_text)
+                if res_error is not None:
+                    month, day = int(res_error.group(1)[0:2]), int(res_error.group(1)[2:])
+                    hour, minute, second = int(res_error.group(2)[0:2]), int(res_error.group(2)[3:5]), int(res_error.group(2)[6:])
+                    milliseconds = int(res_error.group(3))
+                    date_entry = datetime.datetime(file_start_time.year, month, day, hour, minute, second, milliseconds)
+                    if date_entry < audit_bucket['range']['start']:
+                        continue
+                    program_name = res_error.group(4).strip()
+                    program_line = res_error.group(5)
+                    error_text = '%s:%s %s' % (program_name, program_line, res_error.group(6).strip())
+                    if error_text not in log_error:
+                        log_error[error_text] = []
+                    log_error[error_text] += [date_entry]
+                elif res_user_api is not None:
+                    continue
+                elif res_warning is not None:
+                    continue
+                else:
+                    print(line_of_text)
+                    import pdb; pdb.set_trace()
+    
+        if len(log_error) > 0:
+            html_body += [' '*4 + '<!-- targeted by the "filter_reset" option -->']
+            html_body += [' '*4 + '<button type="button" class="reset">Reset Search</button>']
+            html_body += [' '*4 + '<table class="tablesorter-blue" border=1>']
+            if audit_bucket['type'] == 'Previous week':
+                message_body += [' '*4 + '<table border=1>']
+        else:
+            html_body += [' '*4 + '<p>No entries for this time period</p>']
+            if audit_bucket['type'] == 'Previous week':
+                message_body += [html_body[-1]]
+            continue
+    
+        # Compile results
+        error_texts = []
+        error_stats = {}
+        for error_type in ['N Occurences', 'Min per day', 'Max per day', 'Mean per day', 'Earliest', 'Latest']:
+            error_stats[error_type] = []
+        error_entries = []
+        for error_text, date_list in log_error.items():
+            error_texts += [error_text]
+            error_stats['N Occurences'] += [len(date_list)]
+            if error_stats['N Occurences'][-1] > 1:
+                dates_unique = np.unique(np.array(date_list))
+                date_current = dates_unique.min()
+                error_stats_by_day = {}
+                for date_current in date_list:
+                    date_str = date_current.strftime('%Y%m%d')
+                    if date_str not in error_stats_by_day:
+                        error_stats_by_day[date_str] = 0
+                    error_stats_by_day[date_str] += 1
+                error_stats_by_day = np.array(error_stats_by_day.values())
+                error_entry = {'Min per day' : error_stats_by_day.min(),
+                               'Max per day' : error_stats_by_day.max(),
+                               'Mean per day' : error_stats_by_day.mean(),
+                               'Std per day' : error_stats_by_day.std(),
+                               'Earliest' : dates_unique.min(),
+                               'Latest' : dates_unique.max()}
+            else:
+                error_entry = {'Min per day' : 1,
+                               'Max per day' : 1,
+                               'Mean per day' : 1.0,
+                               'Std per day' : 0.0,
+                               'Earliest' : date_list[0],
+                               'Latest' : date_list[0]}
+            for error_type in ['Min per day', 'Max per day', 'Mean per day', 'Earliest', 'Latest']:
+                error_stats[error_type] += [error_entry[error_type]]
+            error_entries += [error_entry]
+                
+        for error_type, error_list in error_stats.items() :
+            error_stats[error_type] = np.array(error_list)
+        error_colors = {}
+        error_colors_rank = ['pink', 'lightyellow', 'white']
+        for error_type, error_data in error_stats.items():
+            error_colors[error_type] = {}
+            if error_type not in ['Earliest', 'Latest']:
+                error_colors[error_type][error_colors_rank[0]] = error_data >= (error_data.mean() + 2 * error_data.std())
+                error_colors[error_type][error_colors_rank[1]] = error_data >= error_data.mean()
+            else:
+                error_data_copy = error_data.copy()
+                error_data_copy.sort()
+                for i_color in range(2):
+                    i_cutoff = min(max(0,len(error_data)-(i_color+1) * 5),len(error_data)-1)
+                    error_colors[error_type][error_colors_rank[i_color]] = error_data >= error_data_copy[i_cutoff]
+            error_colors[error_type][error_colors_rank[-1]] = np.ones(error_data.size,dtype=bool)
+        file_log_error = '%s/%s error_log_%s.csv' % (orthanc_info['directory']['logs'], audit_bucket['type'], datetime.datetime.now().strftime('%Y%m%d%H%M%S'))
+        if flag_generate_csv:
+            files_log_error += [file_log_error]
+        with open(file_log_error, 'wb') as lun:
+            fieldnames = ['N Occurences', 'Min per day', 'Max per day', 'Mean per day', 'Std per day', 'Earliest', 'Latest', 'Text']
+            html_text = ' '*6 + '<thead>\n'
+            html_text += ' '*8 + '<tr bgcolor="lightblue">\n'
+            for fieldname in fieldnames:
+                html_text += ' '*10 + '<th>%s</th>\n' % fieldname
+            html_text += ' '*8 + '</tr>\n'
+            html_text += ' '*6 + '</thead>\n'
+            html_body += [html_text]
+            html_body += [' '*6 + '<tbody>']
+            if audit_bucket['type'] == 'Previous week':
+                message_body += html_body[-2:]
+            writer = csv.DictWriter(lun, fieldnames=fieldnames)
+            writer.writeheader()
+            i_row = 0
+            for i_error in error_stats['N Occurences'].argsort()[::-1]:
+                if i_row % 2 == 0:
+                    html_text = ' '*8 + '<tr>'
+                else:
+                    html_text = ' '*8 + '<tr bgcolor="lightgray">'
+                i_row += 1
+                error_text = error_texts[i_error] 
+                error_entry = error_entries[i_error]
+                date_list = log_error[error_text]
+                row = {}
+                row['N Occurences'] = '%d' % len(date_list)
+                color_str = 'white'
+                for error_color_rank in error_colors_rank:
+                    if error_colors['N Occurences'][error_color_rank][i_error]:
+                        color_str = error_color_rank
+                        break
+                html_text += '<td align="right" bgcolor="%s">%d</td>' % (color_str, len(date_list))
+                for column in ['Min per day', 'Max per day']:
+                    row[column] = '%d' % error_entry[column]
+                    color_str = 'white'
+                    for error_color_rank in error_colors_rank:
+                        if error_colors[column][error_color_rank][i_error]:
+                            color_str = error_color_rank
+                            break
+                    html_text += '<td align="right" bgcolor="%s">%d</td>' % (color_str,error_entry[column])
+                row['Mean per day'] = '%f' % error_entry['Mean per day']
+                color_str = 'white'
+                for error_color_rank in error_colors_rank:
+                    if error_colors['Mean per day'][error_color_rank][i_error]:
+                        color_str = error_color_rank
+                        break
+                html_text += '<td align="right" bgcolor="%s">%.2f</td>' % (color_str, error_entry['Mean per day'])
+                row['Std per day'] = '%f' % error_entry['Std per day']
+                html_text += '<td align="right">%.2f</td>' % error_entry['Std per day']
+                for column in ['Earliest', 'Latest']:
+                    row[column] = error_entry[column].strftime('%Y-%m-%d %H:%M:%S')
+                    color_str = 'white'
+                    for error_color_rank in error_colors_rank:
+                        if error_colors[column][error_color_rank][i_error]:
+                            color_str = error_color_rank
+                            break
+                    html_text += '<td align="center" bgcolor="%s">%s</td>' % (color_str, error_entry[column].strftime('%Y-%m-%d %H:%M:%S'))
+                row['Text'] = error_text
+                html_text += '<td>%s</td></tr>' % html.escape(error_text)
+                writer.writerow(row)
+                html_body += [html_text]
+                if audit_bucket['type'] == 'Previous week':
+                    message_body += [html_body[-1]]
+        html_body += [' '*6 + '</tbody>']
+        html_body += [' '*4 + '</table>']
+        if audit_bucket['type'] == 'Previous week':
+            message_body += html_body[-2:]
+        if not flag_generate_csv:
+            os.unlink(file_log_error)
+    
+    html_body += [' '*2 + '</body>']
+    html_body += ['</html>']
+    html_body = '\n'.join(html_body)
+    file_html_base = 'error_log_report_%s.html' % datetime.datetime.now().strftime('%Y%m%s%H%M%S')
+    file_html = '%s/%s' % (orthanc_info['directory']['reports'], file_html_base)
+    with open(file_html, 'wb') as lun:
+        lun.write(html_body)
+    url_html = '%s/extra/reports/%s' % (orthanc_info['url'], file_html_base)
+    if flag_report_includes_previous_week:
+        message_body += ['Error report available at <a href="%s">%s</a></body></html>' % (url_html, file_html_base)]
+        message_body += [' '*2 + '</body>']
+        message_body += ['</html>']
+        message_body = '\n'.join(message_body)
+        message_body = message_body.replace('FULL_REPORT_URL',url_html)
+        message_body = message_body.replace('FULL_REPORT_NAME', file_html_base)
+    else:
+        message_body = '<html><body>Error report available at <a href="%s">%s</a></body></html>' % (url_html, file_html_base)
+    result_email = email_message('%s Error Log PHI' % orthanc_info['name'], message_body, 
+                                 email_recipients = orthanc_info['email']['error'], 
+                                 subtype='html', files_csv=files_log_error)
+
+# ----------------------------
+# User reports
+# ----------------------------
+flag_user_report = True
+flag_testing = False
+if flag_user_report:
+    # The following are used to map the proxied user name to a human name and contact
+    if flag_testing:
+        unid2name = { 'proxy-x-remote-user' : { 'Name' : 'Human name', 'Email' : 'their_email@somewhere.com' }}
+    else:
+        unid2name = { 'proxy-x-remote-user' : { 'Name' : 'Human name', 'Email' : 'their_email@somewhere.com' }}
+    print('Generating user api reports')
+    html_body = ['<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">']
+    if flag_report_includes_previous_week:
+        message_body = [html_body[-1]]
+    html_body += [' '*2 + '<head>']
+    html_body += [' '*4 + '<link rel="stylesheet" href="style.css" type="text/css" id="" media="print, projection, screen" />']
+    html_body += [' '*4 + '<link rel="stylesheet" href="theme.blue.min.css">']
+    html_body += [' '*4 + '<script type="text/javascript" src="../../app/libs/jquery.min.js"></script>']
+    html_body += [' '*4 + '<script type="text/javascript" src="jquery.tablesorter.combined.min.js"></script>']
+    html_body += [' '*4 + '<script type="text/javascript">']
+    html_body += [' '*4 + '$(document).ready(function() { ']
+    html_body += [' '*4 + '    // call the tablesorter plugin ']
+    html_body += [' '*4 + '    $("table").tablesorter({']
+    html_body += [' '*4 + '        theme: "blue",']
+    html_body += [' '*4 + '        widgets: ["zebra", "filter"],']
+    html_body += [' '*4 + '        widgetOptions : {']
+    html_body += [' '*4 + '            filter_columnFilters: true,']
+    html_body += [' '*4 + '            filter_reset: ".reset",']
+    html_body += [' '*4 + '            zebra : [ "normal-row", "alt-row" ]']
+    html_body += [' '*4 + '        },']
+    html_body += [' '*4 + '        sortList : [[6,1]]']
+    html_body += [' '*4 + '    }); ']
+    html_body += [' '*4 + '}); ']
+    html_body += [' '*4 + '</script>']
+    html_body += [' '*2 + '</head>']
+    html_body += [' '*2 + '<body>']
+    html_body += [' '*4 + '<h1>User activity <a href="%s/">%s</a></h1>' % (orthanc_info['url'], orthanc_info['name'])]
+    if flag_report_includes_previous_week:
+        message_body += html_body[-2:]
+        message_body += [' '*4 + '<p>Full user activity report at <a href="FULL_REPORT_URL">FULL_REPORT_NAME</a></h1>']
+    html_body += [' '*4 + '<a href="#%s">Jump to report: %s</a><br>' % ('user_ip','Users and Locations')]
+    for i_bucket in order_bucket:
+        audit_bucket = audit_buckets[i_bucket]
+        html_body += [' '*4 + '<a href="#%s">Jump to report: %s</a><br>' % (audit_bucket['type'].replace(' ','-'),audit_bucket['type'])]
+    insert_user_ip_html = len(html_body)
+    if flag_report_includes_previous_week:
+        insert_user_ip_message = len(message_body)
+    files_log_user_api = []
+    for i_bucket in order_bucket:
+    
+        audit_bucket = audit_buckets[i_bucket]
+        print('   Processing: %s' % audit_bucket['type'])
+    
+        html_body += [' '*4 + '<hr>']
+        html_body += [' '*4 + '<h2><a id="%s">%s</a></h2>' % (audit_bucket['type'].replace(' ','-'),audit_bucket['type'])]
+        if audit_bucket['type'] == 'Previous week':
+            message_body += html_body[-2:]
+    
+        api_str_counts = {}
+        modality_store_counts = {}
+        send_to_disk_count = 0
+        log_warning = {}
+        log_user_api = {}
+        log_ip = {}
+        log_id = {}
+        map_date_to_user = {}
+        for file_start_time, file_log in map_logs_by_time.items():
+            with open(file_log) as lun:
+                lines_of_text = lun.readlines()
+            lines_of_text_new = []
+            line_of_text_current = []
+            i_line = 0
+            while i_line < len(lines_of_text):
+                line_of_text = lines_of_text[i_line]
+                if re_log_entry.match(line_of_text) is not None:
+                    if len(line_of_text_current) > 0:
+                        lines_of_text_new += [' '.join(line_of_text_current)]
+                        line_of_text_current = []
+                line_of_text_current += [line_of_text.strip().strip('\n')]
+                i_line += 1
+            if len(line_of_text_current) > 0:
+                lines_of_text_new += [' '.join(line_of_text_current)]
+            lines_of_text = lines_of_text_new
+            user_ip = None
+            user_date_entry = None
+            for line_of_text in lines_of_text:
+                res_error = re_error.match(line_of_text)
+                res_user_api = re_user_api.match(line_of_text)
+                res_warning = re_warning.match(line_of_text)
+                if res_error is not None:
+                    continue
+                elif res_user_api is not None:
+                    month, day = int(res_user_api.group(1)[0:2]), int(res_user_api.group(1)[2:])
+                    hour, minute, second = int(res_user_api.group(2)[0:2]), int(res_user_api.group(2)[3:5]), int(res_user_api.group(2)[6:])
+                    milliseconds = int(res_user_api.group(3))
+                    user_date_entry = datetime.datetime(file_start_time.year, month, day, hour, minute, second, milliseconds)
+                    if user_date_entry < audit_bucket['range']['start']:
+                        continue
+                    program_name = res_user_api.group(4).strip()
+                    program_line = res_user_api.group(5)
+                    user_id = res_user_api.group(6)
+                    user_ip = res_user_api.group(7)
+                    api_str = res_user_api.group(8)
+                    if api_str not in api_str_counts:
+                        api_str_counts[api_str] = 0
+                    api_str_counts[api_str] += 1
+                    api_text = res_user_api.group(9)
+                    url_type = 'other'
+                    for url in ['studies','patients','series','instances', 'jobs', 'app', 'queries', 'extra/reports']:
+                        if api_text.find(url) >= 0:
+                            if len(api_text) > len('/%s' % url):
+                                if api_text.find('send_to_disk') > 0:
+                                    url_type = '/%s/send_to_disk' % url
+                                    send_to_disk_count += 1
+                                else:
+                                    url_type = '/%s/specific' % url
+                            else:
+                                url_type = '/%s' % url
+                            break
+                    if api_text.find('modalities') >= 0:
+                        api_text_split = api_text.split('/')
+                        if api_text_split[-1] == 'store':
+                            modality = api_text_split[2]
+                            if modality not in modality_store_counts:
+                                modality_store_counts[modality] = 0
+                            modality_store_counts[modality] += 1
+
+                    if url_type == 'other':
+                        url_type = api_text
+                    if user_date_entry in map_date_to_user:
+                        sys.exit('duplicate date')
+                    map_date_to_user[user_date_entry] = user_id
+                    if user_id in unid2name:
+                        if 'Email' in unid2name[user_id]:
+                            user_str = '<a href="mailto:%s">%s</a>' % (unid2name[user_id]['Email'],unid2name[user_id]['Name'])
+                        else:
+                            user_str = '<a href="mailto:%s@utah.edu">%s</a>' % (user_id,unid2name[user_id]['Name'])
+                    else:
+                        user_str = user_id
+                    entry_text = '%s %s %s %s' % (user_str, user_ip, api_str, url_type)
+                    if entry_text not in log_user_api:
+                        log_user_api[entry_text] = []
+                    log_user_api[entry_text] += [user_date_entry]
+                    if user_ip not in log_ip:
+                        log_ip[user_ip] = []
+                    if user_id not in log_ip[user_ip]:
+                        log_ip[user_ip] += [user_id]
+                    if user_id not in log_id:
+                        log_id[user_id] = []
+                    if user_ip not in log_id[user_id]:
+                        log_id[user_id] += [user_ip]
+                elif res_warning is not None:
+                    month, day = int(res_warning.group(1)[0:2]), int(res_warning.group(1)[2:])
+                    hour, minute, second = int(res_warning.group(2)[0:2]), int(res_warning.group(2)[3:5]), int(res_warning.group(2)[6:])
+                    milliseconds = int(res_warning.group(3))
+                    date_entry = datetime.datetime(file_start_time.year, month, day, hour, minute, second, milliseconds)
+                    if date_entry < audit_bucket['range']['start']:
+                        continue
+                    program_name = res_warning.group(4).strip()
+                    program_line = res_warning.group(5)
+                    warning_text = '%s:%s %s' % (program_name, program_line, res_warning.group(6).strip())
+                    if warning_text not in log_warning:
+                        log_warning[warning_text] = []
+                    log_warning[warning_text] += [date_entry]
+                else:
+                    print(line_of_text)
+                    import pdb; pdb.set_trace()
+    
+        if len(log_user_api) > 0:
+            if len(api_str_counts) > 0:
+                html_body += [' '*4 + '<table border=1><tr>']
+                html_body += [' '*6 + '<td>API Calls</td>']
+                if audit_bucket['type'] == 'Previous week':
+                    message_body += html_body[-2:]
+                for api_str, api_str_count in api_str_counts.items():
+                    if api_str in api_str_colors:
+                        html_body += [' '*6 + '<td bgcolor="%s">%d %s</td>' % (api_str_colors[api_str], api_str_count, api_str)]
+                    else:
+                        html_body += [' '*6 + '<td bgcolor="%s">%d %s</td>' % ('cyan', api_str_count, api_str)]
+                    if audit_bucket['type'] == 'Previous week':
+                        message_body += [html_body[-1]]
+                html_body += [' '*4 + '</tr></table>']
+                if audit_bucket['type'] == 'Previous week':
+                    message_body += [html_body[-1]]
+            if len(modality_store_counts) > 0 or send_to_disk_count > 0:
+                html_body += [' '*4 + '<table border=1>']
+                html_body += [' '*6 + '<tr bgcolor="lightgreen"><th colspan=2>Data Moved</th></tr>']
+                html_body += [' '*6 + '<tr bgcolor="lightyellow"><th>Count</th><th>Destination</th></tr>']
+                if audit_bucket['type'] == 'Previous week':
+                    message_body += html_body[-3:]
+                i_row = 0
+                if send_to_disk_count > 0:
+                    html_body += [' '*6 + '<tr><td align="right">%d</td><td>Send to disk</td></tr>' % send_to_disk_count]
+                    if audit_bucket['type'] == 'Previous week':
+                        message_body += [html_body[-1]]
+                    i_row + 1
+                for modality, modality_count in modality_store_counts.items():
+                    if i_row % 2 == 0:
+                        html_body += [' '*6 + '<tr bgcolor="lightgray"><td align="right">%d</td><td>%s</td></tr>' % (modality_count, modality)]
+                    else:
+                        html_body += [' '*6 + '<tr><td align="right">%d</td><td>%s</td></tr>' % (modality_count, modality)]
+                    if audit_bucket['type'] == 'Previous week':
+                        message_body += [html_body[-1]]
+                    i_row += 1
+                html_body += [' '*4 + '</table>']
+                if audit_bucket['type'] == 'Previous week':
+                    message_body += [html_body[-1]]
+            html_body += [' '*4 + '<!-- targeted by the "filter_reset" option -->']
+            html_body += [' '*4 + '<button type="button" class="reset">Reset Search</button>']
+            html_body += [' '*4 + '<table class="tablesorter-blue" border=1>']
+            if audit_bucket['type'] == 'Previous week':
+                message_body += [' '*4 + '<table border=1>']
+        else:
+            html_body += [' '*4 + '<p>No entries for this time period</p>']
+            if audit_bucket['type'] == 'Previous week':
+                message_body += [html_body[-1]]
+            continue
+
+        # Compile results
+        user_api_texts = []
+        user_api_stats = {}
+        for user_api_type in ['N Occurences', 'Min per day', 'Max per day', 'Mean per day', 'Earliest', 'Latest']:
+            user_api_stats[user_api_type] = []
+        user_api_entries = []
+        for user_api_text, date_list in log_user_api.items():
+            user_api_texts += [user_api_text]
+            user_api_stats['N Occurences'] += [len(date_list)]
+            if user_api_stats['N Occurences'][-1] > 1:
+                dates_unique = np.unique(np.array(date_list))
+                date_current = dates_unique.min()
+                user_api_stats_by_day = {}
+                for date_current in date_list:
+                    date_str = date_current.strftime('%Y%m%d')
+                    if date_str not in user_api_stats_by_day:
+                        user_api_stats_by_day[date_str] = 0
+                    user_api_stats_by_day[date_str] += 1
+                user_api_stats_by_day = np.array(user_api_stats_by_day.values())
+                user_api_entry = {'Min per day' : user_api_stats_by_day.min(),
+                                  'Max per day' : user_api_stats_by_day.max(),
+                                  'Mean per day' : user_api_stats_by_day.mean(),
+                                  'Std per day' : user_api_stats_by_day.std(),
+                                  'Earliest' : dates_unique.min(),
+                                  'Latest' : dates_unique.max()}
+            else:
+                user_api_entry = {'Min per day' : 1,
+                                  'Max per day' : 1,
+                                  'Mean per day' : 1.0,
+                                  'Std per day' : 0.0,
+                                  'Earliest' : date_list[0],
+                                  'Latest' : date_list[0]}
+            for user_api_type in ['Min per day', 'Max per day', 'Mean per day', 'Earliest', 'Latest']:
+                user_api_stats[user_api_type] += [user_api_entry[user_api_type]]
+            user_api_entries += [user_api_entry]
+                
+        for user_api_type, user_api_list in user_api_stats.items() :
+            user_api_stats[user_api_type] = np.array(user_api_list)
+    
+        user_api_colors = {}
+        user_api_colors_rank = ['pink', 'lightyellow', 'white']
+        for user_api_type, user_api_data in user_api_stats.items():
+            user_api_colors[user_api_type] = {}
+            if user_api_type not in ['Earliest', 'Latest']:
+                user_api_colors[user_api_type][user_api_colors_rank[0]] = user_api_data >= (user_api_data.mean() + 2 * user_api_data.std())
+                user_api_colors[user_api_type][user_api_colors_rank[1]] = user_api_data >= user_api_data.mean()
+            else:
+                user_api_data_copy = user_api_data.copy()
+                user_api_data_copy.sort()
+                for i_color in range(2):
+                    i_cutoff = min(max(0,len(user_api_data)-(i_color+1) * 5),len(user_api_data)-1)
+                    user_api_colors[user_api_type][user_api_colors_rank[i_color]] = user_api_data >= user_api_data_copy[i_cutoff]
+            user_api_colors[user_api_type][user_api_colors_rank[-1]] = np.ones(user_api_data.size,dtype=bool)
+        file_log_user_api = '%s/%s user_api_log_%s.csv' % (orthanc_info['directory']['logs'], audit_bucket['type'], datetime.datetime.now().strftime('%Y%m%d%H%M%S'))
+        if flag_generate_csv:
+            files_log_user_api += [file_log_user_api]
+        with open(file_log_user_api, 'wb') as lun:
+            fieldnames = ['N Occurences', 'Min per day', 'Max per day', 'Mean per day', 'Std per day', 'Earliest', 'Latest', 'Text']
+            html_text = ' '*6 + '<thead>\n'
+            html_text += ' '*8 + '<tr bgcolor="lightblue">\n'
+            for fieldname in fieldnames:
+                html_text += ' '*10 + '<th>%s</th>\n' % fieldname
+            html_text += ' '*8 + '</tr>\n'
+            html_text += ' '*6 + '</thead>'
+            html_body += [html_text]
+            html_body += [' '*6 + '<tbody>']
+            if audit_bucket['type'] == 'Previous week':
+                message_body += html_body[-2:]
+            writer = csv.DictWriter(lun, fieldnames=fieldnames)
+            writer.writeheader()
+            i_row = 0
+            for i_user_api in user_api_stats['N Occurences'].argsort()[::-1]:
+                if i_row % 2 == 0:
+                    html_text = ' '*8 + '<tr>'
+                else:
+                    html_text = ' '*8 + '<tr bgcolor="lightgray">'
+                i_row += 1
+                user_api_text = user_api_texts[i_user_api] 
+                user_api_entry = user_api_entries[i_user_api]
+                date_list = log_user_api[user_api_text]
+                row = {}
+                row['N Occurences'] = '%d' % len(date_list)
+                color_str = 'white'
+                for user_api_color_rank in user_api_colors_rank:
+                    if user_api_colors['N Occurences'][user_api_color_rank][i_user_api]:
+                        color_str = user_api_color_rank
+                        break
+                html_text += '<td align="right" bgcolor="%s">%d</td>' % (color_str, len(date_list))
+                for column in ['Min per day', 'Max per day']:
+                    row[column] = '%d' % user_api_entry[column]
+                    color_str = 'white'
+                    for user_api_color_rank in user_api_colors_rank:
+                        if user_api_colors[column][user_api_color_rank][i_user_api]:
+                            color_str = user_api_color_rank
+                            break
+                    html_text += '<td align="right" bgcolor="%s">%d</td>' % (color_str,user_api_entry[column])
+                row['Mean per day'] = '%f' % user_api_entry['Mean per day']
+                color_str = 'white'
+                for user_api_color_rank in user_api_colors_rank:
+                    if user_api_colors['Mean per day'][user_api_color_rank][i_user_api]:
+                        color_str = user_api_color_rank
+                        break
+                html_text += '<td align="right" bgcolor="%s">%.2f</td>' % (color_str, user_api_entry['Mean per day'])
+                row['Std per day'] = '%f' % user_api_entry['Std per day']
+                html_text += '<td align="right">%.2f</td>' % user_api_entry['Std per day']
+                for column in ['Earliest', 'Latest']:
+                    row[column] = user_api_entry[column].strftime('%Y-%m-%d %H:%M:%S')
+                    color_str = 'white'
+                    for user_api_color_rank in user_api_colors_rank:
+                        if user_api_colors[column][user_api_color_rank][i_user_api]:
+                            color_str = user_api_color_rank
+                            break
+                    html_text += '<td align="center" bgcolor="%s">%s</td>' % (color_str, user_api_entry[column].strftime('%Y-%m-%d %H:%M:%S'))
+                row['Text'] = user_api_text
+                if user_api_text.find('utah.edu') < 0:
+                    html_text += '<td bgcolor="pink">%s</td></tr>' % user_api_text
+                else:
+                    html_text += '<td>%s</td></tr>' % user_api_text
+                writer.writerow(row)
+                html_body += [html_text]
+                if audit_bucket['type'] == 'Previous week':
+                    message_body += [html_body[-1]]
+        html_body += [' '*6 + '</tbody>']
+        html_body += [' '*4 + '</table>']
+        if audit_bucket['type'] == 'Previous week':
+            message_body += html_body[-2:]
+        if not flag_generate_csv:
+            os.unlink(file_log_user_api)
+    
+    html_body += [' '*2 + '</body>']
+    html_body += ['</html>']
+    if flag_report_includes_previous_week:
+        message_body += html_body[-2:]
+    
+    table_user_ip = [' '*4 + '<hr>']
+    table_user_ip += [' '*4 + '<h2><a id="%s">%s</a></h2>' % ('user_ip','Users and Locations')]
+    table_user_ip += [' '*4 + '<table border=1>']
+    table_user_ip += [' '*6 + '<tr bgcolor="lightblue"><th style="width:20%">User</th><th style="width:20%">Most Recent</th><th>Access Points</th></tr>']
+    i_row = 0
+    dates_recent = []
+    dates_uid = []
+    for user_id, ip_list in log_id.items():
+        dates_hit = []
+        for date_value, user_id_local in map_date_to_user.items():
+            if user_id_local == user_id:
+                dates_hit += [date_value]
+        dates_hit = np.array(dates_hit)
+        date_recent = dates_hit.max().strftime('%Y-%m-%d %H:%M:%S')
+        dates_recent += [date_recent]
+        dates_uid += [user_id]
+    index_sort = np.array(dates_recent).argsort()[::-1]
+    for i_sort in index_sort:
+        user_id = dates_uid[i_sort]
+        ip_list = log_id[user_id]
+        date_recent = dates_recent[i_sort]
+        if user_id in unid2name:
+            if 'Email' in unid2name[user_id]:
+                user_str = '<a href="mailto:%s">%s</a>' % (unid2name[user_id]['Email'],unid2name[user_id]['Name'])
+            else:
+                user_str = '<a href="mailto:%s@utah.edu">%s</a>' % (user_id,unid2name[user_id]['Name'])
+        else:
+            user_str = user_id
+        color_row = 'white' if i_row % 2 == 0 else 'lightgray'
+        i_row += 1
+        flag_radiology = True
+        ip_list.sort()
+        for ip_value in ip_list:
+            flag_radiology = flag_radiology and re_radiology.match(ip_value) is not None
+        color_ip = 'white' if flag_radiology else 'pink'
+        table_user_ip += [' '*6 + '<tr bgcolor="%s"><td>%s</td><td>%s</td><td bgcolor="%s">%s</td></tr>' % (color_row, user_str, date_recent, color_ip, ', '.join(ip_list))]
+    table_user_ip += [' '*4 + '</table>']
+    
+    html_body = html_body[0:insert_user_ip_html] + table_user_ip + html_body[insert_user_ip_html:]
+    if flag_report_includes_previous_week:
+        message_body = message_body[0:insert_user_ip_message] + table_user_ip + message_body[insert_user_ip_message:]
+    
+    html_body = '\n'.join(html_body)
+    file_html_base = 'user_log_report_%s.html' % datetime.datetime.now().strftime('%Y%m%s%H%M%S')
+    file_html = '%s/%s' % (orthanc_info['directory']['reports'], file_html_base)
+    with open(file_html, 'wb') as lun:
+        lun.write(html_body)
+    url_html = '%s/extra/reports/%s' % (orthanc_info['url'], file_html_base)
+    if flag_report_includes_previous_week:
+        message_body = '\n'.join(message_body)
+        message_body = message_body.replace('FULL_REPORT_URL',url_html)
+        message_body = message_body.replace('FULL_REPORT_NAME', file_html_base)
+    else:
+        message_body = '<html><body>User activity report available at <a href="%s">%s</a></body></html>' % (url_html, file_html_base)
+    result_email = email_message('%s User Logs PHI' % orthanc_info['name'], message_body,  
+                                 email_recipients = orthanc_info['email']['usage'], 
+                                 subtype='html', files_csv=files_log_user_api)
+ 

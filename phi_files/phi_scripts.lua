@@ -3,33 +3,49 @@ function trim(s)
     return (s:gsub("^%s*(.-)%s*$", "%1"))
 end
 
--- ======================================================
-function SplitToKeyList(aInputStr, aSep)
-   if aSep == nil then
-      aSep = "%s"
-   end
-   local t={}
-   for str in string.gmatch(aInputStr, "([^"..aSep.."]+)") do
-      t[str] = true
-   end
-   return t
-end
-
+-- -- ======================================================
+-- function SplitToKeyList(aInputStr, aSep)
+--    if aSep == nil then
+--       aSep = "%s"
+--    end
+--    local t={}
+--    for str in string.gmatch(aInputStr, "([^"..aSep.."]+)") do
+--       t[str] = true
+--    end
+--    return t
+-- end
+-- 
 -- ======================================================
 function OpenSQL()
 
     if gIndent then gIndent=gIndent+3 else gIndent=0 end
     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
     local lTime0 = os.time()
+    local lOrthancConfig = GetOrthancConfiguration()
+    local lUser, lPass, lHost, lPort
+    if lOrthancConfig['PostgreSQL'] then
+        lUser = lOrthancConfig['PostgreSQL']['Username']
+        lPass = lOrthancConfig['PostgreSQL']['Password']
+        lHost = lOrthancConfig['PostgreSQL']['Host']
+        lPort = math.floor(lOrthancConfig['PostgreSQL']['Port']+0.5)
+    else
+        lUser = os.getenv('ORTHANC__POSTGRESQL__USERNAME')
+        lPass = os.getenv('ORTHANC__POSTGRESQL__PASSWORD')
+        lHost = os.getenv('ORTHANC__POSTGRESQL__HOST')        
+        lPort = 5432
+    end
     local lSQLStatus
     if not gSQLOpen then
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Loading postgres engine') end
         gSQLEngine = require "luasql.postgres"
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Calling postgres engine') end
         lSQLStatus, gSQLEnviron = pcall(gSQLEngine.postgres)
         if not lSQLStatus then error("Problem starting SQL engine") end
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Connecting to database') end
         lSQLStatus, gSQLConn = pcall(gSQLEnviron.connect,gSQLEnviron,
-                                 'philookup',os.getenv('ORTHANC__POSTGRESQL__USERNAME'),
-                                 os.getenv('ORTHANC__POSTGRESQL__PASSWORD'),
-                                 os.getenv('ORTHANC__POSTGRESQL__HOST'),5432)
+                                 'philookup', lUser, lPass, lHost,lPort)
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Connection status', lSQLStatus) end
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Database', gSQLConn) end
         if not lSQLStatus then error("Problem connecting to remote postgres") end
         gSQLOpen = true
     end
@@ -304,404 +320,498 @@ end
 -- 
 -- end
 -- 
+-- -- ======================================================
+-- function GetPatientIDs(aoStudyMeta,aPatientIDModifier)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local ldPatientID
+--     local ldPatientIDMain = {}
+--     local ldPatientIDAlt = {}
+--     -- Old style where other patient ids were stored at the study level
+--     if aoStudyMeta['PatientMainDicomTags']['PatientID'] then
+--         if string.len(trim(aoStudyMeta['PatientMainDicomTags']['PatientID'])) > 0 then
+--             ldPatientID = aoStudyMeta['PatientMainDicomTags']['PatientID'] .. aPatientIDModifier
+--             ldPatientIDMain[ldPatientID] = true
+--         end
+--     end
+--     if aoStudyMeta['PatientMainDicomTags']['OtherPatientIDs'] then
+--         if string.len(trim(aoStudyMeta['PatientMainDicomTags']['OtherPatientIDs'])) > 0 then
+--             ldPatientID = aoStudyMeta['PatientMainDicomTags']['OtherPatientIDs'] .. aPatientIDModifier
+--             ldPatientIDAlt[ldPatientID] = true
+--         end
+--     end
+--     if aoStudyMeta['PatientMainDicomTags']['RETIRED_OtherPatientIDs'] then
+--         if string.len(trim(aoStudyMeta['PatientMainDicomTags']['RETIRED_OtherPatientIDs'])) > 0 then
+--             ldPatientID = aoStudyMeta['PatientMainDicomTags']['RETIRED_OtherPatientIDs'] .. aPatientIDModifier
+--             ldPatientIDAlt[ldPatientID] = true
+--         end
+--     end
+--     if aoStudyMeta['PatientMainDicomTags']['OtherPatientIDsSequence'] then
+--         for i, otherPatientID in ipairs(aoStudyMeta['PatientMainDicomTags']['OtherPatientIDsSequence']) do
+--             if otherPatientID['PatientID'] then
+--                 if string.len(trim(otherPatientID['PatientID'])) > 0 then
+--                     ldPatientID = otherPatientID['PatientID'] .. aPatientIDModifier
+--                     ldPatientIDAlt[ldPatientID] = true
+--                 end
+--             end
+--         end
+--     end
+--     -- Now we have to dig into at least one instance to get at the other patient ids
+--     local loInstances = ParseJson(RestApiGet('/studies/' .. aoStudyMeta['ID'] .. '/instances', false))
+--     local loInstanceID = loInstances[1]['ID']
+--     local loInstanceMeta = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags?simplify', false))
+--     if loInstanceMeta['PatientID'] then
+--         if string.len(trim(loInstanceMeta['PatientID'])) > 0 then
+--             ldPatientID = loInstanceMeta['PatientID'] .. aPatientIDModifier
+--             ldPatientIDMain[ldPatientID] = true
+--         end
+--     end
+--     if loInstanceMeta['OtherPatientIDs'] then
+--         if string.len(trim(loInstanceMeta['OtherPatientIDs'])) > 0 then
+--             ldPatientID = loInstanceMeta['OtherPatientIDs'] .. aPatientIDModifier
+--             ldPatientIDAlt[ldPatientID] = true
+--         end
+--     end
+--     if loInstanceMeta['RETIRED_OtherPatientIDs'] then
+--         if string.len(trim(loInstanceMeta['RETIRED_OtherPatientIDs'])) > 0 then
+--             ldPatientID = loInstanceMeta['RETIRED_OtherPatientIDs'] .. aPatientIDModifier
+--             ldPatientIDAlt[ldPatientID] = true
+--         end
+--     end
+--     if loInstanceMeta['OtherPatientIDsSequence'] then
+--         for i, otherPatientID in ipairs(loInstanceMeta['OtherPatientIDsSequence']) do
+--             if otherPatientID['PatientID'] then
+--                 if string.len(trim(otherPatientID['PatientID'])) > 0 then
+--                     ldPatientID = otherPatientID['PatientID'] .. aPatientIDModifier
+--                     ldPatientIDAlt[ldPatientID] = true
+--                 end
+--             end
+--         end
+--     end
+-- 
+--     local lPatientIDs = {}
+--     local lPatientIDsCount = 0
+--     local ldPatientIDs = {}
+--     for ldPatientID, dumby in pairs(ldPatientIDMain) do
+--         if not ldPatientIDs[ldPatientID] then
+--             lPatientIDsCount = lPatientIDsCount + 1
+--             lPatientIDs[lPatientIDsCount] = ldPatientID
+--             ldPatientIDs[ldPatientID] = true
+--         end
+--     end
+--     for ldPatientID, dumby in pairs(ldPatientIDAlt) do
+--         if not ldPatientIDs[ldPatientID] then
+--             lPatientIDsCount = lPatientIDsCount + 1
+--             lPatientIDs[lPatientIDsCount] = ldPatientID
+--             ldPatientIDs[ldPatientID] = true
+--         end
+--     end
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     return lPatientIDs
+-- 
+-- end
+-- 
+-- -- ======================================================
+-- function TestGetPatientIDs(aoOrthancStudyID)
+-- 
+--     loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoOrthancStudyID, false))
+--     aPatientIDModifier = 'zzz'
+--     local lPatientIDs_lua = {}
+--     lPatientIDs_lua = GetPatientIDs(loStudyMeta,aPatientIDModifier) 
+--     local lPostData = {}
+--     lPostData['OrthancStudyID'] = aoOrthancStudyID
+--     if aPatientIDModifier then lPostData['PatientIDModifier'] = aPatientIDModifier end
+--     local lPatientIDs_python = {}
+--     local lResult = ParseJson(RestApiPost('/get_patient_ids_lua', DumpJson(lPostData), false))
+--     for i, lIndex in ipairs(lResult['indices']) do
+--         lPatientIDs_python[lIndex] = lResult['patient_ids'][i]
+--     end
+--     print(lPatientIDs_lua)
+--     print(lPatientIDs_python)
+--     PrintRecursive(lPatientIDs_lua)
+--     PrintRecursive(lPatientIDs_python)
+-- 
+-- end
+-- 
+-- -- ======================================================
+-- function TestSavePatientIDsToDB(aoOrthancStudyID)
+-- 
+--     if gSQLOpen then
+--         if gSQLConn then
+--             CloseSQL()
+--         end
+--     end
+--     gSQLOpen = false
+--     OpenSQL()
+-- 
+--     loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoOrthancStudyID, false))
+--     aPatientIDModifier = ''
+--     local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(loStudyMeta,aPatientIDModifier)
+--     local lPostData = {}
+--     lPostData['OrthancStudyID'] = aoOrthancStudyID
+--     lPostData['PatientIDModifier'] = aPatientIDModifier
+--     local lResults
+--     lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
+--     PrintRecursive(lResults)
+--     print(lResults['FlagPatientNewID'])
+--     print(math.floor(lResults['SQLpid']+0.5))
+--     print(lResults['PatientIDAnon'])
+-- 
+-- end
+-- 
+-- -- ======================================================
+-- function SavePatientIDsToDB(aoStudyMeta,aPatientIDModifier)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     if not aoStudyMeta['PatientMainDicomTags'] then 
+--         gSQLConn:rollback()
+--         CloseSQL()
+--         error("Missing PatientMainDicomTags")
+--     end
+-- 
+--     -- ConfirmLookupTablesSQL()
+--     local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql_lua', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
+--     if lStatus['error_text'] then
+--         error(lStatus['error_text'])
+--     end
+-- 
+--     local lPatientIDs = {}
+--     local lPostData = {}
+--     lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+--     if aPatientIDModifier then lPostData['PatientIDModifier'] = aPatientIDModifier end
+--     -- lPatientIDs['dicom'] = GetPatientIDs(aoStudyMeta,aPatientIDModifier) 
+--     local lResult = ParseJson(RestApiPost('/get_patient_ids_lua', DumpJson(lPostData), false, {['x-remote-user']='lua-get_patient_ids'}))
+--     lPatientIDs['dicom'] = {}
+--     for i, lIndex in ipairs(lResult['indices']) do
+--         lPatientIDs['dicom'][lIndex] = lResult['patient_ids'][i]
+--     end
+--     if #lPatientIDs['dicom'] == 0 then 
+--         gSQLConn:rollback()
+--         CloseSQL()
+--         error("Missing DICOM PatientIDs")
+--     end
+-- 
+--     -- Query database for any matches to dicom PatientID
+--     local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
+--     lPatientIDs['pid'] = {}
+--     lPatientIDs['map'] = {}
+--     local j = 0
+--     local k
+--     for i, ldPatientID in ipairs(lPatientIDs['dicom']) do
+--         k = 0
+--         lSQLQuery = string.format(
+--                 [[SELECT pid, parent_pid  
+--                   FROM patientid  
+--                   WHERE value='%s']], 
+--                 gSQLConn:escape(ldPatientID))
+--         lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--         if not lSQLStatus then 
+--             gSQLConn:rollback()
+--             CloseSQL()
+--             error("Problem querying pid, parent_pid")
+--         end
+--         lPatientIDs['map'][ldPatientID] = {}
+--         if lSQLCursor:numrows() > 0 then
+--             lSQLRow = lSQLCursor:fetch({}, "a")
+--             while lSQLRow do
+--                 j = j + 1
+--                 k = k + 1
+--                 if lSQLRow.parent_pid then
+--                     lPatientIDs['pid'][j] = lSQLRow.parent_pid
+--                 else
+--                     lPatientIDs['pid'][j] = lSQLRow.pid
+--                 end
+--                 lPatientIDs['map'][ldPatientID][k] = lPatientIDs['pid'][j]
+--                 lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+--             end
+--         end
+--     end
+-- 
+--     -- If any are defined, there should only be one unique pid
+--     local lSQLpidUnique = {}
+--     local lFlagNewPatientID = (#lPatientIDs['pid'] == 0)
+--     if not lFlagNewPatientID then
+--         local lCheck = {}
+--         j = 0
+--         for i, lSQLpid in ipairs(lPatientIDs['pid']) do
+--             if not lCheck[lSQLpid] then
+--                 j = j + 1
+--                 lSQLpidUnique[j] = lSQLpid
+--                 lCheck[lSQLpid] = 1
+--             end
+--         end
+--         if #lSQLpidUnique > 1 then
+--             PrintRecursive(lSQLpidUnique)
+--             gSQLConn:rollback()
+--             CloseSQL()
+--             error("More than one unique pid found")
+--         end
+--     end
+-- 
+--     -- Handle any new PatientIDs that match a previous one
+--     if not lFlagNewPatientID then
+--         --    To get here, lSQLpidUnique has only 1 element
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
+--         lSQLResult = gSQLConn:setautocommit(false)
+--         for i, ldPatientID in ipairs(lPatientIDs['dicom']) do
+--             if not lPatientIDs['map'][ldPatientID][1] then
+--                 lSQLQuery = string.format(
+--                               [[INSERT INTO patientid 
+--                                 (value, parent_pid) 
+--                                 VALUES('%s',%d)]],
+--                               gSQLConn:escape(ldPatientID),
+--                               lSQLpidUnique[1])
+--                 lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--                 if not lSQLStatus then
+--                     lSQLResult = gSQLConn:rollback()
+--                     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--                     lSQLResult = gSQLConn:setautocommit(true)
+--                     CloseSQL()
+--                     error("Problem 1 inserting new patientid, parent_pid")
+--                 end
+--                 lPatientIDs['map'][ldPatientID][1] = lSQLpidUnique[1]
+--                 if #lPatientIDs['map'][ldPatientID] > 1 then
+--                     for j = 2, #lPatientIDs['map'][ldPatientID] do
+--                         lPatientIDs['map'][ldPatientID][j] = nil
+--                     end
+--                 end
+--             end
+--         end
+--         lSQLResult = gSQLConn:commit()
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--         lSQLResult = gSQLConn:setautocommit(true)
+--     else -- Should only be here if this is a brand new patient
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
+--         lSQLResult = gSQLConn:setautocommit(false)
+--         local lFirstLoop = true
+--         for i, ldPatientID in ipairs(lPatientIDs['dicom']) do
+--             if not lFirstLoop then
+--                 lSQLQuery = string.format(
+--                               [[INSERT INTO patientid
+--                                 (value, parent_pid) 
+--                                 VALUES('%s',%d)]],
+--                               gSQLConn:escape(ldPatientID),
+--                               lSQLpidUnique[1])
+--                 lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--                 if not lSQLStatus then 
+--                     lSQLResult = gSQLConn:rollback()
+--                     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--                     lSQLResult = gSQLConn:setautocommit(true)
+--                     CloseSQL()
+--                     error("Problem 2 inserting new patientid, parent_pid")
+--                 end
+--             else
+--                 lSQLQuery = string.format(
+--                               [[INSERT INTO patientid (value) VALUES('%s')]],
+--                               gSQLConn:escape(ldPatientID))
+--                 lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--                 if not lSQLStatus then 
+--                     lSQLResult = gSQLConn:rollback()
+--                     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--                     lSQLResult = gSQLConn:setautocommit(true)
+--                     CloseSQL()
+--                     error("Problem inserting new patientid")
+--                 end
+--                 lSQLQuery = string.format(
+--                         [[SELECT pid FROM patientid WHERE value='%s']], 
+--                         gSQLConn:escape(ldPatientID))
+--                 lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--                 if not lSQLStatus then 
+--                     lSQLResult = gSQLConn:rollback()
+--                     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--                     lSQLResult = gSQLConn:setautocommit(true)
+--                     CloseSQL()
+--                     error("Problem post-insert selecting new patientid")
+--                 end
+--                 lSQLRow = lSQLCursor:fetch({},"a")
+--                 lPatientIDs['map'][ldPatientID][1] = lSQLRow.pid
+--                 lSQLpidUnique[1] = lSQLRow.pid
+--             end
+--             lFirstLoop = false
+--         end
+--         lSQLResult = gSQLConn:commit()
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--         lSQLResult = gSQLConn:setautocommit(true)
+--     end
+-- 
+--     -- Look for anonymized IDs for this lSQLpid
+--     lSQLQuery = string.format(
+--                    [[SELECT value FROM patientid_anon WHERE pid=%d]],
+--                    lSQLpidUnique[1])
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--     if not lSQLStatus then 
+--         CloseSQL()
+--         error("Problem selecting from patientid_anon")
+--     end
+--     if lSQLCursor:numrows() > 1 then 
+--         error("More than one corresponding patientid_anon")
+--     end
+--     local ldPatientIDAnon
+--     if lSQLCursor:numrows() > 0 then
+--         lSQLRow = lSQLCursor:fetch({},"a")
+--         ldPatientIDAnon = lSQLRow.value
+--     end
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     return lFlagNewPatientID, lSQLpidUnique[1], ldPatientIDAnon
+-- 
+-- end
+-- 
 -- ======================================================
-function GetPatientIDs(aoStudyMeta,aPatientIDModifier)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local ldPatientID
-    local ldPatientIDMain = {}
-    local ldPatientIDAlt = {}
-    -- Old style where other patient ids were stored at the study level
-    if aoStudyMeta['PatientMainDicomTags']['PatientID'] then
-        if string.len(trim(aoStudyMeta['PatientMainDicomTags']['PatientID'])) > 0 then
-            ldPatientID = aoStudyMeta['PatientMainDicomTags']['PatientID'] .. aPatientIDModifier
-            ldPatientIDMain[ldPatientID] = true
-        end
-    end
-    if aoStudyMeta['PatientMainDicomTags']['OtherPatientIDs'] then
-        if string.len(trim(aoStudyMeta['PatientMainDicomTags']['OtherPatientIDs'])) > 0 then
-            ldPatientID = aoStudyMeta['PatientMainDicomTags']['OtherPatientIDs'] .. aPatientIDModifier
-            ldPatientIDAlt[ldPatientID] = true
-        end
-    end
-    if aoStudyMeta['PatientMainDicomTags']['RETIRED_OtherPatientIDs'] then
-        if string.len(trim(aoStudyMeta['PatientMainDicomTags']['RETIRED_OtherPatientIDs'])) > 0 then
-            ldPatientID = aoStudyMeta['PatientMainDicomTags']['RETIRED_OtherPatientIDs'] .. aPatientIDModifier
-            ldPatientIDAlt[ldPatientID] = true
-        end
-    end
-    if aoStudyMeta['PatientMainDicomTags']['OtherPatientIDsSequence'] then
-        for i, otherPatientID in ipairs(aoStudyMeta['PatientMainDicomTags']['OtherPatientIDsSequence']) do
-            if otherPatientID['PatientID'] then
-                if string.len(trim(otherPatientID['PatientID'])) > 0 then
-                    ldPatientID = otherPatientID['PatientID'] .. aPatientIDModifier
-                    ldPatientIDAlt[ldPatientID] = true
-                end
-            end
-        end
-    end
-    -- Now we have to dig into at least one instance to get at the other patient ids
-    local loInstances = ParseJson(RestApiGet('/studies/' .. aoStudyMeta['ID'] .. '/instances', false))
-    local loInstanceID = loInstances[1]['ID']
-    local loInstanceMeta = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags?simplify', false))
-    if loInstanceMeta['PatientID'] then
-        if string.len(trim(loInstanceMeta['PatientID'])) > 0 then
-            ldPatientID = loInstanceMeta['PatientID'] .. aPatientIDModifier
-            ldPatientIDMain[ldPatientID] = true
-        end
-    end
-    if loInstanceMeta['OtherPatientIDs'] then
-        if string.len(trim(loInstanceMeta['OtherPatientIDs'])) > 0 then
-            ldPatientID = loInstanceMeta['OtherPatientIDs'] .. aPatientIDModifier
-            ldPatientIDAlt[ldPatientID] = true
-        end
-    end
-    if loInstanceMeta['RETIRED_OtherPatientIDs'] then
-        if string.len(trim(loInstanceMeta['RETIRED_OtherPatientIDs'])) > 0 then
-            ldPatientID = loInstanceMeta['RETIRED_OtherPatientIDs'] .. aPatientIDModifier
-            ldPatientIDAlt[ldPatientID] = true
-        end
-    end
-    if loInstanceMeta['OtherPatientIDsSequence'] then
-        for i, otherPatientID in ipairs(loInstanceMeta['OtherPatientIDsSequence']) do
-            if otherPatientID['PatientID'] then
-                if string.len(trim(otherPatientID['PatientID'])) > 0 then
-                    ldPatientID = otherPatientID['PatientID'] .. aPatientIDModifier
-                    ldPatientIDAlt[ldPatientID] = true
-                end
-            end
-        end
-    end
-
-    local lPatientIDs = {}
-    local lPatientIDsCount = 0
-    local ldPatientIDs = {}
-    for ldPatientID, dumby in pairs(ldPatientIDMain) do
-        if not ldPatientIDs[ldPatientID] then
-            lPatientIDsCount = lPatientIDsCount + 1
-            lPatientIDs[lPatientIDsCount] = ldPatientID
-            ldPatientIDs[ldPatientID] = true
-        end
-    end
-    for ldPatientID, dumby in pairs(ldPatientIDAlt) do
-        if not ldPatientIDs[ldPatientID] then
-            lPatientIDsCount = lPatientIDsCount + 1
-            lPatientIDs[lPatientIDsCount] = ldPatientID
-            ldPatientIDs[ldPatientID] = true
-        end
-    end
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    return lPatientIDs
-
-end
-
--- ======================================================
-function SavePatientIDsToDB(aoStudyMeta,aPatientIDModifier)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    if not aoStudyMeta['PatientMainDicomTags'] then 
-        gSQLConn:rollback()
-        CloseSQL()
-        error("Missing PatientMainDicomTags")
-    end
-
-    -- ConfirmLookupTablesSQL()
-    local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
-    if lStatus['error_text'] then
-        error(lStatus['error_text'])
-    end
-
-    local lPatientIDs = {}
-    lPatientIDs['dicom'] = GetPatientIDs(aoStudyMeta,aPatientIDModifier) 
-    if #lPatientIDs['dicom'] == 0 then 
-        gSQLConn:rollback()
-        CloseSQL()
-        error("Missing DICOM PatientIDs")
-    end
-
-    -- Query database for any matches to dicom PatientID
-    local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
-    lPatientIDs['pid'] = {}
-    lPatientIDs['map'] = {}
-    local j = 0
-    local k
-    for i, ldPatientID in ipairs(lPatientIDs['dicom']) do
-        k = 0
-        lSQLQuery = string.format(
-                [[SELECT pid, parent_pid  
-                  FROM patientid  
-                  WHERE value='%s']], 
-                gSQLConn:escape(ldPatientID))
-        lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-        if not lSQLStatus then 
-            gSQLConn:rollback()
-            CloseSQL()
-            error("Problem querying pid, parent_pid")
-        end
-        lPatientIDs['map'][ldPatientID] = {}
-        if lSQLCursor:numrows() > 0 then
-            lSQLRow = lSQLCursor:fetch({}, "a")
-            while lSQLRow do
-                j = j + 1
-                k = k + 1
-                if lSQLRow.parent_pid then
-                    lPatientIDs['pid'][j] = lSQLRow.parent_pid
-                else
-                    lPatientIDs['pid'][j] = lSQLRow.pid
-                end
-                lPatientIDs['map'][ldPatientID][k] = lPatientIDs['pid'][j]
-                lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
-            end
-        end
-    end
-
-    -- If any are defined, there should only be one unique pid
-    local lSQLpidUnique = {}
-    local lFlagNewPatientID = (#lPatientIDs['pid'] == 0)
-    if not lFlagNewPatientID then
-        local lCheck = {}
-        j = 0
-        for i, lSQLpid in ipairs(lPatientIDs['pid']) do
-            if not lCheck[lSQLpid] then
-                j = j + 1
-                lSQLpidUnique[j] = lSQLpid
-                lCheck[lSQLpid] = 1
-            end
-        end
-        if #lSQLpidUnique > 1 then
-            PrintRecursive(lSQLpidUnique)
-            gSQLConn:rollback()
-            CloseSQL()
-            error("More than one unique pid found")
-        end
-    end
-
-    -- Handle any new PatientIDs that match a previous one
-    if not lFlagNewPatientID then
-        --    To get here, lSQLpidUnique has only 1 element
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
-        lSQLResult = gSQLConn:setautocommit(false)
-        for i, ldPatientID in ipairs(lPatientIDs['dicom']) do
-            if not lPatientIDs['map'][ldPatientID][1] then
-                lSQLQuery = string.format(
-                              [[INSERT INTO patientid 
-                                (value, parent_pid) 
-                                VALUES('%s',%d)]],
-                              gSQLConn:escape(ldPatientID),
-                              lSQLpidUnique[1])
-                lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-                if not lSQLStatus then
-                    lSQLResult = gSQLConn:rollback()
-                    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-                    lSQLResult = gSQLConn:setautocommit(true)
-                    CloseSQL()
-                    error("Problem 1 inserting new patientid, parent_pid")
-                end
-                lPatientIDs['map'][ldPatientID][1] = lSQLpidUnique[1]
-                if #lPatientIDs['map'][ldPatientID] > 1 then
-                    for j = 2, #lPatientIDs['map'][ldPatientID] do
-                        lPatientIDs['map'][ldPatientID][j] = nil
-                    end
-                end
-            end
-        end
-        lSQLResult = gSQLConn:commit()
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-        lSQLResult = gSQLConn:setautocommit(true)
-    else -- Should only be here if this is a brand new patient
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
-        lSQLResult = gSQLConn:setautocommit(false)
-        local lFirstLoop = true
-        for i, ldPatientID in ipairs(lPatientIDs['dicom']) do
-            if not lFirstLoop then
-                lSQLQuery = string.format(
-                              [[INSERT INTO patientid
-                                (value, parent_pid) 
-                                VALUES('%s',%d)]],
-                              gSQLConn:escape(ldPatientID),
-                              lSQLpidUnique[1])
-                lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-                if not lSQLStatus then 
-                    lSQLResult = gSQLConn:rollback()
-                    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-                    lSQLResult = gSQLConn:setautocommit(true)
-                    CloseSQL()
-                    error("Problem 2 inserting new patientid, parent_pid")
-                end
-            else
-                lSQLQuery = string.format(
-                              [[INSERT INTO patientid (value) VALUES('%s')]],
-                              gSQLConn:escape(ldPatientID))
-                lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-                if not lSQLStatus then 
-                    lSQLResult = gSQLConn:rollback()
-                    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-                    lSQLResult = gSQLConn:setautocommit(true)
-                    CloseSQL()
-                    error("Problem inserting new patientid")
-                end
-                lSQLQuery = string.format(
-                        [[SELECT pid FROM patientid WHERE value='%s']], 
-                        gSQLConn:escape(ldPatientID))
-                lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-                if not lSQLStatus then 
-                    lSQLResult = gSQLConn:rollback()
-                    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-                    lSQLResult = gSQLConn:setautocommit(true)
-                    CloseSQL()
-                    error("Problem post-insert selecting new patientid")
-                end
-                lSQLRow = lSQLCursor:fetch({},"a")
-                lPatientIDs['map'][ldPatientID][1] = lSQLRow.pid
-                lSQLpidUnique[1] = lSQLRow.pid
-            end
-            lFirstLoop = false
-        end
-        lSQLResult = gSQLConn:commit()
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-        lSQLResult = gSQLConn:setautocommit(true)
-    end
-
-    -- Look for anonymized IDs for this lSQLpid
-    lSQLQuery = string.format(
-                   [[SELECT value FROM patientid_anon WHERE pid=%d]],
-                   lSQLpidUnique[1])
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-    if not lSQLStatus then 
-        CloseSQL()
-        error("Problem selecting from patientid_anon")
-    end
-    if lSQLCursor:numrows() > 1 then 
-        error("More than one corresponding patientid_anon")
-    end
-    local ldPatientIDAnon
-    if lSQLCursor:numrows() > 0 then
-        lSQLRow = lSQLCursor:fetch({},"a")
-        ldPatientIDAnon = lSQLRow.value
-    end
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    return lFlagNewPatientID, lSQLpidUnique[1], ldPatientIDAnon
-
-end
-
--- ======================================================
-function SaveStudyInstanceUIDToDB(aoStudyMeta,aSQLpid,aStudyInstanceUIDModifier)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    -- Missing data handling
-    local lSQLsiuid, ldStudyInstanceUIDAnon
-    if not aoStudyMeta['MainDicomTags'] then 
-        error("Missing MainDicomTags")
-    end
-    if not aoStudyMeta['MainDicomTags']['StudyInstanceUID'] then
-        error('No StudyInstanceUID')
-    end
-    local ldStudyInstanceUID = aoStudyMeta['MainDicomTags']['StudyInstanceUID']
-    if not ldStudyInstanceUID then
-        error("Missing StudyInstanceUID")
-    end
-    ldStudyInstanceUID = ldStudyInstanceUID .. aStudyInstanceUIDModifier
-
-    -- Check for StudyInstanceUID in DB
-    local lSQLCursor, lSQLStatus
-    local lSQLQuery = string.format(
-                        [[SELECT * FROM studyinstanceuid WHERE value='%s']],
-                        gSQLConn:escape(ldStudyInstanceUID))
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-    if not lSQLStatus then
-        CloseSQL()
-        error("Probling finding studyinstanceuid")
-    end
-    local lNRows = lSQLCursor:numrows()
-    if lNRows > 1 then
-        error("More than one occurrence of studyinstanceuid in db")
-    end
-    if lNRows > 0 then
-        local lSQLRow = lSQLCursor:fetch({}, "a")
-        if lSQLRow.pid ~= aSQLpid then
-            error("DB pid for StudyInstanceUID does not match PatientID pid")
-        end
-        lSQLsiuid = lSQLRow.siuid
-    end
-
-    -- Check for anonymized studies
-    local lFlagNewStudyInstanceUID
-    if lSQLsiuid then
-        lFlagNewStudyInstanceUID = false
-        lSQLQuery = string.format(
-                        [[SELECT value 
-                          FROM studyinstanceuid_anon 
-                          WHERE siuid = %d]], lSQLsiuid)
-        lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-        if not lSQLStatus then
-            CloseSQL()
-            error("Probling finding studyinstanceuid_anon")
-        end
-        local lNRows = lSQLCursor:numrows()
-        if lNRows > 1 then
-            error("More than one occurrence of studyinstanceuid_anon in db")
-        end
-        if lNRows > 0 then
-            local lSQLRow = lSQLCursor:fetch({}, "a")
-            ldStudyInstanceUIDAnon = lSQLRow.value
-        end
-    -- Else insert a brand new study
-    else
-        lFlagNewStudyInstanceUID = true
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
-        lSQLCursor = gSQLConn:setautocommit(false)
-        lSQLQuery = string.format(
-                        [[INSERT INTO studyinstanceuid (value,pid)
-                          VALUES('%s',%d)]], 
-                          gSQLConn:escape(ldStudyInstanceUID), aSQLpid)
-        lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-        if not lSQLStatus then
-            lSQLCursor = gSQLConn:rollback()
-            if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-            lSQLCursor = gSQLConn:setautocommit(true)
-            CloseSQL()
-            error("Problem inserting studyinstanceuid, pid")
-        end
-        lSQLQuery = string.format(
-                        [[SELECT siuid FROM studyinstanceuid
-                          WHERE value='%s']], gSQLConn:escape(ldStudyInstanceUID))
-        lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
-        if not lSQLStatus then
-            lSQLCursor = gSQLConn:rollback()
-            if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-            lSQLCursor = gSQLConn:setautocommit(true)
-            CloseSQL()
-            error("Problem post-insert selecting studyinstanceuid, pid")
-        end
-        local lSQLRow = lSQLCursor:fetch({}, "a")
-        lSQLsiuid = lSQLRow.siuid
-        lSQLCursor = gSQLConn:commit()
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-        lSQLCursor = gSQLConn:setautocommit(true)
-    end
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    return lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon
-
-end
-
+-- function TestSaveStudyInstanceUIDToDB(aoOrthancStudyID)
+-- 
+--     if gSQLOpen then
+--         if gSQLConn then
+--             CloseSQL()
+--         end
+--     end
+--     gSQLOpen = false
+--     OpenSQL()
+-- 
+--     loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoOrthancStudyID, false))
+--     aPatientIDModifier = ''
+--     local lPostData = {}
+--     lPostData['OrthancStudyID'] = loStudyMeta['ID']
+--     if aPatientIDModifier then lPostData['PatientIDModifier'] = aPatientIDModifier end
+--     local lResults
+--     print('Calling save patient ids to db python')
+--     lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
+--     -- local lSQLpid = math.floor(lResults['SQLpid']+0.5)
+--     local lSQLpid = lResults['SQLpid']
+--     local lStudyInstanceUIDModifier = ''
+--     print('Calling save studyinstanceuid to db native')
+--     local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(loStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
+--     print(lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon)
+-- 
+--     print('Calling save studyinstanceuid to db python')
+--     lPostData = {}
+--     lPostData['OrthancStudyID'] = loStudyMeta['ID']
+--     lPostData['SQLpid'] = lSQLpid
+--     local lResults
+--     lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
+--     PrintRecursive(lResults)   
+--     print('done')
+--     
+-- end
+-- 
+-- -- ======================================================
+-- function SaveStudyInstanceUIDToDB(aoStudyMeta,aSQLpid,aStudyInstanceUIDModifier)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     -- Missing data handling
+--     local lSQLsiuid, ldStudyInstanceUIDAnon
+--     if not aoStudyMeta['MainDicomTags'] then 
+--         error("Missing MainDicomTags")
+--     end
+--     if not aoStudyMeta['MainDicomTags']['StudyInstanceUID'] then
+--         error('No StudyInstanceUID')
+--     end
+--     local ldStudyInstanceUID = aoStudyMeta['MainDicomTags']['StudyInstanceUID']
+--     if not ldStudyInstanceUID then
+--         error("Missing StudyInstanceUID")
+--     end
+--     ldStudyInstanceUID = ldStudyInstanceUID .. aStudyInstanceUIDModifier
+-- 
+--     -- Check for StudyInstanceUID in DB
+--     local lSQLCursor, lSQLStatus
+--     local lSQLQuery = string.format(
+--                         [[SELECT * FROM studyinstanceuid WHERE value='%s']],
+--                         gSQLConn:escape(ldStudyInstanceUID))
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--     if not lSQLStatus then
+--         CloseSQL()
+--         error("Probling finding studyinstanceuid")
+--     end
+--     local lNRows = lSQLCursor:numrows()
+--     if lNRows > 1 then
+--         error("More than one occurrence of studyinstanceuid in db")
+--     end
+--     if lNRows > 0 then
+--         local lSQLRow = lSQLCursor:fetch({}, "a")
+--         if lSQLRow.pid ~= aSQLpid then
+--             print(type(lSQLRow.pid), type(aSQLpid))
+--             error("DB pid " .. lSQLRow.pid .. " for StudyInstanceUID does not match PatientID pid " .. aSQLpid)
+--         end
+--         lSQLsiuid = lSQLRow.siuid
+--     end
+-- 
+--     -- Check for anonymized studies
+--     local lFlagNewStudyInstanceUID
+--     if lSQLsiuid then
+--         lFlagNewStudyInstanceUID = false
+--         lSQLQuery = string.format(
+--                         [[SELECT value 
+--                           FROM studyinstanceuid_anon 
+--                           WHERE siuid = %d]], lSQLsiuid)
+--         lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--         if not lSQLStatus then
+--             CloseSQL()
+--             error("Probling finding studyinstanceuid_anon")
+--         end
+--         local lNRows = lSQLCursor:numrows()
+--         if lNRows > 1 then
+--             error("More than one occurrence of studyinstanceuid_anon in db")
+--         end
+--         if lNRows > 0 then
+--             local lSQLRow = lSQLCursor:fetch({}, "a")
+--             ldStudyInstanceUIDAnon = lSQLRow.value
+--         end
+--     -- Else insert a brand new study
+--     else
+--         lFlagNewStudyInstanceUID = true
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
+--         lSQLCursor = gSQLConn:setautocommit(false)
+--         lSQLQuery = string.format(
+--                         [[INSERT INTO studyinstanceuid (value,pid)
+--                           VALUES('%s',%d)]], 
+--                           gSQLConn:escape(ldStudyInstanceUID), aSQLpid)
+--         lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--         if not lSQLStatus then
+--             lSQLCursor = gSQLConn:rollback()
+--             if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--             lSQLCursor = gSQLConn:setautocommit(true)
+--             CloseSQL()
+--             error("Problem inserting studyinstanceuid, pid")
+--         end
+--         lSQLQuery = string.format(
+--                         [[SELECT siuid FROM studyinstanceuid
+--                           WHERE value='%s']], gSQLConn:escape(ldStudyInstanceUID))
+--         lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
+--         if not lSQLStatus then
+--             lSQLCursor = gSQLConn:rollback()
+--             if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--             lSQLCursor = gSQLConn:setautocommit(true)
+--             CloseSQL()
+--             error("Problem post-insert selecting studyinstanceuid, pid")
+--         end
+--         local lSQLRow = lSQLCursor:fetch({}, "a")
+--         lSQLsiuid = lSQLRow.siuid
+--         lSQLCursor = gSQLConn:commit()
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--         lSQLCursor = gSQLConn:setautocommit(true)
+--     end
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     return lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon
+-- 
+-- end
+-- 
 -- -- ======================================================
 -- function GetInternalNumber(aSQLpid, aPatientIDModifier)
 -- 
@@ -818,204 +928,227 @@ end
 --     return lInternalNumber
 -- 
 -- end
-
+--
 -- ======================================================
-function ConstructPatientName(aInteger)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    local lTime0 = os.time()
-    local lPatientNameBase
-    if not gPatientNameBase then
-        local loSystemMeta = ParseJson(RestApiGet('/system', false))
-        lPatientNameBase = loSystemMeta['Name']
-    else
-        lPatientNameBase = gPatientNameBase
-    end
-    local lPatientNameIDChar
-    if gPatientNameIDChar then
-        lPatientNameIDChar = gPatientNameIDChar
-    else
-        lPatientNameIDChar = 'ID'
-    end
-    local lPatientName = string.format('%s^%s%06d^^^', lPatientNameBase, lPatientNameIDChar, aInteger)
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    return lPatientName
-
-end
-
+-- function ConstructPatientName(aInteger)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     local lTime0 = os.time()
+--     local lPatientNameBase
+--     if not gPatientNameBase then
+--         local loSystemMeta = ParseJson(RestApiGet('/system', false))
+--         lPatientNameBase = loSystemMeta['Name']
+--     else
+--         lPatientNameBase = gPatientNameBase
+--     end
+--     local lPatientNameIDChar
+--     if gPatientNameIDChar then
+--         lPatientNameIDChar = gPatientNameIDChar
+--     else
+--         lPatientNameIDChar = 'ID'
+--     end
+--     local lPatientName = string.format('%s^%s%06d^^^', lPatientNameBase, lPatientNameIDChar, aInteger)
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     return lPatientName
+-- 
+-- end
+-- 
 -- ======================================================
-function SavePatientIDsAnonToDB(aoStudyMeta,aSQLpid)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    if not aoStudyMeta['PatientMainDicomTags'] then 
-        gSQLConn:rollback()
-        CloseSQL()
-        error("Missing PatientMainDicomTags")
-    end
-
-    local ldPatientID = aoStudyMeta['PatientMainDicomTags']['PatientID']
-    if not ldPatientID then
-        gSQLConn:rollback()
-        CloseSQL()
-        error('No PatientID')
-    end
-
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
-    local lSQLResult = gSQLConn:setautocommit(false)
-    local lSQLQuery = string.format(
-                        [[INSERT INTO patientid_anon (value,pid)
-                          VALUES('%s',%d)]], 
-                          gSQLConn:escape(ldPatientID), aSQLpid)
-    local lSQLStatus, lSQLCursor
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
-    if not lSQLStatus then
-        lSQLResult = gSQLConn:rollback()
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-        lSQLResult = gSQLConn:setautocommit(true)
-        CloseSQL()
-        error("Problem inserting patientid_anon")
-    end
-    lSQLResult = gSQLConn:commit()
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-    lSQLResult = gSQLConn:setautocommit(true)
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-
-end
-
+-- function SavePatientIDsAnonToDB(aoStudyMeta,aSQLpid)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     if not aoStudyMeta['PatientMainDicomTags'] then 
+--         gSQLConn:rollback()
+--         CloseSQL()
+--         error("Missing PatientMainDicomTags")
+--     end
+-- 
+--     local ldPatientID = aoStudyMeta['PatientMainDicomTags']['PatientID']
+--     if not ldPatientID then
+--         gSQLConn:rollback()
+--         CloseSQL()
+--         error('No PatientID')
+--     end
+-- 
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
+--     local lSQLResult = gSQLConn:setautocommit(false)
+--     local lSQLQuery = string.format(
+--                         [[INSERT INTO patientid_anon (value,pid)
+--                           VALUES('%s',%d)]], 
+--                           gSQLConn:escape(ldPatientID), aSQLpid)
+--     local lSQLStatus, lSQLCursor
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
+--     if not lSQLStatus then
+--         lSQLResult = gSQLConn:rollback()
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--         lSQLResult = gSQLConn:setautocommit(true)
+--         CloseSQL()
+--         error("Problem inserting patientid_anon")
+--     end
+--     lSQLResult = gSQLConn:commit()
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--     lSQLResult = gSQLConn:setautocommit(true)
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+-- 
+-- end
+-- 
 -- ======================================================
-function SaveStudyInstanceUIDAnonToDB(aoStudyMeta,aSQLsiuid)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local ldStudyInstanceUID = aoStudyMeta['MainDicomTags']['StudyInstanceUID']
-    if not ldStudyInstanceUID then
-        gSQLConn:rollback()
-        CloseSQL()
-        error("Missing StudyInstanceUID")
-    end
-
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
-    local lSQLResult = gSQLConn:setautocommit(false)
-    local lSQLQuery = string.format(
-                        [[INSERT INTO studyinstanceuid_anon
-                          (value,siuid)
-                          VALUES('%s',%d)]],
-                          gSQLConn:escape(ldStudyInstanceUID),aSQLsiuid)
-    local lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
-    if not lSQLStatus then
-        lSQLResult = gSQLConn:rollback()
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-        lSQLResult = gSQLConn:setautocommit(true)
-        CloseSQL()
-        error("Problem inserting studyinstanceuid_anon")
-    end
-    lSQLResult = gSQLConn:commit()
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-    local lSQLResult = gSQLConn:setautocommit(true)
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-
-end
-
+-- function SaveStudyInstanceUIDAnonToDB(aoStudyMeta,aSQLsiuid)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local ldStudyInstanceUID = aoStudyMeta['MainDicomTags']['StudyInstanceUID']
+--     if not ldStudyInstanceUID then
+--         gSQLConn:rollback()
+--         CloseSQL()
+--         error("Missing StudyInstanceUID")
+--     end
+-- 
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
+--     local lSQLResult = gSQLConn:setautocommit(false)
+--     local lSQLQuery = string.format(
+--                         [[INSERT INTO studyinstanceuid_anon
+--                           (value,siuid)
+--                           VALUES('%s',%d)]],
+--                           gSQLConn:escape(ldStudyInstanceUID),aSQLsiuid)
+--     local lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
+--     if not lSQLStatus then
+--         lSQLResult = gSQLConn:rollback()
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--         lSQLResult = gSQLConn:setautocommit(true)
+--         CloseSQL()
+--         error("Problem inserting studyinstanceuid_anon")
+--     end
+--     lSQLResult = gSQLConn:commit()
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--     local lSQLResult = gSQLConn:setautocommit(true)
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+-- 
+-- end
+-- 
 -- ======================================================
-function SavePatientNameAnonToDB(aPatientName,aSQLsiuid)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    gIndent = gIndent + 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'PatientNameAnon ' .. aPatientName) end
-    local lTime0 = os.time()
-    local lTimeStamp = os.date("%Y-%m-%d %H:%M:%S",lTime0)
-
-    local lSQLQuery = [[SELECT table_name 
-                       FROM information_schema.tables 
-                       WHERE table_name='siuid2patientname_anon']]
-    local lSQLStatus, lSQLCursor
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-    if not lSQLStatus then
-        if gVerbose then print(string.rep(' ',gIndent) .. 'siuid2patientname_anon does not exist.  Skipping...') end
-        return
-    end
-
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
-    local lSQLResult = gSQLConn:setautocommit(false)
-
-    lSQLQuery = string.format(
-                  [[INSERT INTO siuid2patientname_anon 
-                    (patientname_anon, timestamp, siuid) 
-                    VALUES ('%s', '%s', %d)]], 
-                    gSQLConn:escape(aPatientName),gSQLConn:escape(lTimeStamp), aSQLsiuid)
-    lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
-    if not lSQLStatus then
-        lSQLResult = gSQLConn:rollback()
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-        lSQLResult = gSQLConn:setautocommit(true)
-        CloseSQL()
-        error("Problem inserting patientname_anon: " .. lSQLQuery)
-    end
-    lSQLResult = gSQLConn:commit()
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-    local lSQLResult = gSQLConn:setautocommit(true)
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-
-end
-
+-- function SavePatientNameAnonToDB(aPatientName,aSQLsiuid)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     gIndent = gIndent + 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'PatientNameAnon ' .. aPatientName) end
+--     local lTime0 = os.time()
+--     local lTimeStamp = os.date("%Y-%m-%d %H:%M:%S",lTime0)
+-- 
+--     local lSQLQuery = [[SELECT table_name 
+--                        FROM information_schema.tables 
+--                        WHERE table_name='siuid2patientname_anon']]
+--     local lSQLStatus, lSQLCursor
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--     if not lSQLStatus then
+--         if gVerbose then print(string.rep(' ',gIndent) .. 'siuid2patientname_anon does not exist.  Skipping...') end
+--         return
+--     end
+-- 
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
+--     local lSQLResult = gSQLConn:setautocommit(false)
+-- 
+--     lSQLQuery = string.format(
+--                   [[INSERT INTO siuid2patientname_anon 
+--                     (patientname_anon, timestamp, siuid) 
+--                     VALUES ('%s', '%s', %d)]], 
+--                     gSQLConn:escape(aPatientName),gSQLConn:escape(lTimeStamp), aSQLsiuid)
+--     lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
+--     if not lSQLStatus then
+--         lSQLResult = gSQLConn:rollback()
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--         lSQLResult = gSQLConn:setautocommit(true)
+--         CloseSQL()
+--         error("Problem inserting patientname_anon: " .. lSQLQuery)
+--     end
+--     lSQLResult = gSQLConn:commit()
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--     local lSQLResult = gSQLConn:setautocommit(true)
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+-- 
+-- end
+-- 
 -- ======================================================
-function RecursiveFindUIDToKeep(aParent, aLevelIn)
-
-    gMaxRecurseDepth = 20
-    local lLevelIn = (aLevelIn) or gMaxRecurseDepth
-    local lLevelOut = lLevelIn - 1
-    if (lLevelIn<1) then return lLevelOut end;
-    local lParentType = type(aParent);
-    if (lParentType ~= "table") then return lLevelOut end
-    for k,lChild in pairs(aParent) do  
-        if lChild['Name'] then
-            if (type(lChild['Value']) == "table") and (lLevelIn == gMaxRecurseDepth) then 
-                gParentTag=k
-            end
-            if string.find(lChild['Name'],'UID') and lChild['Value'] then
-                gKeptUID[lChild['Value']] = {}
-                gKeptUID[lChild['Value']]['Numeric'] = k
-                gKeptUID[lChild['Value']]['Name'] = lChild['Name']
-                if lLevelIn < gMaxRecurseDepth then 
-                    gTopLevelTagToKeep[gParentTag] = true
-                end
-                if (lLevelIn == gMaxRecurseDepth) and 
-                   (not (lChild['Name'] == 'StudyInstanceUID')) and 
-                   (not (lChild['Name'] == 'SeriesInstanceUID')) and
-                   (not (lChild['Name'] == 'SOPInstanceUID')) then
-                   gTopLevelTagToKeep[k] = true
-                end
-            end
-            lLevelOut = RecursiveFindUIDToKeep(lChild['Value'], lLevelIn-1);
-            if (type(lChild['Value']) == "table") and (lLevelIn == gMaxRecurseDepth) then 
-                gParentTag = nil
-            end
-        else
-            lLevelOut = RecursiveFindUIDToKeep(lChild, lLevelIn-1);
-        end
-        if (lLevelOut < 0) then break end
-    end
-    return lLevelOut
-
-end    
-
+-- function TestRecursiveFindUID()
+-- 
+--     gTopLevelTagToKeep = {}
+--     gKeptUID = {}
+--     local orthanc_instance_id = 'acd0cdfa-51944655-fb72c173-9c02d9b3-12863225'
+--     local loLevelInstanceMeta = ParseJson(RestApiGet('/instances/' .. orthanc_instance_id .. '/tags', false))
+--     -- PrintRecursive(loLevelInstanceMeta)
+--     RecursiveFindUIDToKeep(loLevelInstanceMeta)
+--     PrintRecursive(gKeptUID)
+--     PrintRecursive(gTopLevelTagToKeep)
+-- 
+--     local lResult = ParseJson(RestApiGet('/instances/' .. orthanc_instance_id .. '/recursive_find_uid_to_keep_lua', false))
+--     if lResult['status'] > 0 then
+--         error(lResult['error_text'])
+--     end
+--     gTopLevelTagToKeep = lResult['TopLevelTagToKeep']
+--     gKeptUID = lResult['KeptUID']
+--     PrintRecursive(gKeptUID)
+--     PrintRecursive(gTopLevelTagToKeep)
+-- 
+-- end
+--     
+-- -- ======================================================
+-- function RecursiveFindUIDToKeep(aParent, aLevelIn)
+-- 
+--     gMaxRecurseDepth = 20
+--     local lLevelIn = (aLevelIn) or gMaxRecurseDepth
+--     local lLevelOut = lLevelIn - 1
+--     if (lLevelIn<1) then return lLevelOut end;
+--     local lParentType = type(aParent);
+--     if (lParentType ~= "table") then return lLevelOut end
+--     for k,lChild in pairs(aParent) do  
+--         if lChild['Name'] then
+--             if (type(lChild['Value']) == "table") and (lLevelIn == gMaxRecurseDepth) then 
+--                 gParentTag=k
+--             end
+--             if string.find(lChild['Name'],'UID') and lChild['Value'] then
+--                 gKeptUID[lChild['Value']] = {}
+--                 gKeptUID[lChild['Value']]['Numeric'] = k
+--                 gKeptUID[lChild['Value']]['Name'] = lChild['Name']
+--                 if lLevelIn < gMaxRecurseDepth then 
+--                     gTopLevelTagToKeep[gParentTag] = true
+--                 end
+--                 if (lLevelIn == gMaxRecurseDepth) and 
+--                    (not (lChild['Name'] == 'StudyInstanceUID')) and 
+--                    (not (lChild['Name'] == 'SeriesInstanceUID')) and
+--                    (not (lChild['Name'] == 'SOPInstanceUID')) then
+--                    gTopLevelTagToKeep[k] = true
+--                 end
+--             end
+--             lLevelOut = RecursiveFindUIDToKeep(lChild['Value'], lLevelIn-1);
+--             if (type(lChild['Value']) == "table") and (lLevelIn == gMaxRecurseDepth) then 
+--                 gParentTag = nil
+--             end
+--         else
+--             lLevelOut = RecursiveFindUIDToKeep(lChild, lLevelIn-1);
+--         end
+--         if (lLevelOut < 0) then break end
+--     end
+--     return lLevelOut
+-- 
+-- end    
+-- 
 -- ======================================================
 function BaseTagHandling ()
 
@@ -1024,84 +1157,63 @@ function BaseTagHandling ()
 
     local lTableFromCTP
     lTableFromCTP = {}
-    lTableFromCTP['0018-0010'] = {en = false, op = 'empty',   name = 'ContrastBolusAgent',                           comment = ''}
-    lTableFromCTP['0008-0090'] = {en = false, op = 'empty',   name = 'ReferringPhysicianName',                       comment = ''}
-    lTableFromCTP['0040-1001'] = {en = true,  op = 'empty',   name = 'RequestedProcedureID',                         comment = ''}
-    lTableFromCTP['0012-0030'] = {en = false, op = 'fill',    name = 'ClinicalTrialSiteID',                          comment = ''}
-    lTableFromCTP['0012-0031'] = {en = false, op = 'fill',    name = 'ClinicalTrialSiteName',                        comment = ''}
-    lTableFromCTP['0012-0010'] = {en = false, op = 'fill',    name = 'ClinicalTrialSponsorName',                     comment = ''}
-    lTableFromCTP['0012-0040'] = {en = false, op = 'fill',    name = 'ClinicalTrialSubjectID',                       comment = ''}
-    if lFlagHologic or lFlagKeepSiemensMR then
-        lTableFromCTP['0019'] = { en = true,  op = 'groupkeep', name = 'SiemensMRHeader',                            comment = 'Siemens/Hologic protocol stuff.  Does capture study date internally'}
-    end
-    if lFlagHologic then
-        lTableFromCTP['7e01'] = { en = true,  op = 'groupkeep', name = 'HologicHeader',                            comment = 'Siemens/Hologic protocol stuff.  Does capture study date internally'}
-    end
-    if lFlagKeepSiemensMR then
-        lTableFromCTP['0029'] = { en = true,  op = 'groupkeep', name = 'SiemensCSAHeader',                           comment = 'Siemens protocol stuff.  Does capture study date internally'}
-        lTableFromCTP['0051'] = { en = true,  op = 'groupkeep', name = 'SiemensMRHeader',                            comment = 'Siemens protocol stuff.  Does capture study date internally'}
-    end
-    lTableFromCTP['50..']      = {en = true,  op = 'groupremovere', name = 'Curves',                                 comment = 'Curve data.  Regex permitted in group spec.'}
-    lTableFromCTP['60..']      = {en = true,  op = 'groupremovere', name = 'Overlays',                               comment = 'Overlays might have burned in PHI.  Regex permitted in group spec.'}
     lTableFromCTP['0008-0005'] = {en = true,  op = 'keep',    name = 'SpecificCharacterSet',                         comment = ''}
     lTableFromCTP['0008-0008'] = {en = true,  op = 'keep',    name = 'ImageType',                                    comment = ''}
     lTableFromCTP['0008-0012'] = {en = true,  op = 'keep',    name = 'InstanceCreationDate',                         comment = 'We keep this when shifting dates, otherwise remove'}
     lTableFromCTP['0008-0013'] = {en = true,  op = 'keep',    name = 'InstanceCreationTime',                         comment = 'We keep this when shifting dates, otherwise remove'}
+    lTableFromCTP['0008-0014'] = {en = true,  op = 'remove',  name = 'InstanceCreatorUID',                           comment = ''}
     lTableFromCTP['0008-0016'] = {en = true,  op = 'keep',    name = 'SOPClassUID',                                  comment = 'In general this is not PHI'}
+    lTableFromCTP['0008-0018'] = {en = true,  op = 'orthanc', name = 'SOPInstanceUID',                               comment = 'Currently handled by Orthanc'}
     lTableFromCTP['0008-0020'] = {en = true,  op = 'keep',    name = 'StudyDate',                                    comment = 'We keep this when shifting dates, otherwise remove'}
+    lTableFromCTP['0008-0021'] = {en = true,  op = 'keep',    name = 'SeriesDate',                                   comment = ''}
     lTableFromCTP['0008-0022'] = {en = true,  op = 'keep',    name = 'AcquisitionDate',                              comment = 'We keep this when shifting dates, otherwise remove'}
     lTableFromCTP['0008-0023'] = {en = true,  op = 'keep',    name = 'ContentDate',                                  comment = 'We keep this when shifting dates, otherwise remove'}
+    lTableFromCTP['0008-0024'] = {en = true,  op = 'remove',  name = 'OverlayDate',                                  comment = ''}
+    lTableFromCTP['0008-0025'] = {en = true,  op = 'remove',  name = 'CurveDate',                                    comment = ''}
+    lTableFromCTP['0008-002a'] = {en = true,  op = 'keep',    name = 'AcquisitionDateTime',                          comment = 'We keep this when shifting dates, otherwise remove'}
     lTableFromCTP['0008-0030'] = {en = true,  op = 'keep',    name = 'StudyTime',                                    comment = 'We keep this when shifting dates, otherwise remove'}
+    lTableFromCTP['0008-0031'] = {en = true,  op = 'keep',    name = 'SeriesTime',                                   comment = ''}
     lTableFromCTP['0008-0032'] = {en = true,  op = 'keep',    name = 'AcquisitionTime',                              comment = 'We keep this when shifting dates, otherwise remove'}
     lTableFromCTP['0008-0033'] = {en = true,  op = 'keep',    name = 'ContentTime',                                  comment = 'We keep this when shifting dates, otherwise remove'}
+    lTableFromCTP['0008-0034'] = {en = true,  op = 'remove',  name = 'OverlayTime',                                  comment = ''}
+    lTableFromCTP['0008-0035'] = {en = true,  op = 'remove',  name = 'CurveTime',                                    comment = ''}
     lTableFromCTP['0008-0050'] = {en = true,  op = 'keep',    name = 'AccessionNumber',                              comment = 'Orthanc will replace this'}
+    lTableFromCTP['0008-0052'] = {en = false, op = '',        name = 'QueryRetrieveLevel',                           comment = ''}
+    lTableFromCTP['0008-0054'] = {en = false, op = '',        name = 'RetrieveAET',                                  comment = ''}
+    lTableFromCTP['0008-0056'] = {en = false, op = '',        name = 'InstanceAvailability',                         comment = ''}
+    lTableFromCTP['0008-0058'] = {en = false, op = '',        name = 'FailedSOPInstanceUIDList',                     comment = ''}
     lTableFromCTP['0008-0060'] = {en = true,  op = 'keep',    name = 'Modality',                                     comment = ''}
     lTableFromCTP['0008-0061'] = {en = true,  op = 'keep',    name = 'ModalitiesInStudy',                            comment = ''}
+    lTableFromCTP['0008-0064'] = {en = false, op = '',        name = 'ConversionType',                               comment = ''}
+    lTableFromCTP['0008-0068'] = {en = false, op = '',        name = 'PresentationIntentType',                       comment = ''}
     lTableFromCTP['0008-0070'] = {en = true,  op = 'keep',    name = 'Manufacturer',                                 comment = 'We typically keeps this'}
-    lTableFromCTP['0008-1030'] = {en = true,  op = 'keep',    name = 'StudyDescription',                             comment = 'We tends to keep this'}
-    lTableFromCTP['0008-103e'] = {en = true,  op = 'keep',    name = 'SeriesDescription',                            comment = 'We tends to keep this'}
-    lTableFromCTP['0010-0030'] = {en = true,  op = 'keep',    name = 'PatientBirthDate',                             comment = 'We keep this when shifting dates, otherwise remove'}
-    lTableFromCTP['0010-0040'] = {en = true,  op = 'keep',    name = 'PatientSex',                                   comment = 'We keep this'}
-    lTableFromCTP['0010-1010'] = {en = true,  op = 'keep',    name = 'PatientAge',                                   comment = 'We keep this when shifting dates, otherwise remove'}
-    lTableFromCTP['0010-1030'] = {en = true,  op = 'keep',    name = 'PatientWeight',                                comment = ''}
-    lTableFromCTP['0018-1030'] = {en = true,  op = 'keep',    name = 'ProtocolName',                                 comment = 'We often keeps this'}
-    lTableFromCTP['0018-1078'] = {en = true,  op = 'keep',    name = 'RadiopharmaceuticalStartDateTime',             comment = ''}
-    lTableFromCTP['0018-1079'] = {en = true,  op = 'keep',    name = 'RadiopharmaceuticalStopDateTime',              comment = ''}
-    lTableFromCTP['0020-0010'] = {en = true,  op = 'keep',    name = 'StudyID',                                      comment = 'Orthanc later anonymizes this'}
-    lTableFromCTP['0018-0081'] = {en = true,  op = 'keep',    name = 'EchoTime',                                     comment = ''}
-    lTableFromCTP['0018-0086'] = {en = true,  op = 'keep',    name = 'EchoNumber',                                   comment = ''}
-    lTableFromCTP['0018-0091'] = {en = true,  op = 'keep',    name = 'EchoTrainLength',                              comment = ''}
-    lTableFromCTP['0008-0018'] = {en = true,  op = 'orthanc', name = 'SOPInstanceUID',                               comment = 'Currently handled by Orthanc'}
-    lTableFromCTP['0008-1140'] = {en = true,  op = 'orthanc', name = 'RefImageSeq',                                  comment = ''}
-    lTableFromCTP['0008-1150'] = {en = true,  op = 'orthanc', name = 'RefSOPClassUID',                               comment = 'Currently handled by Orthanc'}
-    lTableFromCTP['0008-1155'] = {en = true,  op = 'orthanc', name = 'RefSOPInstanceUID',                            comment = 'Currently handled by Orthanc'}
-    lTableFromCTP['0020-000d'] = {en = true,  op = 'orthanc', name = 'StudyInstanceUID',                             comment = 'Currently handled by Orthanc'}
-    lTableFromCTP['0020-000e'] = {en = true,  op = 'orthanc', name = 'SeriesInstanceUID',                            comment = 'Currently handled by Orthanc'}
-    lTableFromCTP['0020-0052'] = {en = true,  op = 'orthanc', name = 'FrameOfReferenceUID',                          comment = 'Currently handled by Orthanc'}
+    lTableFromCTP['0008-0080'] = {en = true,  op = 'remove',  name = 'InstitutionName',                              comment = ''}
+    lTableFromCTP['0008-0081'] = {en = true,  op = 'remove',  name = 'InstitutionAddress',                           comment = ''}
+    lTableFromCTP['0008-0082'] = {en = true,  op = 'remove',  name = 'InstitutionCodeSeq',                           comment = ''}
+    lTableFromCTP['0008-0090'] = {en = true,  op = 'empty',   name = 'ReferringPhysicianName',                       comment = ''}
+    lTableFromCTP['0008-0092'] = {en = true,  op = 'remove',  name = 'ReferringPhysicianAddress',                    comment = ''}
+    lTableFromCTP['0008-0094'] = {en = true,  op = 'remove',  name = 'ReferringPhysicianPhoneNumbers',               comment = ''}
+    lTableFromCTP['0008-0096'] = {en = true,  op = 'remove',  name = 'ReferringPhysiciansIDSeq',                     comment = ''}
+    lTableFromCTP['0008-0100'] = {en = false, op = '',        name = 'CodeValue',                                    comment = ''}
+    lTableFromCTP['0008-0102'] = {en = false, op = '',        name = 'CodingSchemeDesignator',                       comment = ''}
+    lTableFromCTP['0008-0103'] = {en = false, op = '',        name = 'CodingSchemeVersion',                          comment = ''}
+    lTableFromCTP['0008-0104'] = {en = false, op = '',        name = 'CodeMeaning',                                  comment = ''}
+    lTableFromCTP['0008-0105'] = {en = false, op = '',        name = 'MappingResource',                              comment = ''}
+    lTableFromCTP['0008-0106'] = {en = false, op = '',        name = 'ContextGroupVersion',                          comment = ''}
+    lTableFromCTP['0008-0107'] = {en = false, op = '',        name = 'ContextGroupLocalVersion',                     comment = ''}
+    lTableFromCTP['0008-010b'] = {en = false, op = '',        name = 'CodeSetExtensionFlag',                         comment = ''}
+    lTableFromCTP['0008-010c'] = {en = true,  op = 'remove',  name = 'PrivateCodingSchemeCreatorUID',                comment = ''}
+    lTableFromCTP['0008-010d'] = {en = true,  op = 'remove',  name = 'CodeSetExtensionCreatorUID',                   comment = ''}
+    lTableFromCTP['0008-010f'] = {en = false, op = '',        name = 'ContextIdentifier',                            comment = ''}
+    lTableFromCTP['0008-0201'] = {en = true,  op = 'remove',  name = 'TimezoneOffsetFromUTC',                        comment = ''}
     lTableFromCTP['0008-1010'] = {en = true,  op = 'remove',  name = 'StationName',                                  comment = 'Some groups want to keep this'}
+    lTableFromCTP['0008-1030'] = {en = true,  op = 'keep',    name = 'StudyDescription',                             comment = 'We tends to keep this'}
     if lFlagHologic then
         lTableFromCTP['0008-1032']={en = true, op = 'keep',   name = 'ProcedureCodeSeq',                             comment = 'Winkler needs to keep this for Hologic'}
     else
         lTableFromCTP['0008-1032']={en = true, op = 'remove', name = 'ProcedureCodeSeq',                             comment = 'Winkler needs to keep this for Hologic'}
     end
-    lTableFromCTP['0008-1090'] = {en = true,  op = 'remove',  name = 'ManufacturerModelName',                        comment = 'Some groups (Cardiac) like to keep this'}
-    lTableFromCTP['0008-0014'] = {en = true,  op = 'remove',  name = 'InstanceCreatorUID',                           comment = ''}
-    lTableFromCTP['0008-0021'] = {en = true,  op = 'remove',  name = 'SeriesDate',                                   comment = ''}
-    lTableFromCTP['0008-0024'] = {en = true,  op = 'remove',  name = 'OverlayDate',                                  comment = ''}
-    lTableFromCTP['0008-0025'] = {en = true,  op = 'remove',  name = 'CurveDate',                                    comment = ''}
-    lTableFromCTP['0008-002a'] = {en = true,  op = 'remove',  name = 'AcquisitionDatetime',                          comment = ''}
-    lTableFromCTP['0008-0031'] = {en = true,  op = 'remove',  name = 'SeriesTime',                                   comment = ''}
-    lTableFromCTP['0008-0034'] = {en = true,  op = 'remove',  name = 'OverlayTime',                                  comment = ''}
-    lTableFromCTP['0008-0035'] = {en = true,  op = 'remove',  name = 'CurveTime',                                    comment = ''}
-    lTableFromCTP['0008-0080'] = {en = true,  op = 'remove',  name = 'InstitutionName',                              comment = ''}
-    lTableFromCTP['0008-0081'] = {en = true,  op = 'remove',  name = 'InstitutionAddress',                           comment = ''}
-    lTableFromCTP['0008-0082'] = {en = true,  op = 'remove',  name = 'InstitutionCodeSeq',                           comment = ''}
-    lTableFromCTP['0008-0092'] = {en = true,  op = 'remove',  name = 'ReferringPhysicianAddress',                    comment = ''}
-    lTableFromCTP['0008-0094'] = {en = true,  op = 'remove',  name = 'ReferringPhysicianPhoneNumbers',               comment = ''}
-    lTableFromCTP['0008-0096'] = {en = true,  op = 'remove',  name = 'ReferringPhysiciansIDSeq',                     comment = ''}
-    lTableFromCTP['0008-010c'] = {en = true,  op = 'remove',  name = 'PrivateCodingSchemeCreatorUID',                comment = ''}
-    lTableFromCTP['0008-010d'] = {en = true,  op = 'remove',  name = 'CodeSetExtensionCreatorUID',                   comment = ''}
-    lTableFromCTP['0008-0201'] = {en = true,  op = 'remove',  name = 'TimezoneOffsetFromUTC',                        comment = ''}
+    lTableFromCTP['0008-103e'] = {en = true,  op = 'keep',    name = 'SeriesDescription',                            comment = 'We tends to keep this'}
     lTableFromCTP['0008-1040'] = {en = true,  op = 'remove',  name = 'InstitutionalDepartmentName',                  comment = ''}
     lTableFromCTP['0008-1048'] = {en = true,  op = 'remove',  name = 'PhysicianOfRecord',                            comment = ''}
     lTableFromCTP['0008-1049'] = {en = true,  op = 'remove',  name = 'PhysicianOfRecordIdSeq',                       comment = ''}
@@ -1113,17 +1225,66 @@ function BaseTagHandling ()
     lTableFromCTP['0008-1072'] = {en = true,  op = 'remove',  name = 'OperatorsIdentificationSeq',                   comment = ''}
     lTableFromCTP['0008-1080'] = {en = true,  op = 'remove',  name = 'AdmittingDiagnosisDescription',                comment = ''}
     lTableFromCTP['0008-1084'] = {en = true,  op = 'remove',  name = 'AdmittingDiagnosisCodeSeq',                    comment = ''}
+    lTableFromCTP['0008-1090'] = {en = true,  op = 'keep',    name = 'ManufacturerModelName',                        comment = 'Some groups (Cardiac) like to keep this'}
+    lTableFromCTP['0008-1100'] = {en = false, op = '',        name = 'RefResultsSeq',                                comment = ''}
     lTableFromCTP['0008-1110'] = {en = true,  op = 'remove',  name = 'RefStudySeq',                                  comment = ''}
     lTableFromCTP['0008-1111'] = {en = true,  op = 'remove',  name = 'RefPPSSeq',                                    comment = ''}
+    lTableFromCTP['0008-1115'] = {en = false, op = '',        name = 'RefSeriesSeq',                                 comment = ''}
     lTableFromCTP['0008-1120'] = {en = true,  op = 'remove',  name = 'RefPatientSeq',                                comment = ''}
+    lTableFromCTP['0008-1125'] = {en = false, op = '',        name = 'RefVisitSeq',                                  comment = ''}
+    lTableFromCTP['0008-1130'] = {en = false, op = '',        name = 'RefOverlaySeq',                                comment = ''}
+    lTableFromCTP['0008-1140'] = {en = true,  op = 'orthanc', name = 'RefImageSeq',                                  comment = ''}
+    lTableFromCTP['0008-1145'] = {en = false, op = '',        name = 'RefCurveSeq',                                  comment = ''}
+    lTableFromCTP['0008-114a'] = {en = false, op = '',        name = 'RefInstanceSeq',                               comment = ''}
+    lTableFromCTP['0008-1150'] = {en = true,  op = 'orthanc', name = 'RefSOPClassUID',                               comment = 'Currently handled by Orthanc'}
+    lTableFromCTP['0008-1155'] = {en = true,  op = 'orthanc', name = 'RefSOPInstanceUID',                            comment = 'Currently handled by Orthanc'}
+    lTableFromCTP['0008-115a'] = {en = false, op = '',        name = 'SOPClassesSupported',                          comment = ''}
+    lTableFromCTP['0008-1160'] = {en = false, op = '',        name = 'RefFrameNumber',                               comment = ''}
     lTableFromCTP['0008-1195'] = {en = true,  op = 'remove',  name = 'TransactionUID',                               comment = ''}
+    lTableFromCTP['0008-1197'] = {en = false, op = '',        name = 'FailureReason',                                comment = ''}
+    lTableFromCTP['0008-1198'] = {en = false, op = '',        name = 'FailedSOPSeq',                                 comment = ''}
+    lTableFromCTP['0008-1199'] = {en = false, op = '',        name = 'RefSOPSeq',                                    comment = ''}
     lTableFromCTP['0008-2111'] = {en = true,  op = 'remove',  name = 'DerivationDescription',                        comment = ''}
     lTableFromCTP['0008-2112'] = {en = true,  op = 'remove',  name = 'SourceImageSeq',                               comment = ''}
+    lTableFromCTP['0008-2120'] = {en = false, op = '',        name = 'StageName',                                    comment = ''}
+    lTableFromCTP['0008-2122'] = {en = false, op = '',        name = 'StageNumber',                                  comment = ''}
+    lTableFromCTP['0008-2124'] = {en = false, op = '',        name = 'NumberOfStages',                               comment = ''}
+    lTableFromCTP['0008-2128'] = {en = false, op = '',        name = 'ViewNumber',                                   comment = ''}
+    lTableFromCTP['0008-2129'] = {en = false, op = '',        name = 'NumberOfEventTimers',                          comment = ''}
+    lTableFromCTP['0008-212a'] = {en = false, op = '',        name = 'NumberOfViewsInStage',                         comment = ''}
+    lTableFromCTP['0008-2130'] = {en = false, op = '',        name = 'EventElapsedTime',                             comment = ''}
+    lTableFromCTP['0008-2132'] = {en = false, op = '',        name = 'EventTimerName',                               comment = ''}
+    lTableFromCTP['0008-2142'] = {en = false, op = '',        name = 'StartTrim',                                    comment = ''}
+    lTableFromCTP['0008-2143'] = {en = false, op = '',        name = 'StopTrim',                                     comment = ''}
+    lTableFromCTP['0008-2144'] = {en = false, op = '',        name = 'RecommendedDisplayFrameRate',                  comment = ''}
+    lTableFromCTP['0008-2218'] = {en = false, op = '',        name = 'AnatomicRegionSeq',                            comment = ''}
+    lTableFromCTP['0008-2220'] = {en = false, op = '',        name = 'AnatomicRegionModifierSeq',                    comment = ''}
+    lTableFromCTP['0008-2228'] = {en = false, op = '',        name = 'PrimaryAnatomicStructureSeq',                  comment = ''}
+    lTableFromCTP['0008-2229'] = {en = false, op = '',        name = 'AnatomicStructureSpaceRegionSeq',              comment = ''}
+    lTableFromCTP['0008-2230'] = {en = false, op = '',        name = 'PrimaryAnatomicStructureModifierSeq',          comment = ''}
+    lTableFromCTP['0008-2240'] = {en = false, op = '',        name = 'TransducerPositionSeq',                        comment = ''}
+    lTableFromCTP['0008-2242'] = {en = false, op = '',        name = 'TransducerPositionModifierSeq',                comment = ''}
+    lTableFromCTP['0008-2244'] = {en = false, op = '',        name = 'TransducerOrientationSeq',                     comment = ''}
+    lTableFromCTP['0008-2246'] = {en = false, op = '',        name = 'TransducerOrientationModifierSeq',             comment = ''}
     lTableFromCTP['0008-3010'] = {en = true,  op = 'remove',  name = 'IrradiationEventUID',                          comment = ''}
     lTableFromCTP['0008-4000'] = {en = true,  op = 'remove',  name = 'IdentifyingComments',                          comment = ''}
+    lTableFromCTP['0008-9007'] = {en = false, op = '',        name = 'FrameType',                                    comment = ''}
+    lTableFromCTP['0008-9092'] = {en = false, op = '',        name = 'ReferringImageEvidenceSeq',                    comment = ''}
+    lTableFromCTP['0008-9121'] = {en = false, op = '',        name = 'RefRawDataSeq',                                comment = ''}
     lTableFromCTP['0008-9123'] = {en = true,  op = 'remove',  name = 'CreatorVersionUID',                            comment = ''}
+    lTableFromCTP['0008-9124'] = {en = false, op = '',        name = 'DerivationImageSeq',                           comment = ''}
+    lTableFromCTP['0008-9154'] = {en = false, op = '',        name = 'SourceImageEvidenceSeq',                       comment = ''}
+    lTableFromCTP['0008-9205'] = {en = false, op = '',        name = 'PixelPresentation',                            comment = ''}
+    lTableFromCTP['0008-9206'] = {en = false, op = '',        name = 'VolumetricProperties',                         comment = ''}
+    lTableFromCTP['0008-9207'] = {en = false, op = '',        name = 'VolumeBasedCalculationTechnique',              comment = ''}
+    lTableFromCTP['0008-9208'] = {en = false, op = '',        name = 'ComplexImageComponent',                        comment = ''}
+    lTableFromCTP['0008-9209'] = {en = false, op = '',        name = 'AcquisitionContrast',                          comment = ''}
+    lTableFromCTP['0008-9215'] = {en = false, op = '',        name = 'DerivationCodeSeq',                            comment = ''}
+    lTableFromCTP['0008-9237'] = {en = false, op = '',        name = 'RefGrayscalePresentationStateSeq',             comment = ''}
     lTableFromCTP['0010-0021'] = {en = true,  op = 'remove',  name = 'IssuerOfPatientID',                            comment = ''}
+    lTableFromCTP['0010-0030'] = {en = true,  op = 'keep',    name = 'PatientBirthDate',                             comment = 'We keep this when shifting dates, otherwise remove'}
     lTableFromCTP['0010-0032'] = {en = true,  op = 'remove',  name = 'PatientBirthTime',                             comment = ''}
+    lTableFromCTP['0010-0040'] = {en = true,  op = 'keep',    name = 'PatientSex',                                   comment = 'We keep this'}
     lTableFromCTP['0010-0050'] = {en = true,  op = 'remove',  name = 'PatientInsurancePlanCodeSeq',                  comment = ''}
     lTableFromCTP['0010-0101'] = {en = true,  op = 'remove',  name = 'PatientPrimaryLanguageCodeSeq',                comment = ''}
     lTableFromCTP['0010-0102'] = {en = true,  op = 'remove',  name = 'PatientPrimaryLanguageModifierCodeSeq',        comment = ''}
@@ -1131,7 +1292,9 @@ function BaseTagHandling ()
     lTableFromCTP['0010-1001'] = {en = true,  op = 'remove',  name = 'OtherPatientNames',                            comment = ''}
     lTableFromCTP['0010-1002'] = {en = true,  op = 'remove',  name = 'OtherPatientIDsSeq',                           comment = ''}
     lTableFromCTP['0010-1005'] = {en = true,  op = 'remove',  name = 'PatientBirthName',                             comment = ''}
+    lTableFromCTP['0010-1010'] = {en = true,  op = 'keep',    name = 'PatientAge',                                   comment = 'We keep this when shifting dates, otherwise remove'}
     lTableFromCTP['0010-1020'] = {en = true,  op = 'remove',  name = 'PatientSize',                                  comment = ''}
+    lTableFromCTP['0010-1030'] = {en = true,  op = 'keep',    name = 'PatientWeight',                                comment = ''}
     lTableFromCTP['0010-1040'] = {en = true,  op = 'remove',  name = 'PatientAddress',                               comment = ''}
     lTableFromCTP['0010-1050'] = {en = true,  op = 'remove',  name = 'InsurancePlanIdentification',                  comment = ''}
     lTableFromCTP['0010-1060'] = {en = true,  op = 'remove',  name = 'PatientMotherBirthName',                       comment = ''}
@@ -1154,231 +1317,20 @@ function BaseTagHandling ()
     lTableFromCTP['0010-2297'] = {en = true,  op = 'remove',  name = 'ResponsiblePerson',                            comment = ''}
     lTableFromCTP['0010-2299'] = {en = true,  op = 'remove',  name = 'ResponsibleOrganization',                      comment = ''}
     lTableFromCTP['0010-4000'] = {en = true,  op = 'remove',  name = 'PatientComments',                              comment = ''}
-    lTableFromCTP['0018-1000'] = {en = true,  op = 'remove',  name = 'DeviceSerialNumber',                           comment = ''}
-    lTableFromCTP['0018-1002'] = {en = true,  op = 'remove',  name = 'DeviceUID',                                    comment = ''}
-    lTableFromCTP['0018-1004'] = {en = true,  op = 'remove',  name = 'PlateID',                                      comment = ''}
-    lTableFromCTP['0018-1005'] = {en = true,  op = 'remove',  name = 'GeneratorID',                                  comment = ''}
-    lTableFromCTP['0018-1007'] = {en = true,  op = 'remove',  name = 'CassetteID',                                   comment = ''}
-    lTableFromCTP['0018-1008'] = {en = true,  op = 'remove',  name = 'GantryID',                                     comment = ''}
-    lTableFromCTP['0018-1012'] = {en = true,  op = 'remove',  name = 'DateOfSecondaryCapture',                       comment = ''}
-    lTableFromCTP['0018-1020'] = {en = true,  op = 'remove',  name = 'SoftwareVersion',                              comment = ''}
-    lTableFromCTP['0018-1200'] = {en = true,  op = 'remove',  name = 'DateOfLastCalibration',                        comment = ''}
-    lTableFromCTP['0018-1400'] = {en = true,  op = 'remove',  name = 'AcquisitionDeviceProcessingDescription',       comment = ''}
-    lTableFromCTP['0018-4000'] = {en = true,  op = 'remove',  name = 'AcquisitionComments',                          comment = ''}
-    lTableFromCTP['0018-700a'] = {en = true,  op = 'remove',  name = 'DetectorID',                                   comment = ''}
-    lTableFromCTP['0018-700c'] = {en = true,  op = 'remove',  name = 'DateOfLastDetectorCalibration',                comment = ''}
-    lTableFromCTP['0018-9074'] = {en = true,  op = 'remove',  name = 'FrameAcquisitionDatetime',                     comment = ''}
-    lTableFromCTP['0018-9151'] = {en = true,  op = 'remove',  name = 'FrameReferenceDatetime',                       comment = ''}
-    lTableFromCTP['0018-9424'] = {en = true,  op = 'remove',  name = 'AcquisitionProtocolDescription',               comment = ''}
-    lTableFromCTP['0018-a003'] = {en = true,  op = 'remove',  name = 'ContributionDescription',                      comment = ''}
-    lTableFromCTP['0020-0200'] = {en = true,  op = 'remove',  name = 'SynchronizationFrameOfReferenceUID',           comment = ''}
-    lTableFromCTP['0020-3401'] = {en = true,  op = 'remove',  name = 'ModifyingDeviceID',                            comment = ''}
-    lTableFromCTP['0020-3404'] = {en = true,  op = 'remove',  name = 'ModifyingDeviceManufacturer',                  comment = ''}
-    lTableFromCTP['0020-3406'] = {en = true,  op = 'remove',  name = 'ModifiedImageDescription',                     comment = ''}
-    lTableFromCTP['0020-4000'] = {en = true,  op = 'remove',  name = 'ImageComments',                                comment = 'We often keeps this, but Siemens Retro-recon fills it with PHI'}
-    lTableFromCTP['0020-9161'] = {en = true,  op = 'remove',  name = 'ConcatenationUID',                             comment = ''}
-    lTableFromCTP['0020-9164'] = {en = true,  op = 'remove',  name = 'DimensionOrganizationUID',                     comment = ''}
-    lTableFromCTP['0028-1199'] = {en = true,  op = 'remove',  name = 'PaletteColorLUTUID',                           comment = ''}
-    lTableFromCTP['0028-4000'] = {en = true,  op = 'remove',  name = 'ImagePresentationComments',                    comment = ''}
-    lTableFromCTP['0032-0012'] = {en = true,  op = 'remove',  name = 'StudyIDIssuer',                                comment = ''}
-    lTableFromCTP['0032-0032'] = {en = true,  op = 'remove',  name = 'StudyVerifiedDate',                            comment = ''}
-    lTableFromCTP['0032-0034'] = {en = true,  op = 'remove',  name = 'StudyReadDate',                                comment = ''}
-    lTableFromCTP['0032-1000'] = {en = true,  op = 'remove',  name = 'ScheduledStudyStartDate',                      comment = ''}
-    lTableFromCTP['0032-1010'] = {en = true,  op = 'remove',  name = 'ScheduledStudyStopDate',                       comment = ''}
-    lTableFromCTP['0032-1020'] = {en = true,  op = 'remove',  name = 'ScheduledStudyLocation',                       comment = ''}
-    lTableFromCTP['0032-1021'] = {en = true,  op = 'remove',  name = 'ScheduledStudyLocationAET',                    comment = ''}
-    lTableFromCTP['0032-1030'] = {en = true,  op = 'remove',  name = 'ReasonforStudy',                               comment = ''}
-    lTableFromCTP['0032-1032'] = {en = true,  op = 'remove',  name = 'RequestingPhysician',                          comment = ''}
-    lTableFromCTP['0032-1033'] = {en = true,  op = 'remove',  name = 'RequestingService',                            comment = ''}
-    lTableFromCTP['0032-1040'] = {en = true,  op = 'remove',  name = 'StudyArrivalDate',                             comment = ''}
-    lTableFromCTP['0032-1050'] = {en = true,  op = 'remove',  name = 'StudyCompletionDate',                          comment = ''}
-    lTableFromCTP['0032-1060'] = {en = true,  op = 'remove',  name = 'RequestedProcedureDescription',                comment = ''}
-    lTableFromCTP['0032-1064'] = {en = true,  op = 'remove',  name = 'RequestedProcedureCodeSeq',                    comment = ''}
-    lTableFromCTP['0032-1070'] = {en = true,  op = 'remove',  name = 'RequestedContrastAgent',                       comment = ''}
-    lTableFromCTP['0032-4000'] = {en = true,  op = 'remove',  name = 'StudyComments',                                comment = ''}
-    lTableFromCTP['0038-0010'] = {en = true,  op = 'remove',  name = 'AdmissionID',                                  comment = ''}
-    lTableFromCTP['0038-0011'] = {en = true,  op = 'remove',  name = 'IssuerOfAdmissionID',                          comment = ''}
-    lTableFromCTP['0038-001a'] = {en = true,  op = 'remove',  name = 'ScheduledAdmissionDate',                       comment = ''}
-    lTableFromCTP['0038-001c'] = {en = true,  op = 'remove',  name = 'ScheduledDischargeDate',                       comment = ''}
-    lTableFromCTP['0038-001e'] = {en = true,  op = 'remove',  name = 'ScheduledPatientInstitutionResidence',         comment = ''}
-    lTableFromCTP['0038-0020'] = {en = true,  op = 'remove',  name = 'AdmittingDate',                                comment = ''}
-    lTableFromCTP['0038-0021'] = {en = true,  op = 'remove',  name = 'AdmittingTime',                                comment = ''}
-    lTableFromCTP['0038-0030'] = {en = true,  op = 'remove',  name = 'DischargeDate',                                comment = ''}
-    lTableFromCTP['0038-0040'] = {en = true,  op = 'remove',  name = 'DischargeDiagnosisDescription',                comment = ''}
-    lTableFromCTP['0038-0050'] = {en = true,  op = 'remove',  name = 'SpecialNeeds',                                 comment = ''}
-    lTableFromCTP['0038-0060'] = {en = true,  op = 'remove',  name = 'ServiceEpisodeID',                             comment = ''}
-    lTableFromCTP['0038-0061'] = {en = true,  op = 'remove',  name = 'IssuerOfServiceEpisodeId',                     comment = ''}
-    lTableFromCTP['0038-0062'] = {en = true,  op = 'remove',  name = 'ServiceEpisodeDescription',                    comment = ''}
-    lTableFromCTP['0038-0300'] = {en = true,  op = 'remove',  name = 'CurrentPatientLocation',                       comment = ''}
-    lTableFromCTP['0038-0400'] = {en = true,  op = 'remove',  name = 'PatientInstitutionResidence',                  comment = ''}
-    lTableFromCTP['0038-0500'] = {en = true,  op = 'remove',  name = 'PatientState',                                 comment = ''}
-    lTableFromCTP['0038-1234'] = {en = true,  op = 'remove',  name = 'ReferencedPatientAliasSeq',                    comment = ''}
-    lTableFromCTP['0038-4000'] = {en = true,  op = 'remove',  name = 'VisitComments',                                comment = ''}
-    lTableFromCTP['0040-0001'] = {en = true,  op = 'remove',  name = 'ScheduledStationAET',                          comment = ''}
-    lTableFromCTP['0040-0002'] = {en = true,  op = 'remove',  name = 'SPSStartDate',                                 comment = ''}
-    lTableFromCTP['0040-0004'] = {en = true,  op = 'remove',  name = 'SPSEndDate',                                   comment = ''}
-    lTableFromCTP['0040-0006'] = {en = true,  op = 'remove',  name = 'ScheduledPerformingPhysicianName',             comment = ''}
-    lTableFromCTP['0040-0007'] = {en = true,  op = 'remove',  name = 'ScheduledProcedureStepDescription',            comment = ''}
-    lTableFromCTP['0040-0008'] = {en = true,  op = 'remove',  name = 'ScheduledProtocolCodeSeq',                     comment = ''}
-    lTableFromCTP['0040-000b'] = {en = true,  op = 'remove',  name = '',                                             comment = ''}
-    lTableFromCTP['0040-0010'] = {en = true,  op = 'remove',  name = 'ScheduledStationName',                         comment = ''}
-    lTableFromCTP['0040-0011'] = {en = true,  op = 'remove',  name = 'SPSLocation',                                  comment = ''}
-    lTableFromCTP['0040-0012'] = {en = true,  op = 'remove',  name = 'PreMedication',                                comment = ''}
-    lTableFromCTP['0040-030e'] = {en = true,  op = 'remove',  name = 'RETIRED_ExposureDoseSequence',                 comment = 'Something embeds stuff here, maybe when loading another institutions pacs into our pacs?'}
-    lTableFromCTP['0040-0241'] = {en = true,  op = 'remove',  name = 'PerformedStationAET',                          comment = ''}
-    lTableFromCTP['0040-0242'] = {en = true,  op = 'remove',  name = 'PerformedStationName',                         comment = ''}
-    lTableFromCTP['0040-0243'] = {en = true,  op = 'remove',  name = 'PerformedLocation',                            comment = ''}
-    lTableFromCTP['0040-0244'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepStartDate',              comment = ''}
-    lTableFromCTP['0040-0245'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepStartTime',              comment = ''}
-    lTableFromCTP['0040-0248'] = {en = true,  op = 'remove',  name = 'PerformedStationNameCodeSeq',                  comment = ''}
-    lTableFromCTP['0040-0250'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepEndDate',                comment = ''}
-    lTableFromCTP['0040-0251'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepEndTime',                comment = ''}
-    lTableFromCTP['0040-0252'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepStatus',                 comment = ''}
-    lTableFromCTP['0040-0253'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepID',                     comment = ''}
-    lTableFromCTP['0040-0254'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepDescription',            comment = ''}
-    lTableFromCTP['0040-0255'] = {en = true,  op = 'remove',  name = 'PerformedProcedureTypeDescription',            comment = ''}
-    lTableFromCTP['0040-0260'] = {en = true,  op = 'remove',  name = 'PerformedProtocolCodeSeq',                     comment = ''}
-    lTableFromCTP['0040-0275'] = {en = true,  op = 'remove',  name = 'RequestAttributesSeq',                         comment = ''}
-    lTableFromCTP['0040-0280'] = {en = true,  op = 'remove',  name = 'PPSComments',                                  comment = ''}
-    lTableFromCTP['0040-0555'] = {en = true,  op = 'remove',  name = 'AcquisitionContextSeq',                        comment = ''}
-    lTableFromCTP['0040-1004'] = {en = true,  op = 'remove',  name = 'PatientTransportArrangements',                 comment = ''}
-    lTableFromCTP['0040-1005'] = {en = true,  op = 'remove',  name = 'RequestedProcedureLocation',                   comment = ''}
-    lTableFromCTP['0040-1010'] = {en = true,  op = 'remove',  name = 'NamesOfIntendedRecipientsOfResults',           comment = ''}
-    lTableFromCTP['0040-1011'] = {en = true,  op = 'remove',  name = 'IntendedRecipientsOfResultsIDSequence',        comment = ''}
-    lTableFromCTP['0040-1102'] = {en = true,  op = 'remove',  name = 'PersonAddress',                                comment = ''}
-    lTableFromCTP['0040-1103'] = {en = true,  op = 'remove',  name = 'PersonTelephoneNumbers',                       comment = ''}
-    lTableFromCTP['0040-1400'] = {en = true,  op = 'remove',  name = 'RequestedProcedureComments',                   comment = ''}
-    lTableFromCTP['0040-2001'] = {en = true,  op = 'remove',  name = 'ReasonForTheImagingServiceRequest',            comment = ''}
-    lTableFromCTP['0040-2004'] = {en = true,  op = 'remove',  name = 'IssueDateOfImagingServiceRequest',             comment = ''}
-    lTableFromCTP['0040-2008'] = {en = true,  op = 'remove',  name = 'OrderEnteredBy',                               comment = ''}
-    lTableFromCTP['0040-2009'] = {en = true,  op = 'remove',  name = 'OrderEntererLocation',                         comment = ''}
-    lTableFromCTP['0040-2010'] = {en = true,  op = 'remove',  name = 'OrderCallbackPhoneNumber',                     comment = ''}
-    lTableFromCTP['0040-2016'] = {en = true,  op = 'remove',  name = 'PlacerOrderNumber',                            comment = ''}
-    lTableFromCTP['0040-2017'] = {en = true,  op = 'remove',  name = 'FillerOrderNumber',                            comment = ''}
-    lTableFromCTP['0040-2400'] = {en = true,  op = 'remove',  name = 'ImagingServiceRequestComments',                comment = ''}
-    lTableFromCTP['0040-3001'] = {en = true,  op = 'remove',  name = 'ConfidentialityPatientData',                   comment = ''}
-    lTableFromCTP['0040-4023'] = {en = true,  op = 'remove',  name = 'RefGenPurposeSchedProcStepTransUID',           comment = ''}
-    lTableFromCTP['0040-4025'] = {en = true,  op = 'remove',  name = 'ScheduledStationNameCodeSeq',                  comment = ''}
-    lTableFromCTP['0040-4027'] = {en = true,  op = 'remove',  name = 'ScheduledStationGeographicLocCodeSeq',         comment = ''}
-    lTableFromCTP['0040-4030'] = {en = true,  op = 'remove',  name = 'PerformedStationGeoLocCodeSeq',                comment = ''}
-    lTableFromCTP['0040-4034'] = {en = true,  op = 'remove',  name = 'ScheduledHumanPerformersSeq',                  comment = ''}
-    lTableFromCTP['0040-4035'] = {en = true,  op = 'remove',  name = 'ActualHumanPerformersSequence',                comment = ''}
-    lTableFromCTP['0040-4036'] = {en = true,  op = 'remove',  name = 'HumanPerformersOrganization',                  comment = ''}
-    lTableFromCTP['0040-4037'] = {en = true,  op = 'remove',  name = 'HumanPerformersName',                          comment = ''}
-    lTableFromCTP['0040-a027'] = {en = true,  op = 'remove',  name = 'VerifyingOrganization',                        comment = ''}
-    lTableFromCTP['0040-a030'] = {en = true,  op = 'remove',  name = 'VerificationDateTime',                         comment = ''}
-    lTableFromCTP['0040-a032'] = {en = true,  op = 'remove',  name = 'ObservationDateTime',                          comment = ''}
-    lTableFromCTP['0040-a075'] = {en = true,  op = 'remove',  name = 'VerifyingObserverName',                        comment = ''}
-    lTableFromCTP['0040-a078'] = {en = true,  op = 'remove',  name = 'AuthorObserverSequence',                       comment = ''}
-    lTableFromCTP['0040-a07a'] = {en = true,  op = 'remove',  name = 'ParticipantSequence',                          comment = ''}
-    lTableFromCTP['0040-a07c'] = {en = true,  op = 'remove',  name = 'CustodialOrganizationSeq',                     comment = ''}
-    lTableFromCTP['0040-a088'] = {en = true,  op = 'remove',  name = 'VerifyingObserverIdentificationCodeSeq',       comment = ''}
-    lTableFromCTP['0040-a120'] = {en = true,  op = 'remove',  name = 'DateTime',                                     comment = ''}
-    lTableFromCTP['0040-a121'] = {en = true,  op = 'remove',  name = 'Date',                                         comment = ''}
-    lTableFromCTP['0040-a123'] = {en = true,  op = 'remove',  name = 'PersonName',                                   comment = ''}
-    lTableFromCTP['0040-a124'] = {en = true,  op = 'remove',  name = 'UID',                                          comment = ''}
-    lTableFromCTP['0040-a13a'] = {en = true,  op = 'remove',  name = 'RefDatetime',                                  comment = ''}
-    lTableFromCTP['0040-a730'] = {en = true,  op = 'remove',  name = 'ContentSeq',                                   comment = ''}
-    lTableFromCTP['0040-db0c'] = {en = true,  op = 'remove',  name = 'TemplateExtensionOrganizationUID',             comment = ''}
-    lTableFromCTP['0040-db0d'] = {en = true,  op = 'remove',  name = 'TemplateExtensionCreatorUID',                  comment = ''}
-    lTableFromCTP['0060-3000'] = {en = true,  op = 'remove',  name = 'OverlayData',                                  comment = ''}
-    lTableFromCTP['0060-4000'] = {en = true,  op = 'remove',  name = 'OverlayComments',                              comment = ''}
-    lTableFromCTP['0070-031a'] = {en = true,  op = 'remove',  name = 'FiducialUID',                                  comment = ''}
-    lTableFromCTP['0088-0140'] = {en = true,  op = 'remove',  name = 'StorageMediaFilesetUID',                       comment = ''}
-    lTableFromCTP['0088-0200'] = {en = true,  op = 'remove',  name = 'IconImageSequence',                            comment = ''}
-    lTableFromCTP['0088-0906'] = {en = true,  op = 'remove',  name = 'TopicSubject',                                 comment = ''}
-    lTableFromCTP['0088-0910'] = {en = true,  op = 'remove',  name = 'TopicAuthor',                                  comment = ''}
-    lTableFromCTP['0088-0912'] = {en = true,  op = 'remove',  name = 'TopicKeyWords',                                comment = ''}
-    lTableFromCTP['0400-0100'] = {en = true,  op = 'remove',  name = 'DigitalSignatureUID',                          comment = ''}
-    lTableFromCTP['0400-0561'] = {en = true,  op = 'remove',  name = 'OriginalAttributesSequence',                   comment = 'yet another PHI location snuck in by importing foreign DICOM'}
-    lTableFromCTP['2030-0020'] = {en = true,  op = 'remove',  name = 'TextString',                                   comment = ''}
-    lTableFromCTP['3006-0024'] = {en = true,  op = 'remove',  name = 'ReferencedFrameOfReferenceUID',                comment = ''}
-    lTableFromCTP['3006-00c2'] = {en = true,  op = 'remove',  name = 'RelatedFrameOfReferenceUID',                   comment = ''}
-    lTableFromCTP['300a-0013'] = {en = true,  op = 'remove',  name = 'DoseReferenceUID',                             comment = ''}
-    lTableFromCTP['4000-0010'] = {en = true,  op = 'remove',  name = 'Arbitrary',                                    comment = ''}
-    lTableFromCTP['4000-4000'] = {en = true,  op = 'remove',  name = 'TextComments',                                 comment = ''}
-    lTableFromCTP['4008-0042'] = {en = true,  op = 'remove',  name = 'ResultsIDIssuer',                              comment = ''}
-    lTableFromCTP['4008-0102'] = {en = true,  op = 'remove',  name = 'InterpretationRecorder',                       comment = ''}
-    lTableFromCTP['4008-010a'] = {en = true,  op = 'remove',  name = 'InterpretationTranscriber',                    comment = ''}
-    lTableFromCTP['4008-010b'] = {en = true,  op = 'remove',  name = 'InterpretationText',                           comment = ''}
-    lTableFromCTP['4008-010c'] = {en = true,  op = 'remove',  name = 'InterpretationAuthor',                         comment = ''}
-    lTableFromCTP['4008-0111'] = {en = true,  op = 'remove',  name = 'InterpretationApproverSequence',               comment = ''}
-    lTableFromCTP['4008-0114'] = {en = true,  op = 'remove',  name = 'PhysicianApprovingInterpretation',             comment = ''}
-    lTableFromCTP['4008-0115'] = {en = true,  op = 'remove',  name = 'InterpretationDiagnosisDescription',           comment = ''}
-    lTableFromCTP['4008-0118'] = {en = true,  op = 'remove',  name = 'ResultsDistributionListSeq',                   comment = ''}
-    lTableFromCTP['4008-0119'] = {en = true,  op = 'remove',  name = 'DistributionName',                             comment = ''}
-    lTableFromCTP['4008-011a'] = {en = true,  op = 'remove',  name = 'DistributionAddress',                          comment = ''}
-    lTableFromCTP['4008-0202'] = {en = true,  op = 'remove',  name = 'InterpretationIdIssuer',                       comment = ''}
-    lTableFromCTP['4008-0300'] = {en = true,  op = 'remove',  name = 'Impressions',                                  comment = ''}
-    lTableFromCTP['4008-4000'] = {en = true,  op = 'remove',  name = 'ResultComments',                               comment = ''}
-    lTableFromCTP['fffa-fffa'] = {en = true,  op = 'remove',  name = 'DigitalSignaturesSeq',                         comment = ''}
-    lTableFromCTP['fffc-fffc'] = {en = true,  op = 'remove',  name = 'DataSetTrailingPadding',                       comment = ''}
-    lTableFromCTP['0008-0052'] = {en = false, op = '',        name = 'QueryRetrieveLevel',                           comment = ''}
-    lTableFromCTP['0008-0054'] = {en = false, op = '',        name = 'RetrieveAET',                                  comment = ''}
-    lTableFromCTP['0008-0056'] = {en = false, op = '',        name = 'InstanceAvailability',                         comment = ''}
-    lTableFromCTP['0008-0058'] = {en = false, op = '',        name = 'FailedSOPInstanceUIDList',                     comment = ''}
-    lTableFromCTP['0008-0064'] = {en = false, op = '',        name = 'ConversionType',                               comment = ''}
-    lTableFromCTP['0008-0068'] = {en = false, op = '',        name = 'PresentationIntentType',                       comment = ''}
-    lTableFromCTP['0008-0100'] = {en = false, op = '',        name = 'CodeValue',                                    comment = ''}
-    lTableFromCTP['0008-0102'] = {en = false, op = '',        name = 'CodingSchemeDesignator',                       comment = ''}
-    lTableFromCTP['0008-0103'] = {en = false, op = '',        name = 'CodingSchemeVersion',                          comment = ''}
-    lTableFromCTP['0008-0104'] = {en = false, op = '',        name = 'CodeMeaning',                                  comment = ''}
-    lTableFromCTP['0008-0105'] = {en = false, op = '',        name = 'MappingResource',                              comment = ''}
-    lTableFromCTP['0008-0106'] = {en = false, op = '',        name = 'ContextGroupVersion',                          comment = ''}
-    lTableFromCTP['0008-0107'] = {en = false, op = '',        name = 'ContextGroupLocalVersion',                     comment = ''}
-    lTableFromCTP['0008-010b'] = {en = false, op = '',        name = 'CodeSetExtensionFlag',                         comment = ''}
-    lTableFromCTP['0008-010f'] = {en = false, op = '',        name = 'ContextIdentifier',                            comment = ''}
-    lTableFromCTP['0008-1100'] = {en = false, op = '',        name = 'RefResultsSeq',                                comment = ''}
-    lTableFromCTP['0008-1115'] = {en = false, op = '',        name = 'RefSeriesSeq',                                 comment = ''}
-    lTableFromCTP['0008-1125'] = {en = false, op = '',        name = 'RefVisitSeq',                                  comment = ''}
-    lTableFromCTP['0008-1130'] = {en = false, op = '',        name = 'RefOverlaySeq',                                comment = ''}
-    lTableFromCTP['0008-1145'] = {en = false, op = '',        name = 'RefCurveSeq',                                  comment = ''}
-    lTableFromCTP['0008-114a'] = {en = false, op = '',        name = 'RefInstanceSeq',                               comment = ''}
-    lTableFromCTP['0008-115a'] = {en = false, op = '',        name = 'SOPClassesSupported',                          comment = ''}
-    lTableFromCTP['0008-1160'] = {en = false, op = '',        name = 'RefFrameNumber',                               comment = ''}
-    lTableFromCTP['0008-1197'] = {en = false, op = '',        name = 'FailureReason',                                comment = ''}
-    lTableFromCTP['0008-1198'] = {en = false, op = '',        name = 'FailedSOPSeq',                                 comment = ''}
-    lTableFromCTP['0008-1199'] = {en = false, op = '',        name = 'RefSOPSeq',                                    comment = ''}
-    lTableFromCTP['0008-2120'] = {en = false, op = '',        name = 'StageName',                                    comment = ''}
-    lTableFromCTP['0008-2122'] = {en = false, op = '',        name = 'StageNumber',                                  comment = ''}
-    lTableFromCTP['0008-2124'] = {en = false, op = '',        name = 'NumberOfStages',                               comment = ''}
-    lTableFromCTP['0008-2128'] = {en = false, op = '',        name = 'ViewNumber',                                   comment = ''}
-    lTableFromCTP['0008-2129'] = {en = false, op = '',        name = 'NumberOfEventTimers',                          comment = ''}
-    lTableFromCTP['0008-212a'] = {en = false, op = '',        name = 'NumberOfViewsInStage',                         comment = ''}
-    lTableFromCTP['0008-2130'] = {en = false, op = '',        name = 'EventElapsedTime',                             comment = ''}
-    lTableFromCTP['0008-2132'] = {en = false, op = '',        name = 'EventTimerName',                               comment = ''}
-    lTableFromCTP['0008-2142'] = {en = false, op = '',        name = 'StartTrim',                                    comment = ''}
-    lTableFromCTP['0008-2143'] = {en = false, op = '',        name = 'StopTrim',                                     comment = ''}
-    lTableFromCTP['0008-2144'] = {en = false, op = '',        name = 'RecommendedDisplayFrameRate',                  comment = ''}
-    lTableFromCTP['0008-2218'] = {en = false, op = '',        name = 'AnatomicRegionSeq',                            comment = ''}
-    lTableFromCTP['0008-2220'] = {en = false, op = '',        name = 'AnatomicRegionModifierSeq',                    comment = ''}
-    lTableFromCTP['0008-2228'] = {en = false, op = '',        name = 'PrimaryAnatomicStructureSeq',                  comment = ''}
-    lTableFromCTP['0008-2229'] = {en = false, op = '',        name = 'AnatomicStructureSpaceRegionSeq',              comment = ''}
-    lTableFromCTP['0008-2230'] = {en = false, op = '',        name = 'PrimaryAnatomicStructureModifierSeq',          comment = ''}
-    lTableFromCTP['0008-2240'] = {en = false, op = '',        name = 'TransducerPositionSeq',                        comment = ''}
-    lTableFromCTP['0008-2242'] = {en = false, op = '',        name = 'TransducerPositionModifierSeq',                comment = ''}
-    lTableFromCTP['0008-2244'] = {en = false, op = '',        name = 'TransducerOrientationSeq',                     comment = ''}
-    lTableFromCTP['0008-2246'] = {en = false, op = '',        name = 'TransducerOrientationModifierSeq',             comment = ''}
-    lTableFromCTP['0008-9007'] = {en = false, op = '',        name = 'FrameType',                                    comment = ''}
-    lTableFromCTP['0008-9092'] = {en = false, op = '',        name = 'ReferringImageEvidenceSeq',                    comment = ''}
-    lTableFromCTP['0008-9121'] = {en = false, op = '',        name = 'RefRawDataSeq',                                comment = ''}
-    lTableFromCTP['0008-9124'] = {en = false, op = '',        name = 'DerivationImageSeq',                           comment = ''}
-    lTableFromCTP['0008-9154'] = {en = false, op = '',        name = 'SourceImageEvidenceSeq',                       comment = ''}
-    lTableFromCTP['0008-9205'] = {en = false, op = '',        name = 'PixelPresentation',                            comment = ''}
-    lTableFromCTP['0008-9206'] = {en = false, op = '',        name = 'VolumetricProperties',                         comment = ''}
-    lTableFromCTP['0008-9207'] = {en = false, op = '',        name = 'VolumeBasedCalculationTechnique',              comment = ''}
-    lTableFromCTP['0008-9208'] = {en = false, op = '',        name = 'ComplexImageComponent',                        comment = ''}
-    lTableFromCTP['0008-9209'] = {en = false, op = '',        name = 'AcquisitionContrast',                          comment = ''}
-    lTableFromCTP['0008-9215'] = {en = false, op = '',        name = 'DerivationCodeSeq',                            comment = ''}
-    lTableFromCTP['0008-9237'] = {en = false, op = '',        name = 'RefGrayscalePresentationStateSeq',             comment = ''}
+    lTableFromCTP['0012-0010'] = {en = false, op = 'fill',    name = 'ClinicalTrialSponsorName',                     comment = ''}
     lTableFromCTP['0012-0020'] = {en = false, op = '',        name = 'ClinicalTrialProtocolID',                      comment = ''}
     lTableFromCTP['0012-0021'] = {en = false, op = '',        name = 'ClinicalTrialProtocolName',                    comment = ''}
+    lTableFromCTP['0012-0030'] = {en = false, op = 'fill',    name = 'ClinicalTrialSiteID',                          comment = ''}
+    lTableFromCTP['0012-0031'] = {en = false, op = 'fill',    name = 'ClinicalTrialSiteName',                        comment = ''}
+    lTableFromCTP['0012-0040'] = {en = false, op = 'fill',    name = 'ClinicalTrialSubjectID',                       comment = ''}
     lTableFromCTP['0012-0042'] = {en = false, op = '',        name = 'ClinicalTrialSubjectReadingID',                comment = ''}
     lTableFromCTP['0012-0050'] = {en = false, op = '',        name = 'ClinicalTrialTimePointID',                     comment = ''}
     lTableFromCTP['0012-0051'] = {en = false, op = '',        name = 'ClinicalTrialTimePointDescription',            comment = ''}
     lTableFromCTP['0012-0060'] = {en = false, op = '',        name = 'CoordinatingCenterName',                       comment = ''}
-    lTableFromCTP['0012-0063'] = {en = false, op = '',        name = 'DeIdentificationMethod',                       comment = ''}
-    lTableFromCTP['0012-0064'] = {en = false, op = '',        name = 'DeIdentificationMethodCodeSeq',                comment = ''}
+    lTableFromCTP['0012-0062'] = {en = true,  op = 'keep',    name = 'PatientIdentityRemoved',                       comment = 'Need to keep and-or update'}
+    lTableFromCTP['0012-0063'] = {en = true,  op = 'keep',    name = 'DeidentificationMethod',                       comment = 'Need to fill this with some descriptor'}
+    lTableFromCTP['0012-0064'] = {en = true,  op = 'keep',    name = 'DeidentificationMethodCodeSeq',                comment = 'May need to fill this if 12-63 not filled'}
+    lTableFromCTP['0018-0010'] = {en = false, op = 'empty',   name = 'ContrastBolusAgent',                           comment = ''}
     lTableFromCTP['0018-0012'] = {en = false, op = '',        name = 'ContrastBolusAgentSeq',                        comment = ''}
     lTableFromCTP['0018-0014'] = {en = false, op = '',        name = 'ContrastBolusAdministrationRouteSeq',          comment = ''}
     lTableFromCTP['0018-0020'] = {en = false, op = '',        name = 'ScanningSeq',                                  comment = ''}
@@ -1409,19 +1361,29 @@ function BaseTagHandling ()
     lTableFromCTP['0018-0074'] = {en = false, op = '',        name = 'AcquisitionStartConditionData',                comment = ''}
     lTableFromCTP['0018-0075'] = {en = false, op = '',        name = 'AcquisitionTerminationConditionData',          comment = ''}
     lTableFromCTP['0018-0080'] = {en = false, op = '',        name = 'RepetitionTime',                               comment = ''}
+    lTableFromCTP['0018-0081'] = {en = true,  op = 'keep',    name = 'EchoTime',                                     comment = ''}
     lTableFromCTP['0018-0082'] = {en = false, op = '',        name = 'InversionTime',                                comment = ''}
     lTableFromCTP['0018-0083'] = {en = false, op = '',        name = 'NumberOfAverages',                             comment = ''}
     lTableFromCTP['0018-0084'] = {en = false, op = '',        name = 'ImagingFrequency',                             comment = ''}
     lTableFromCTP['0018-0085'] = {en = false, op = '',        name = 'ImagedNucleus',                                comment = ''}
+    lTableFromCTP['0018-0086'] = {en = true,  op = 'keep',    name = 'EchoNumber',                                   comment = ''}
     lTableFromCTP['0018-0087'] = {en = false, op = '',        name = 'MagneticFieldStrength',                        comment = ''}
     lTableFromCTP['0018-0088'] = {en = false, op = '',        name = 'SpacingBetweenSlices',                         comment = ''}
     lTableFromCTP['0018-0089'] = {en = false, op = '',        name = 'NumberOfPhaseEncodingSteps',                   comment = ''}
     lTableFromCTP['0018-0090'] = {en = false, op = '',        name = 'DataCollectionDiameter',                       comment = ''}
+    lTableFromCTP['0018-0091'] = {en = true,  op = 'keep',    name = 'EchoTrainLength',                              comment = ''}
     lTableFromCTP['0018-0093'] = {en = false, op = '',        name = 'PercentSampling',                              comment = ''}
     lTableFromCTP['0018-0094'] = {en = false, op = '',        name = 'PercentPhaseFieldOfView',                      comment = ''}
     lTableFromCTP['0018-0095'] = {en = false, op = '',        name = 'PixelBandwidth',                               comment = ''}
+    lTableFromCTP['0018-1000'] = {en = true,  op = 'emptyx',  name = 'DeviceSerialNumber',                           comment = 'Per Clunie validator'}
+    lTableFromCTP['0018-1002'] = {en = true,  op = 'remove',  name = 'DeviceUID',                                    comment = ''}
+    lTableFromCTP['0018-1004'] = {en = true,  op = 'remove',  name = 'PlateID',                                      comment = ''}
+    lTableFromCTP['0018-1005'] = {en = true,  op = 'remove',  name = 'GeneratorID',                                  comment = ''}
+    lTableFromCTP['0018-1007'] = {en = true,  op = 'remove',  name = 'CassetteID',                                   comment = ''}
+    lTableFromCTP['0018-1008'] = {en = true,  op = 'remove',  name = 'GantryID',                                     comment = ''}
     lTableFromCTP['0018-1010'] = {en = false, op = '',        name = 'SecondaryCaptureDeviceID',                     comment = ''}
     lTableFromCTP['0018-1011'] = {en = false, op = '',        name = 'HardcopyCreationDeviceID',                     comment = ''}
+    lTableFromCTP['0018-1012'] = {en = true,  op = 'remove',  name = 'DateOfSecondaryCapture',                       comment = ''}
     lTableFromCTP['0018-1014'] = {en = false, op = '',        name = 'TimeOfSecondaryCapture',                       comment = ''}
     lTableFromCTP['0018-1016'] = {en = false, op = '',        name = 'SecondaryCaptureDeviceManufacturer',           comment = ''}
     lTableFromCTP['0018-1017'] = {en = false, op = '',        name = 'HardcopyDeviceManufacturer',                   comment = ''}
@@ -1429,8 +1391,10 @@ function BaseTagHandling ()
     lTableFromCTP['0018-1019'] = {en = false, op = '',        name = 'SecondaryCaptureDeviceSoftwareVersion',        comment = ''}
     lTableFromCTP['0018-101a'] = {en = false, op = '',        name = 'HardcopyDeviceSoftwareVersion',                comment = ''}
     lTableFromCTP['0018-101b'] = {en = false, op = '',        name = 'HardcopyDeviceManfuacturerModelName',          comment = ''}
+    lTableFromCTP['0018-1020'] = {en = true,  op = 'emptyx',  name = 'SoftwareVersion',                              comment = 'Per Clunie validator'}
     lTableFromCTP['0018-1022'] = {en = false, op = '',        name = 'VideoImageFormatAcquired',                     comment = ''}
     lTableFromCTP['0018-1023'] = {en = false, op = '',        name = 'DigitalImageFormatAcquired',                   comment = ''}
+    lTableFromCTP['0018-1030'] = {en = true,  op = 'keep',    name = 'ProtocolName',                                 comment = 'We often keeps this'}
     lTableFromCTP['0018-1040'] = {en = false, op = '',        name = 'ContrastBolusRoute',                           comment = ''}
     lTableFromCTP['0018-1041'] = {en = false, op = '',        name = 'ContrastBolusVolume',                          comment = ''}
     lTableFromCTP['0018-1042'] = {en = false, op = '',        name = 'ContrastBolusStartTime',                       comment = ''}
@@ -1463,6 +1427,8 @@ function BaseTagHandling ()
     lTableFromCTP['0018-1075'] = {en = false, op = '',        name = 'RadionuclideHalfLife',                         comment = ''}
     lTableFromCTP['0018-1076'] = {en = false, op = '',        name = 'RadionuclidePositronFraction',                 comment = ''}
     lTableFromCTP['0018-1077'] = {en = false, op = '',        name = 'RadiopharmaceuticalSpecificActivity',          comment = ''}
+    lTableFromCTP['0018-1078'] = {en = true,  op = 'keep',    name = 'RadiopharmaceuticalStartDateTime',             comment = ''}
+    lTableFromCTP['0018-1079'] = {en = true,  op = 'keep',    name = 'RadiopharmaceuticalStopDateTime',              comment = ''}
     lTableFromCTP['0018-1080'] = {en = false, op = '',        name = 'BeatRejectionFlag',                            comment = ''}
     lTableFromCTP['0018-1081'] = {en = false, op = '',        name = 'LowRRValue',                                   comment = ''}
     lTableFromCTP['0018-1082'] = {en = false, op = '',        name = 'HighRRValue',                                  comment = ''}
@@ -1519,6 +1485,7 @@ function BaseTagHandling ()
     lTableFromCTP['0018-1191'] = {en = false, op = '',        name = 'AnodeTargetMaterial',                          comment = ''}
     lTableFromCTP['0018-11a0'] = {en = false, op = '',        name = 'BodyPartThickness',                            comment = ''}
     lTableFromCTP['0018-11a2'] = {en = false, op = '',        name = 'CompressionForce',                             comment = ''}
+    lTableFromCTP['0018-1200'] = {en = true,  op = 'remove',  name = 'DateOfLastCalibration',                        comment = ''}
     lTableFromCTP['0018-1201'] = {en = false, op = '',        name = 'TimeOfLastCalibration',                        comment = ''}
     lTableFromCTP['0018-1210'] = {en = false, op = '',        name = 'ConvolutionKernel',                            comment = ''}
     lTableFromCTP['0018-1242'] = {en = false, op = '',        name = 'ActualFrameDuration',                          comment = ''}
@@ -1537,6 +1504,7 @@ function BaseTagHandling ()
     lTableFromCTP['0018-1315'] = {en = false, op = '',        name = 'VariableFlipAngleFlag',                        comment = ''}
     lTableFromCTP['0018-1316'] = {en = false, op = '',        name = 'SAR',                                          comment = ''}
     lTableFromCTP['0018-1318'] = {en = false, op = '',        name = 'dBDt',                                         comment = ''}
+    lTableFromCTP['0018-1400'] = {en = true,  op = 'remove',  name = 'AcquisitionDeviceProcessingDescription',       comment = ''}
     lTableFromCTP['0018-1401'] = {en = false, op = '',        name = 'AcquisitionDeviceProcessingCode',              comment = ''}
     lTableFromCTP['0018-1402'] = {en = false, op = '',        name = 'CassetteOrientation',                          comment = ''}
     lTableFromCTP['0018-1403'] = {en = false, op = '',        name = 'CassetteSize',                                 comment = ''}
@@ -1578,6 +1546,7 @@ function BaseTagHandling ()
     lTableFromCTP['0018-1800'] = {en = false, op = '',        name = 'AcquisitionTimeSynchronized',                  comment = ''}
     lTableFromCTP['0018-1801'] = {en = false, op = '',        name = 'TimeSource',                                   comment = ''}
     lTableFromCTP['0018-1802'] = {en = false, op = '',        name = 'TimeDistributionProtocol',                     comment = ''}
+    lTableFromCTP['0018-4000'] = {en = true,  op = 'remove',  name = 'AcquisitionComments',                          comment = ''}
     lTableFromCTP['0018-5000'] = {en = false, op = '',        name = 'OutputPower',                                  comment = ''}
     lTableFromCTP['0018-5010'] = {en = false, op = '',        name = 'TransducerData',                               comment = ''}
     lTableFromCTP['0018-5012'] = {en = false, op = '',        name = 'FocusDepth',                                   comment = ''}
@@ -1641,6 +1610,8 @@ function BaseTagHandling ()
     lTableFromCTP['0018-7005'] = {en = false, op = '',        name = 'DetectorConfiguration',                        comment = ''}
     lTableFromCTP['0018-7006'] = {en = false, op = '',        name = 'DetectorDescription',                          comment = ''}
     lTableFromCTP['0018-7008'] = {en = false, op = '',        name = 'DetectorMode',                                 comment = ''}
+    lTableFromCTP['0018-700a'] = {en = true,  op = 'remove',  name = 'DetectorID',                                   comment = ''}
+    lTableFromCTP['0018-700c'] = {en = true,  op = 'remove',  name = 'DateOfLastDetectorCalibration',                comment = ''}
     lTableFromCTP['0018-700e'] = {en = false, op = '',        name = 'TimeOfLastDetectorCalibration',                comment = ''}
     lTableFromCTP['0018-7010'] = {en = false, op = '',        name = 'ExposuresOnDetectorSinceLastCalibration',      comment = ''}
     lTableFromCTP['0018-7011'] = {en = false, op = '',        name = 'ExposuresOnDetectorSinceManufactured',         comment = ''}
@@ -1728,6 +1699,7 @@ function BaseTagHandling ()
     lTableFromCTP['0018-9067'] = {en = false, op = '',        name = 'BaselineCorrection',                           comment = ''}
     lTableFromCTP['0018-9070'] = {en = false, op = '',        name = 'CardiacRRIntervalSpecified',                   comment = ''}
     lTableFromCTP['0018-9073'] = {en = false, op = '',        name = 'AcquisitionDuration',                          comment = ''}
+    lTableFromCTP['0018-9074'] = {en = true,  op = 'keep',    name = 'FrameAcquisitionDatetime',                     comment = 'Per Clunie validator'}
     lTableFromCTP['0018-9075'] = {en = false, op = '',        name = 'DiffusionDirectionality',                      comment = ''}
     lTableFromCTP['0018-9076'] = {en = false, op = '',        name = 'DiffusionGradientDirectionSeq',                comment = ''}
     lTableFromCTP['0018-9077'] = {en = false, op = '',        name = 'ParallelAcquisition',                          comment = ''}
@@ -1764,11 +1736,12 @@ function BaseTagHandling ()
     lTableFromCTP['0018-9126'] = {en = false, op = '',        name = 'VolumeLocalizationSeq',                        comment = ''}
     lTableFromCTP['0018-9127'] = {en = false, op = '',        name = 'SpectroscopyAcquisitionDataColumns',           comment = ''}
     lTableFromCTP['0018-9147'] = {en = false, op = '',        name = 'DiffusionAnisotropyType',                      comment = ''}
+    lTableFromCTP['0018-9151'] = {en = true,  op = 'keep',    name = 'FrameReferenceDatetime',                       comment = 'Per Clunie validator'}
     lTableFromCTP['0018-9152'] = {en = false, op = '',        name = 'MetaboliteMapSeq',                             comment = ''}
     lTableFromCTP['0018-9155'] = {en = false, op = '',        name = 'ParallelReductionFactorOutOfPlane',            comment = ''}
     lTableFromCTP['0018-9159'] = {en = false, op = '',        name = 'SpectroscopyAcquisitionOutOfPlanePhaseSteps',  comment = ''}
     lTableFromCTP['0018-9166'] = {en = false, op = '',        name = 'BulkMotionStatus',                             comment = ''}
-    lTableFromCTP['0018-9168'] = {en = false, op = '',        name = 'ParallelReductionFactorSecondInPlane',         comment = ''}
+    lTableFromCTP['0018-9168'] = {en = true,  op = 'keep',    name = 'ParallelReductionFactorSecondInPlane',         comment = 'Per Clunie validator'}
     lTableFromCTP['0018-9169'] = {en = false, op = '',        name = 'CardiacBeatRejectionTechnique',                comment = ''}
     lTableFromCTP['0018-9170'] = {en = false, op = '',        name = 'RespiratoryMotionCompensation',                comment = ''}
     lTableFromCTP['0018-9171'] = {en = false, op = '',        name = 'RespiratorySignalSource',                      comment = ''}
@@ -1803,6 +1776,14 @@ function BaseTagHandling ()
     lTableFromCTP['0018-9234'] = {en = false, op = '',        name = 'SpectroscopyAcquisitionPhaseColumns',          comment = ''}
     lTableFromCTP['0018-9236'] = {en = false, op = '',        name = 'CardiacMotionStatus',                          comment = ''}
     lTableFromCTP['0018-9239'] = {en = false, op = '',        name = 'SpecificAbsorptionRateSeq',                    comment = ''}
+    lTableFromCTP['0018-9424'] = {en = true,  op = 'remove',  name = 'AcquisitionProtocolDescription',               comment = ''}
+    lTableFromCTP['0018-a003'] = {en = true,  op = 'remove',  name = 'ContributionDescription',                      comment = ''}
+    if lFlagHologic or lFlagKeepSiemensMR then
+        lTableFromCTP['0019'] = { en = true,  op = 'groupkeep', name = 'SiemensMRHeader',                            comment = 'Siemens/Hologic protocol stuff.  Does capture study date internally'}
+    end
+    lTableFromCTP['0020-000d'] = {en = true,  op = 'orthanc', name = 'StudyInstanceUID',                             comment = 'Currently handled by Orthanc'}
+    lTableFromCTP['0020-000e'] = {en = true,  op = 'orthanc', name = 'SeriesInstanceUID',                            comment = 'Currently handled by Orthanc'}
+    lTableFromCTP['0020-0010'] = {en = true,  op = 'keep',    name = 'StudyID',                                      comment = 'Orthanc later anonymizes this'}
     lTableFromCTP['0020-0011'] = {en = false, op = '',        name = 'SeriesNumber',                                 comment = ''}
     lTableFromCTP['0020-0012'] = {en = false, op = '',        name = 'AcquisitionNumber',                            comment = ''}
     lTableFromCTP['0020-0013'] = {en = false, op = '',        name = 'InstanceNumber',                               comment = ''}
@@ -1813,11 +1794,13 @@ function BaseTagHandling ()
     lTableFromCTP['0020-0026'] = {en = false, op = '',        name = 'LUTNumber',                                    comment = ''}
     lTableFromCTP['0020-0032'] = {en = false, op = '',        name = 'ImagePosition',                                comment = ''}
     lTableFromCTP['0020-0037'] = {en = false, op = '',        name = 'ImageOrientation',                             comment = ''}
+    lTableFromCTP['0020-0052'] = {en = true,  op = 'orthanc', name = 'FrameOfReferenceUID',                          comment = 'Currently handled by Orthanc'}
     lTableFromCTP['0020-0060'] = {en = false, op = '',        name = 'Laterality',                                   comment = ''}
     lTableFromCTP['0020-0062'] = {en = false, op = '',        name = 'ImageLaterality',                              comment = ''}
     lTableFromCTP['0020-0100'] = {en = false, op = '',        name = 'TemporalPositionIdentifier',                   comment = ''}
     lTableFromCTP['0020-0105'] = {en = false, op = '',        name = 'NumberOfTemporalPositions',                    comment = ''}
     lTableFromCTP['0020-0110'] = {en = false, op = '',        name = 'TemporalResolution',                           comment = ''}
+    lTableFromCTP['0020-0200'] = {en = true,  op = 'remove',  name = 'SynchronizationFrameOfReferenceUID',           comment = ''}
     lTableFromCTP['0020-1000'] = {en = false, op = '',        name = 'SeriesInStudy',                                comment = ''}
     lTableFromCTP['0020-1002'] = {en = false, op = '',        name = 'ImagesInAcquisition',                          comment = ''}
     lTableFromCTP['0020-1004'] = {en = false, op = '',        name = 'AcquisitionsInStudy',                          comment = ''}
@@ -1830,6 +1813,10 @@ function BaseTagHandling ()
     lTableFromCTP['0020-1206'] = {en = false, op = '',        name = 'NumberOfStudyRelatedSeries',                   comment = ''}
     lTableFromCTP['0020-1208'] = {en = false, op = '',        name = 'NumberOfStudyRelatedInstances',                comment = ''}
     lTableFromCTP['0020-1209'] = {en = false, op = '',        name = 'NumberOfSeriesRelatedInstances',               comment = ''}
+    lTableFromCTP['0020-3401'] = {en = true,  op = 'remove',  name = 'ModifyingDeviceID',                            comment = ''}
+    lTableFromCTP['0020-3404'] = {en = true,  op = 'remove',  name = 'ModifyingDeviceManufacturer',                  comment = ''}
+    lTableFromCTP['0020-3406'] = {en = true,  op = 'remove',  name = 'ModifiedImageDescription',                     comment = ''}
+    lTableFromCTP['0020-4000'] = {en = true,  op = 'remove',  name = 'ImageComments',                                comment = 'We often keeps this, but siemens retro-recon puts PHI here'}
     lTableFromCTP['0020-9056'] = {en = false, op = '',        name = 'StackID',                                      comment = ''}
     lTableFromCTP['0020-9057'] = {en = false, op = '',        name = 'InStackPositionNumber',                        comment = ''}
     lTableFromCTP['0020-9071'] = {en = false, op = '',        name = 'FrameAnatomySeq',                              comment = ''}
@@ -1842,8 +1829,10 @@ function BaseTagHandling ()
     lTableFromCTP['0020-9156'] = {en = false, op = '',        name = 'FrameAcquisitionNumber',                       comment = ''}
     lTableFromCTP['0020-9157'] = {en = false, op = '',        name = 'DimensionIndexValues',                         comment = ''}
     lTableFromCTP['0020-9158'] = {en = false, op = '',        name = 'FrameComments',                                comment = ''}
+    lTableFromCTP['0020-9161'] = {en = true,  op = 'remove',  name = 'ConcatenationUID',                             comment = ''}
     lTableFromCTP['0020-9162'] = {en = false, op = '',        name = 'InConcatenationNumber',                        comment = ''}
     lTableFromCTP['0020-9163'] = {en = false, op = '',        name = 'InConcatenationTotalNumber',                   comment = ''}
+    lTableFromCTP['0020-9164'] = {en = true,  op = 'keep',    name = 'DimensionOrganizationUID',                     comment = 'Per clunie validator - Dicom standard requires keeping this UID used for multiframe enhanced'}
     lTableFromCTP['0020-9165'] = {en = false, op = '',        name = 'DimensionIndexPointer',                        comment = ''}
     lTableFromCTP['0020-9167'] = {en = false, op = '',        name = 'FunctionalGroupSequencePointer',               comment = ''}
     lTableFromCTP['0020-9213'] = {en = false, op = '',        name = 'DimensionIndexPrivateCreator',                 comment = ''}
@@ -1890,6 +1879,7 @@ function BaseTagHandling ()
     lTableFromCTP['0028-1101'] = {en = false, op = '',        name = 'RedPaletteColorLUTDescriptor',                 comment = ''}
     lTableFromCTP['0028-1102'] = {en = false, op = '',        name = 'GreenPaletteColorLUTDescriptor',               comment = ''}
     lTableFromCTP['0028-1103'] = {en = false, op = '',        name = 'BluePaletteColorLUTDescriptor',                comment = ''}
+    lTableFromCTP['0028-1199'] = {en = true,  op = 'remove',  name = 'PaletteColorLUTUID',                           comment = ''}
     lTableFromCTP['0028-1201'] = {en = false, op = '',        name = 'RedPaletteColorLUTData',                       comment = ''}
     lTableFromCTP['0028-1202'] = {en = false, op = '',        name = 'GreenPaletteColorLUTData',                     comment = ''}
     lTableFromCTP['0028-1203'] = {en = false, op = '',        name = 'BluePaletteColorLUTData',                      comment = ''}
@@ -1909,6 +1899,7 @@ function BaseTagHandling ()
     lTableFromCTP['0028-3006'] = {en = false, op = '',        name = 'LUTData',                                      comment = ''}
     lTableFromCTP['0028-3010'] = {en = false, op = '',        name = 'VOILUTSeq',                                    comment = ''}
     lTableFromCTP['0028-3110'] = {en = false, op = '',        name = 'SoftcopyVOILUTSeq',                            comment = ''}
+    lTableFromCTP['0028-4000'] = {en = true,  op = 'remove',  name = 'ImagePresentationComments',                    comment = ''}
     lTableFromCTP['0028-5000'] = {en = false, op = '',        name = 'BiPlaneAcquisitionSeq',                        comment = ''}
     lTableFromCTP['0028-6010'] = {en = false, op = '',        name = 'RepresentativeFrameNumber',                    comment = ''}
     lTableFromCTP['0028-6020'] = {en = false, op = '',        name = 'FrameNumbersOfInterest',                       comment = ''}
@@ -1932,22 +1923,59 @@ function BaseTagHandling ()
     lTableFromCTP['0028-9132'] = {en = false, op = '',        name = 'FrameVOILUTSeq',                               comment = ''}
     lTableFromCTP['0028-9145'] = {en = false, op = '',        name = 'PixelValueTransformationSeq',                  comment = ''}
     lTableFromCTP['0028-9235'] = {en = false, op = '',        name = 'SignalDomainRows',                             comment = ''}
+    if lFlagKeepSiemensMR then
+        lTableFromCTP['0029'] = { en = true,  op = 'groupkeep', name = 'SiemensCSAHeader',                           comment = 'Siemens protocol stuff.  Does capture study date internally'}
+    end
     lTableFromCTP['0032-000a'] = {en = false, op = '',        name = 'StudyStatusID',                                comment = ''}
     lTableFromCTP['0032-000c'] = {en = false, op = '',        name = 'StudyPriorityID',                              comment = ''}
+    lTableFromCTP['0032-0012'] = {en = true,  op = 'remove',  name = 'StudyIDIssuer',                                comment = ''}
+    lTableFromCTP['0032-0032'] = {en = true,  op = 'remove',  name = 'StudyVerifiedDate',                            comment = ''}
     lTableFromCTP['0032-0033'] = {en = false, op = '',        name = 'StudyVerifiedTime',                            comment = ''}
+    lTableFromCTP['0032-0034'] = {en = true,  op = 'remove',  name = 'StudyReadDate',                                comment = ''}
     lTableFromCTP['0032-0035'] = {en = false, op = '',        name = 'StudyReadTime',                                comment = ''}
+    lTableFromCTP['0032-1000'] = {en = true,  op = 'remove',  name = 'ScheduledStudyStartDate',                      comment = ''}
     lTableFromCTP['0032-1001'] = {en = false, op = '',        name = 'ScheduledStudyStartTime',                      comment = ''}
+    lTableFromCTP['0032-1010'] = {en = true,  op = 'remove',  name = 'ScheduledStudyStopDate',                       comment = ''}
     lTableFromCTP['0032-1011'] = {en = false, op = '',        name = 'ScheduledStudyStopTime',                       comment = ''}
+    lTableFromCTP['0032-1020'] = {en = true,  op = 'remove',  name = 'ScheduledStudyLocation',                       comment = ''}
+    lTableFromCTP['0032-1021'] = {en = true,  op = 'remove',  name = 'ScheduledStudyLocationAET',                    comment = ''}
+    lTableFromCTP['0032-1030'] = {en = true,  op = 'remove',  name = 'ReasonforStudy',                               comment = ''}
+    lTableFromCTP['0032-1032'] = {en = true,  op = 'remove',  name = 'RequestingPhysician',                          comment = ''}
+    lTableFromCTP['0032-1033'] = {en = true,  op = 'remove',  name = 'RequestingService',                            comment = ''}
+    lTableFromCTP['0032-1040'] = {en = true,  op = 'remove',  name = 'StudyArrivalDate',                             comment = ''}
     lTableFromCTP['0032-1041'] = {en = false, op = '',        name = 'StudyArrivalTime',                             comment = ''}
+    lTableFromCTP['0032-1050'] = {en = true,  op = 'remove',  name = 'StudyCompletionDate',                          comment = ''}
     lTableFromCTP['0032-1051'] = {en = false, op = '',        name = 'StudyCompletionTime',                          comment = ''}
     lTableFromCTP['0032-1055'] = {en = false, op = '',        name = 'StudyComponentStatusID',                       comment = ''}
+    lTableFromCTP['0032-1060'] = {en = true,  op = 'remove',  name = 'RequestedProcedureDescription',                comment = ''}
+    lTableFromCTP['0032-1064'] = {en = true,  op = 'remove',  name = 'RequestedProcedureCodeSeq',                    comment = ''}
+    lTableFromCTP['0032-1070'] = {en = true,  op = 'remove',  name = 'RequestedContrastAgent',                       comment = ''}
+    lTableFromCTP['0032-4000'] = {en = true,  op = 'remove',  name = 'StudyComments',                                comment = ''}
     lTableFromCTP['0038-0004'] = {en = false, op = '',        name = 'RefPatientAliasSeq',                           comment = ''}
     lTableFromCTP['0038-0008'] = {en = false, op = '',        name = 'VisitStatusID',                                comment = ''}
+    lTableFromCTP['0038-0010'] = {en = true,  op = 'remove',  name = 'AdmissionID',                                  comment = ''}
+    lTableFromCTP['0038-0011'] = {en = true,  op = 'remove',  name = 'IssuerOfAdmissionID',                          comment = ''}
     lTableFromCTP['0038-0016'] = {en = false, op = '',        name = 'RouteOfAdmissions',                            comment = ''}
+    lTableFromCTP['0038-001a'] = {en = true,  op = 'remove',  name = 'ScheduledAdmissionDate',                       comment = ''}
     lTableFromCTP['0038-001b'] = {en = false, op = '',        name = 'ScheduledAdmissionTime',                       comment = ''}
+    lTableFromCTP['0038-001c'] = {en = true,  op = 'remove',  name = 'ScheduledDischargeDate',                       comment = ''}
     lTableFromCTP['0038-001d'] = {en = false, op = '',        name = 'ScheduledDischargeTime',                       comment = ''}
+    lTableFromCTP['0038-001e'] = {en = true,  op = 'remove',  name = 'ScheduledPatientInstitutionResidence',         comment = ''}
+    lTableFromCTP['0038-0020'] = {en = true,  op = 'remove',  name = 'AdmittingDate',                                comment = ''}
+    lTableFromCTP['0038-0021'] = {en = true,  op = 'remove',  name = 'AdmittingTime',                                comment = ''}
+    lTableFromCTP['0038-0030'] = {en = true,  op = 'remove',  name = 'DischargeDate',                                comment = ''}
     lTableFromCTP['0038-0032'] = {en = false, op = '',        name = 'DischargeTime',                                comment = ''}
+    lTableFromCTP['0038-0040'] = {en = true,  op = 'remove',  name = 'DischargeDiagnosisDescription',                comment = ''}
     lTableFromCTP['0038-0044'] = {en = false, op = '',        name = 'DischargeDiagnosisCodeSeq',                    comment = ''}
+    lTableFromCTP['0038-0050'] = {en = true,  op = 'remove',  name = 'SpecialNeeds',                                 comment = ''}
+    lTableFromCTP['0038-0060'] = {en = true,  op = 'remove',  name = 'ServiceEpisodeID',                             comment = ''}
+    lTableFromCTP['0038-0061'] = {en = true,  op = 'remove',  name = 'IssuerOfServiceEpisodeId',                     comment = ''}
+    lTableFromCTP['0038-0062'] = {en = true,  op = 'remove',  name = 'ServiceEpisodeDescription',                    comment = ''}
+    lTableFromCTP['0038-0300'] = {en = true,  op = 'remove',  name = 'CurrentPatientLocation',                       comment = ''}
+    lTableFromCTP['0038-0400'] = {en = true,  op = 'remove',  name = 'PatientInstitutionResidence',                  comment = ''}
+    lTableFromCTP['0038-0500'] = {en = true,  op = 'remove',  name = 'PatientState',                                 comment = ''}
+    lTableFromCTP['0038-1234'] = {en = true,  op = 'remove',  name = 'ReferencedPatientAliasSeq',                    comment = ''}
+    lTableFromCTP['0038-4000'] = {en = true,  op = 'remove',  name = 'VisitComments',                                comment = ''}
     lTableFromCTP['003a-0004'] = {en = false, op = '',        name = 'WaveformOriginality',                          comment = ''}
     lTableFromCTP['003a-0005'] = {en = false, op = '',        name = 'NumberOfWaveformChannels',                     comment = ''}
     lTableFromCTP['003a-0010'] = {en = false, op = '',        name = 'NumberOfWaveformSamples',                      comment = ''}
@@ -1973,13 +2001,38 @@ function BaseTagHandling ()
     lTableFromCTP['003a-0221'] = {en = false, op = '',        name = 'FilterHighFrequency',                          comment = ''}
     lTableFromCTP['003a-0222'] = {en = false, op = '',        name = 'NotchFilterFrequency',                         comment = ''}
     lTableFromCTP['003a-0223'] = {en = false, op = '',        name = 'NotchFilterBandwidth',                         comment = ''}
+    lTableFromCTP['0040-0001'] = {en = true,  op = 'remove',  name = 'ScheduledStationAET',                          comment = ''}
+    lTableFromCTP['0040-0002'] = {en = true,  op = 'remove',  name = 'SPSStartDate',                                 comment = ''}
     lTableFromCTP['0040-0003'] = {en = false, op = '',        name = 'SPSStartTime',                                 comment = ''}
+    lTableFromCTP['0040-0004'] = {en = true,  op = 'remove',  name = 'SPSEndDate',                                   comment = ''}
     lTableFromCTP['0040-0005'] = {en = false, op = '',        name = 'SPSEndTime',                                   comment = ''}
+    lTableFromCTP['0040-0006'] = {en = true,  op = 'remove',  name = 'ScheduledPerformingPhysicianName',             comment = ''}
+    lTableFromCTP['0040-0007'] = {en = true,  op = 'remove',  name = 'ScheduledProcedureStepDescription',            comment = ''}
+    lTableFromCTP['0040-0008'] = {en = true,  op = 'remove',  name = 'ScheduledProtocolCodeSeq',                     comment = ''}
     lTableFromCTP['0040-0009'] = {en = false, op = '',        name = 'SPSID',                                        comment = ''}
+    lTableFromCTP['0040-000b'] = {en = true,  op = 'remove',  name = '',                                             comment = ''}
+    lTableFromCTP['0040-0010'] = {en = true,  op = 'remove',  name = 'ScheduledStationName',                         comment = ''}
+    lTableFromCTP['0040-0011'] = {en = true,  op = 'remove',  name = 'SPSLocation',                                  comment = ''}
+    lTableFromCTP['0040-0012'] = {en = true,  op = 'remove',  name = 'PreMedication',                                comment = ''}
     lTableFromCTP['0040-0020'] = {en = false, op = '',        name = 'SPSStatus',                                    comment = ''}
     lTableFromCTP['0040-0100'] = {en = false, op = '',        name = 'SPSSeq',                                       comment = ''}
     lTableFromCTP['0040-0220'] = {en = false, op = '',        name = 'RefNonImageCompositeSOPInstanceSeq',           comment = ''}
+    lTableFromCTP['0040-0241'] = {en = true,  op = 'remove',  name = 'PerformedStationAET',                          comment = ''}
+    lTableFromCTP['0040-0242'] = {en = true,  op = 'remove',  name = 'PerformedStationName',                         comment = ''}
+    lTableFromCTP['0040-0243'] = {en = true,  op = 'remove',  name = 'PerformedLocation',                            comment = ''}
+    lTableFromCTP['0040-0244'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepStartDate',              comment = ''}
+    lTableFromCTP['0040-0245'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepStartTime',              comment = ''}
+    lTableFromCTP['0040-0248'] = {en = true,  op = 'remove',  name = 'PerformedStationNameCodeSeq',                  comment = ''}
+    lTableFromCTP['0040-0250'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepEndDate',                comment = ''}
+    lTableFromCTP['0040-0251'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepEndTime',                comment = ''}
+    lTableFromCTP['0040-0252'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepStatus',                 comment = ''}
+    lTableFromCTP['0040-0253'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepID',                     comment = ''}
+    lTableFromCTP['0040-0254'] = {en = true,  op = 'remove',  name = 'PerformedProcedureStepDescription',            comment = ''}
+    lTableFromCTP['0040-0255'] = {en = true,  op = 'remove',  name = 'PerformedProcedureTypeDescription',            comment = ''}
+    lTableFromCTP['0040-0260'] = {en = true,  op = 'remove',  name = 'PerformedProtocolCodeSeq',                     comment = ''}
     lTableFromCTP['0040-0270'] = {en = false, op = '',        name = 'ScheduledStepAttributesSeq',                   comment = ''}
+    lTableFromCTP['0040-0275'] = {en = true,  op = 'remove',  name = 'RequestAttributesSeq',                         comment = ''}
+    lTableFromCTP['0040-0280'] = {en = true,  op = 'remove',  name = 'PPSComments',                                  comment = ''}
     lTableFromCTP['0040-0281'] = {en = false, op = '',        name = 'PPSDiscontinuationReasonCodeSeq',              comment = ''}
     lTableFromCTP['0040-0293'] = {en = false, op = '',        name = 'QuantitySeq',                                  comment = ''}
     lTableFromCTP['0040-0294'] = {en = false, op = '',        name = 'Quantity',                                     comment = ''}
@@ -1991,6 +2044,7 @@ function BaseTagHandling ()
     lTableFromCTP['0040-0303'] = {en = false, op = '',        name = 'ExposedArea',                                  comment = ''}
     lTableFromCTP['0040-0306'] = {en = false, op = '',        name = 'DistanceSourceToEntrance',                     comment = ''}
     lTableFromCTP['0040-0307'] = {en = false, op = '',        name = 'DistanceSourceToSupport',                      comment = ''}
+    lTableFromCTP['0040-030e'] = {en = true,  op = 'remove',  name = 'RETIRED_ExposureDoseSequence',                 comment = 'Something embeds stuff here, maybe when loading another institutions pacs into our pacs?'}
     lTableFromCTP['0040-0310'] = {en = false, op = '',        name = 'CommentsOnRadiationDose',                      comment = ''}
     lTableFromCTP['0040-0312'] = {en = false, op = '',        name = 'XRayOutput',                                   comment = ''}
     lTableFromCTP['0040-0314'] = {en = false, op = '',        name = 'HalfValueLayer',                               comment = ''}
@@ -2005,6 +2059,7 @@ function BaseTagHandling ()
     lTableFromCTP['0040-050a'] = {en = false, op = '',        name = 'SpecimenAccessionNumber',                      comment = ''}
     lTableFromCTP['0040-0550'] = {en = false, op = '',        name = 'SpecimenSeq',                                  comment = ''}
     lTableFromCTP['0040-0551'] = {en = false, op = '',        name = 'SpecimenIdentifier',                           comment = ''}
+    lTableFromCTP['0040-0555'] = {en = true, op = 'emptyseq', name = 'AcquisitionContextSequence',                   comment = 'Per Clunie, must exist but can be empty'}
     lTableFromCTP['0040-0556'] = {en = false, op = '',        name = 'AcquisitionContextDescription',                comment = ''}
     lTableFromCTP['0040-059a'] = {en = false, op = '',        name = 'SpecimenTypeCodeSeq',                          comment = ''}
     lTableFromCTP['0040-06fa'] = {en = false, op = '',        name = 'SlideIdentifier',                              comment = ''}
@@ -2015,11 +2070,36 @@ function BaseTagHandling ()
     lTableFromCTP['0040-08d8'] = {en = false, op = '',        name = 'PixelSpacingSeq',                              comment = ''}
     lTableFromCTP['0040-08da'] = {en = false, op = '',        name = 'CoordinateSystemAxisCodeSeq',                  comment = ''}
     lTableFromCTP['0040-08ea'] = {en = false, op = '',        name = 'MeasurementUnitsCodeSeq',                      comment = ''}
+    lTableFromCTP['0040-1001'] = {en = true,  op = 'empty',   name = 'RequestedProcedureID',                         comment = ''}
     lTableFromCTP['0040-1002'] = {en = false, op = '',        name = 'ReasonForTheRequestedProcedure',               comment = ''}
     lTableFromCTP['0040-1003'] = {en = false, op = '',        name = 'RequestedProcedurePriority',                   comment = ''}
+    lTableFromCTP['0040-1004'] = {en = true,  op = 'remove',  name = 'PatientTransportArrangements',                 comment = ''}
+    lTableFromCTP['0040-1005'] = {en = true,  op = 'remove',  name = 'RequestedProcedureLocation',                   comment = ''}
     lTableFromCTP['0040-1008'] = {en = false, op = '',        name = 'ConfidentialityCode',                          comment = ''}
     lTableFromCTP['0040-1009'] = {en = false, op = '',        name = 'ReportingPriority',                            comment = ''}
+    lTableFromCTP['0040-1010'] = {en = true,  op = 'remove',  name = 'NamesOfIntendedRecipientsOfResults',           comment = ''}
+    lTableFromCTP['0040-1011'] = {en = true,  op = 'remove',  name = 'IntendedRecipientsOfResultsIDSequence',        comment = ''}
+    lTableFromCTP['0040-1102'] = {en = true,  op = 'remove',  name = 'PersonAddress',                                comment = ''}
+    lTableFromCTP['0040-1103'] = {en = true,  op = 'remove',  name = 'PersonTelephoneNumbers',                       comment = ''}
+    lTableFromCTP['0040-1400'] = {en = true,  op = 'remove',  name = 'RequestedProcedureComments',                   comment = ''}
+    lTableFromCTP['0040-2001'] = {en = true,  op = 'remove',  name = 'ReasonForTheImagingServiceRequest',            comment = ''}
+    lTableFromCTP['0040-2004'] = {en = true,  op = 'remove',  name = 'IssueDateOfImagingServiceRequest',             comment = ''}
     lTableFromCTP['0040-2005'] = {en = false, op = '',        name = 'IssueTimeOfImagingServiceRequest',             comment = ''}
+    lTableFromCTP['0040-2008'] = {en = true,  op = 'remove',  name = 'OrderEnteredBy',                               comment = ''}
+    lTableFromCTP['0040-2009'] = {en = true,  op = 'remove',  name = 'OrderEntererLocation',                         comment = ''}
+    lTableFromCTP['0040-2010'] = {en = true,  op = 'remove',  name = 'OrderCallbackPhoneNumber',                     comment = ''}
+    lTableFromCTP['0040-2016'] = {en = true,  op = 'remove',  name = 'PlacerOrderNumber',                            comment = ''}
+    lTableFromCTP['0040-2017'] = {en = true,  op = 'remove',  name = 'FillerOrderNumber',                            comment = ''}
+    lTableFromCTP['0040-2400'] = {en = true,  op = 'remove',  name = 'ImagingServiceRequestComments',                comment = ''}
+    lTableFromCTP['0040-3001'] = {en = true,  op = 'remove',  name = 'ConfidentialityPatientData',                   comment = ''}
+    lTableFromCTP['0040-4023'] = {en = true,  op = 'remove',  name = 'RefGenPurposeSchedProcStepTransUID',           comment = ''}
+    lTableFromCTP['0040-4025'] = {en = true,  op = 'remove',  name = 'ScheduledStationNameCodeSeq',                  comment = ''}
+    lTableFromCTP['0040-4027'] = {en = true,  op = 'remove',  name = 'ScheduledStationGeographicLocCodeSeq',         comment = ''}
+    lTableFromCTP['0040-4030'] = {en = true,  op = 'remove',  name = 'PerformedStationGeoLocCodeSeq',                comment = ''}
+    lTableFromCTP['0040-4034'] = {en = true,  op = 'remove',  name = 'ScheduledHumanPerformersSeq',                  comment = ''}
+    lTableFromCTP['0040-4035'] = {en = true,  op = 'remove',  name = 'ActualHumanPerformersSequence',                comment = ''}
+    lTableFromCTP['0040-4036'] = {en = true,  op = 'remove',  name = 'HumanPerformersOrganization',                  comment = ''}
+    lTableFromCTP['0040-4037'] = {en = true,  op = 'remove',  name = 'HumanPerformersName',                          comment = ''}
     lTableFromCTP['0040-8302'] = {en = false, op = '',        name = 'EntranceDoseInmGy',                            comment = ''}
     lTableFromCTP['0040-9096'] = {en = false, op = '',        name = 'RealWorldValueMappingSeq',                     comment = ''}
     lTableFromCTP['0040-9210'] = {en = false, op = '',        name = 'LUTLabel',                                     comment = ''}
@@ -2029,16 +2109,29 @@ function BaseTagHandling ()
     lTableFromCTP['0040-9224'] = {en = false, op = '',        name = 'RealWorldValueIntercept',                      comment = ''}
     lTableFromCTP['0040-9225'] = {en = false, op = '',        name = 'RealWorldValueSlope',                          comment = ''}
     lTableFromCTP['0040-a010'] = {en = false, op = '',        name = 'RelationshipType',                             comment = ''}
+    lTableFromCTP['0040-a027'] = {en = true,  op = 'remove',  name = 'VerifyingOrganization',                        comment = ''}
+    lTableFromCTP['0040-a030'] = {en = true,  op = 'remove',  name = 'VerificationDateTime',                         comment = ''}
+    lTableFromCTP['0040-a032'] = {en = true,  op = 'remove',  name = 'ObservationDateTime',                          comment = ''}
     lTableFromCTP['0040-a040'] = {en = false, op = '',        name = 'ValueType',                                    comment = ''}
     lTableFromCTP['0040-a043'] = {en = false, op = '',        name = 'ConceptNameCodeSeq',                           comment = ''}
     lTableFromCTP['0040-a050'] = {en = false, op = '',        name = 'ContinuityOfContent',                          comment = ''}
     lTableFromCTP['0040-a073'] = {en = false, op = '',        name = 'VerifyingObserverSeq',                         comment = ''}
+    lTableFromCTP['0040-a075'] = {en = true,  op = 'remove',  name = 'VerifyingObserverName',                        comment = ''}
+    lTableFromCTP['0040-a078'] = {en = true,  op = 'remove',  name = 'AuthorObserverSequence',                       comment = ''}
+    lTableFromCTP['0040-a07a'] = {en = true,  op = 'remove',  name = 'ParticipantSequence',                          comment = ''}
+    lTableFromCTP['0040-a07c'] = {en = true,  op = 'remove',  name = 'CustodialOrganizationSeq',                     comment = ''}
+    lTableFromCTP['0040-a088'] = {en = true,  op = 'remove',  name = 'VerifyingObserverIdentificationCodeSeq',       comment = ''}
     lTableFromCTP['0040-a0b0'] = {en = false, op = '',        name = 'RefWaveformChannels',                          comment = ''}
+    lTableFromCTP['0040-a120'] = {en = true,  op = 'remove',  name = 'DateTime',                                     comment = ''}
+    lTableFromCTP['0040-a121'] = {en = true,  op = 'remove',  name = 'Date',                                         comment = ''}
     lTableFromCTP['0040-a122'] = {en = false, op = '',        name = 'Time',                                         comment = ''}
+    lTableFromCTP['0040-a123'] = {en = true,  op = 'remove',  name = 'PersonName',                                   comment = ''}
+    lTableFromCTP['0040-a124'] = {en = true,  op = 'remove',  name = 'UID',                                          comment = ''}
     lTableFromCTP['0040-a130'] = {en = false, op = '',        name = 'TemporalRangeType',                            comment = ''}
     lTableFromCTP['0040-a132'] = {en = false, op = '',        name = 'RefSamplePositions',                           comment = ''}
     lTableFromCTP['0040-a136'] = {en = false, op = '',        name = 'RefFrameNumbers',                              comment = ''}
     lTableFromCTP['0040-a138'] = {en = false, op = '',        name = 'RefTimeOffsets',                               comment = ''}
+    lTableFromCTP['0040-a13a'] = {en = true,  op = 'remove',  name = 'RefDatetime',                                  comment = ''}
     lTableFromCTP['0040-a160'] = {en = false, op = '',        name = 'TextValue',                                    comment = ''}
     lTableFromCTP['0040-a168'] = {en = false, op = '',        name = 'ConceptCodeSeq',                               comment = ''}
     lTableFromCTP['0040-a180'] = {en = false, op = '',        name = 'AnnotationGroupNumber',                        comment = ''}
@@ -2055,12 +2148,55 @@ function BaseTagHandling ()
     lTableFromCTP['0040-a493'] = {en = false, op = '',        name = 'VerificationFlag',                             comment = ''}
     lTableFromCTP['0040-a504'] = {en = false, op = '',        name = 'ContentTemplateSeq',                           comment = ''}
     lTableFromCTP['0040-a525'] = {en = false, op = '',        name = 'IdenticalDocumentsSeq',                        comment = ''}
+    lTableFromCTP['0040-a730'] = {en = true,  op = 'remove',  name = 'ContentSeq',                                   comment = ''}
     lTableFromCTP['0040-b020'] = {en = false, op = '',        name = 'AnnotationSeq',                                comment = ''}
     lTableFromCTP['0040-db00'] = {en = false, op = '',        name = 'TemplateIdentifier',                           comment = ''}
     lTableFromCTP['0040-db06'] = {en = false, op = '',        name = 'TemplateVersion',                              comment = ''}
     lTableFromCTP['0040-db07'] = {en = false, op = '',        name = 'TemplateLocalVersion',                         comment = ''}
     lTableFromCTP['0040-db0b'] = {en = false, op = '',        name = 'TemplateExtensionFlag',                        comment = ''}
+    lTableFromCTP['0040-db0c'] = {en = true,  op = 'remove',  name = 'TemplateExtensionOrganizationUID',             comment = ''}
+    lTableFromCTP['0040-db0d'] = {en = true,  op = 'remove',  name = 'TemplateExtensionCreatorUID',                  comment = ''}
     lTableFromCTP['0040-db73'] = {en = false, op = '',        name = 'RefContentItemIdentifier',                     comment = ''}
+    if lFlagKeepSiemensMR then
+        lTableFromCTP['0051'] = { en = true,  op = 'groupkeep', name = 'SiemensMRHeader',                            comment = 'Siemens protocol stuff.  Does capture study date internally'}
+    end
+    lTableFromCTP['0060-3000'] = {en = true,  op = 'remove',  name = 'OverlayData',                                  comment = ''}
+    lTableFromCTP['0060-4000'] = {en = true,  op = 'remove',  name = 'OverlayComments',                              comment = ''}
+    lTableFromCTP['0070-031a'] = {en = true,  op = 'remove',  name = 'FiducialUID',                                  comment = ''}
+    lTableFromCTP['0088-0140'] = {en = true,  op = 'remove',  name = 'StorageMediaFilesetUID',                       comment = ''}
+    lTableFromCTP['0088-0200'] = {en = true,  op = 'remove',  name = 'IconImageSequence',                            comment = ''}
+    lTableFromCTP['0088-0906'] = {en = true,  op = 'remove',  name = 'TopicSubject',                                 comment = ''}
+    lTableFromCTP['0088-0910'] = {en = true,  op = 'remove',  name = 'TopicAuthor',                                  comment = ''}
+    lTableFromCTP['0088-0912'] = {en = true,  op = 'remove',  name = 'TopicKeyWords',                                comment = ''}
+    lTableFromCTP['0400-0100'] = {en = true,  op = 'remove',  name = 'DigitalSignatureUID',                          comment = ''}
+    lTableFromCTP['0400-0561'] = {en = true,  op = 'remove',  name = 'OriginalAttributesSequence',                   comment = 'yet another PHI location snuck in by importing foreign DICOM'}
+    lTableFromCTP['2030-0020'] = {en = true,  op = 'remove',  name = 'TextString',                                   comment = ''}
+    lTableFromCTP['3006-0024'] = {en = true,  op = 'remove',  name = 'ReferencedFrameOfReferenceUID',                comment = ''}
+    lTableFromCTP['3006-00c2'] = {en = true,  op = 'remove',  name = 'RelatedFrameOfReferenceUID',                   comment = ''}
+    lTableFromCTP['300a-0013'] = {en = true,  op = 'remove',  name = 'DoseReferenceUID',                             comment = ''}
+    lTableFromCTP['4000-0010'] = {en = true,  op = 'remove',  name = 'Arbitrary',                                    comment = ''}
+    lTableFromCTP['4000-4000'] = {en = true,  op = 'remove',  name = 'TextComments',                                 comment = ''}
+    lTableFromCTP['4008-0042'] = {en = true,  op = 'remove',  name = 'ResultsIDIssuer',                              comment = ''}
+    lTableFromCTP['4008-0102'] = {en = true,  op = 'remove',  name = 'InterpretationRecorder',                       comment = ''}
+    lTableFromCTP['4008-010a'] = {en = true,  op = 'remove',  name = 'InterpretationTranscriber',                    comment = ''}
+    lTableFromCTP['4008-010b'] = {en = true,  op = 'remove',  name = 'InterpretationText',                           comment = ''}
+    lTableFromCTP['4008-010c'] = {en = true,  op = 'remove',  name = 'InterpretationAuthor',                         comment = ''}
+    lTableFromCTP['4008-0111'] = {en = true,  op = 'remove',  name = 'InterpretationApproverSequence',               comment = ''}
+    lTableFromCTP['4008-0114'] = {en = true,  op = 'remove',  name = 'PhysicianApprovingInterpretation',             comment = ''}
+    lTableFromCTP['4008-0115'] = {en = true,  op = 'remove',  name = 'InterpretationDiagnosisDescription',           comment = ''}
+    lTableFromCTP['4008-0118'] = {en = true,  op = 'remove',  name = 'ResultsDistributionListSeq',                   comment = ''}
+    lTableFromCTP['4008-0119'] = {en = true,  op = 'remove',  name = 'DistributionName',                             comment = ''}
+    lTableFromCTP['4008-011a'] = {en = true,  op = 'remove',  name = 'DistributionAddress',                          comment = ''}
+    lTableFromCTP['4008-0202'] = {en = true,  op = 'remove',  name = 'InterpretationIdIssuer',                       comment = ''}
+    lTableFromCTP['4008-0300'] = {en = true,  op = 'remove',  name = 'Impressions',                                  comment = ''}
+    lTableFromCTP['4008-4000'] = {en = true,  op = 'remove',  name = 'ResultComments',                               comment = ''}
+    lTableFromCTP['50..']      = {en = true,  op = 'groupremovere', name = 'Curves',                                 comment = 'Curve data.  Regex permitted in group spec.'}
+    lTableFromCTP['60..']      = {en = true,  op = 'groupremovere', name = 'Overlays',                               comment = 'Overlays might have burned in PHI.  Regex permitted in group spec.'}
+    if lFlagHologic then
+        lTableFromCTP['7e01'] = { en = true,  op = 'groupkeep', name = 'HologicHeader',                            comment = 'Siemens/Hologic protocol stuff.  Does capture study date internally'}
+    end
+    lTableFromCTP['fffa-fffa'] = {en = true,  op = 'remove',  name = 'DigitalSignaturesSeq',                         comment = ''}
+    lTableFromCTP['fffc-fffc'] = {en = true,  op = 'remove',  name = 'DataSetTrailingPadding',                       comment = ''}
 
     local lTagHandling = { ['keep'] = {}, ['remove'] = {} }
     local lFoundPrivateAddress = false
@@ -2169,8 +2305,11 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
         loInstanceID = loLevelInstanceMeta['ID']
         local loInstanceMeta = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
         -- First the UID mapping info
-        RecursiveFindUIDToKeep(loInstanceMeta)
-
+        -- RecursiveFindUIDToKeep(loInstanceMeta)
+        local lResult = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/recursive_find_uid_to_keep_lua', false))
+        if lResult['status'] and lResult['status'] > 0 then error(lResult['error_text']) end
+        for kk,vv in pairs(lResult['TopLevelTagToKeep']) do gTopLevelTagToKeep[kk] = vv end
+        for kk,vv in pairs(lResult['KeptUID']) do gKeptUID[kk] = vv end
         for lTagKey, lTagVal in pairs(loInstanceMeta) do
             _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
             lField = lGroup .. '-' .. lElement
@@ -2235,10 +2374,10 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (1) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
 
     local lDataToPython = {}
-    lDataToPython['sql_pid'] = aSQLpid
-    lDataToPython['patient_id_modifier'] = aPatientIDModifier
+    lDataToPython['SQLpid'] = aSQLpid
+    if aPatientIDModifier then lDataToPython['PatientIDModifier'] = aPatientIDModifier end
     -- local lSQLInternalNumber = GetInternalNumber(aSQLpid, aPatientIDModifier)
-    local lSQLInternalNumberResult = ParseJson(RestApiPost('/get_internal_number', DumpJson(lDataToPython,true), false, {['x-remote-user']='lua-GetInternalNumber'}))
+    local lSQLInternalNumberResult = ParseJson(RestApiPost('/get_internal_number_lua', DumpJson(lDataToPython,true), false, {['x-remote-user']='lua-GetInternalNumberLua'}))
     local lSQLInternalNumber
     if lSQLInternalNumberResult['internal_number'] then
         lSQLInternalNumber = lSQLInternalNumberResult['internal_number']
@@ -2249,9 +2388,9 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
     end
     -- local ldPatientNameAnon = ConstructPatientName(lSQLInternalNumber)
     local lDataToPython = {}
-    lDataToPython['internal_number'] = lSQLInternalNumber
-    if gPatientNameBase then lDataToPython['patient_name_base'] = gPatientNameBase end
-    if gPatientNameIDChar then lDataToPython['patient_name_id'] = gPatientNameIDChar end
+    lDataToPython['InternalNumber'] = lSQLInternalNumber
+    if gPatientNameBase then lDataToPython['PatientNameBase'] = gPatientNameBase end
+    if gPatientNameIDChar then lDataToPython['PatientNameIDChar'] = gPatientNameIDChar end
     local ldPatientNameAnon = RestApiPost('/construct_patient_name', DumpJson(lDataToPython,true), false)
 
     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (2) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
@@ -2268,6 +2407,16 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
     if lTagHandling['empty'] then
         for lField, lValue in pairs(lTagHandling['empty']) do
             lReplace[lField] = ''
+        end
+    end
+    if lTagHandling['emptyseq'] then
+        for lField, lValue in pairs(lTagHandling['emptyseq']) do
+            lReplace[lField] = {}
+        end
+    end
+    if lTagHandling['emptyx'] then
+        for lField, lValue in pairs(lTagHandling['emptyx']) do
+            lReplace[lField] = 'xxxxxx'
         end
     end
 
@@ -2401,14 +2550,29 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
         ParseJson(RestApiGet('/studies/' .. loStudyIDAnon, false))
 
     if not adPatientIDAnon then
-        SavePatientIDsAnonToDB(loStudyAnonMeta,aSQLpid)
+        -- SavePatientIDsAnonToDB(loStudyAnonMeta,aSQLpid)
+        local lPostData = {}
+        lPostData['OrthancStudyID'] = loStudyAnonMeta['ID']
+        lPostData['SQLpid'] = aSQLpid
+        local lStatus = ParseJson(RestApiPost('/save_patient_ids_anon_to_db_lua', DumpJson(lPostData), false))
+        if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
     end
     if not adStudyInstanceUIDAnon then
-        SaveStudyInstanceUIDAnonToDB(loStudyAnonMeta,aSQLsiuid)
+        -- SaveStudyInstanceUIDAnonToDB(loStudyAnonMeta,aSQLsiuid)
+        local lPostData = {}
+        lPostData['OrthancStudyID'] = loStudyAnonMeta['ID']
+        lPostData['SQLsiuid'] = aSQLsiuid
+        local lStatus = ParseJson(RestApiPost('/save_study_instance_uid_anon_to_db_lua', DumpJson(lPostData), false))
+        if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
     end
     local lFlagSavePatientNameAnon = os.getenv('LUA_FLAG_SAVE_PATIENTNAME_ANON') == 'true'
     if lFlagSavePatientNameAnon then
-        SavePatientNameAnonToDB(ldPatientNameAnon, aSQLsiuid)
+        -- SavePatientNameAnonToDB(ldPatientNameAnon, aSQLsiuid)
+        local lPostData = {}
+        lPostData['PatientNameAnon'] = ldPatientNameAnon
+        lPostData['SQLsiuid'] = aSQLsiuid
+        local lStatus = ParseJson(RestApiPost('/save_patient_name_anon_to_db_lua', DumpJson(lPostData), false))
+        if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
     end
 
     gIndent = gIndent - 3
@@ -2557,168 +2721,168 @@ function MapUIDOldToNew(aoStudyIDNew, aFlagRemapSOPInstanceUID, aFlagRemapKeptUI
 
 end
 
--- ======================================================
-function LoadShiftEpochFromDB(aSQLpid)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local lSQLQuery = string.format([[SELECT value FROM shiftepoch WHERE pid=%d]],aSQLpid)
-    local lSQLStatus, lSQLCursor
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
-    if not lSQLStatus then 
-        CloseSQL()
-        error("Problem selecting shiftepoch")
-    end
-    if lSQLCursor:numrows() > 0 then
-        local lSQLRow = lSQLCursor:fetch({}, "a")
-        gIndent = gIndent - 3
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-        if gIndent > 0 then gIndent = gIndent - 3 end
-        return lSQLRow.value
-    end
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-
-end
-
--- ======================================================
-function SaveShiftEpochToDB(aShiftEpoch,aSQLpid)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
-    local lSQLResult = gSQLConn:setautocommit(false)
-    local lSQLQuery = string.format(
-                        [[INSERT INTO shiftepoch (value,pid) VALUES(%d,%d)]],
-                        aShiftEpoch, aSQLpid)
-    local lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
-    if not lSQLStatus then
-        lSQLResult = gSQLConn:rollback()
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-        lSQLResult = gSQLConn:setautocommit(true)
-        CloseSQL()
-        error("Problem inserting shiftepoch")
-    end
-    lSQLResult = gSQLConn:commit()
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
-    lSQLResult = gSQLConn:setautocommit(true)
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-
-end
-
--- ======================================================
-function ComputeShiftEpochFromEarliestDate(aoInstancesMeta)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local lDicomFields = { 'Study', 'Series', 'Acquisition', 
-                           'Content', 'InstanceCreation',
-                           'PerformedProcedureStepStart' }
-    local lDateTimeFields = { 'AcquisitionDateTime' }
-    -- Default to current time if no date/time fields found
-    local lMinEpoch = os.time()
-    local lDateField, lTimeField
-    for i, loInstanceMeta in pairs(aoInstancesMeta) do
-        local loInstanceID = (loInstanceMeta['ID'])
-        local lSuccess, loDicomTagsJson =pcall(RestApiGet,
-                                               '/instances/' .. loInstanceID .. '/simplified-tags',
-                                                false)
-        if not lSuccess then
-            gSQLConn:rollback()
-            CloseSQL()
-            error('Could not query instance for tags')
-        end
-        local loDicomTags = ParseJson(loDicomTagsJson)
-        -- local loDicomTags = 
-        --        ParseJson(RestApiGet('/instances/' .. 
-        --                             loInstanceID .. '/simplified-tags', false))
-        for j, lDicomField in pairs(lDicomFields) do
-            local lDateField = lDicomField .. 'Date'
-            local lTimeField = lDicomField .. 'Time'
-            if loDicomTags[lDateField] and string.len(trim(loDicomTags[lDateField])) > 0 then
-                if loDicomTags[lTimeField] and string.len(trim(loDicomTags[lTimeField])) > 0 then
-                    local lYear           = tonumber(string.sub(loDicomTags[lDateField],1,4))
-                    local lMonth          = tonumber(string.sub(loDicomTags[lDateField],5,6))
-                    local lDay            = tonumber(string.sub(loDicomTags[lDateField],7,8))
-                    local lHour           = tonumber(string.sub(loDicomTags[lTimeField],1,2))
-                    local lMinute         = tonumber(string.sub(loDicomTags[lTimeField],3,4))
-                    local lSec = math.floor(tonumber(string.sub(loDicomTags[lTimeField],5)) or 0)
-                    if not lMinEpoch then
-                        lMinEpoch = os.time{year=lYear, 
-                                           month=lMonth or 1, 
-                                           day=lDay or 1, 
-                                           hour=lHour or 0, 
-                                           min=lMinute or 0, 
-                                           sec=lSec or 0}
-                    else
-                        lMinEpoch = math.min(lMinEpoch, os.time{year=lYear, 
-                                                              month=lMonth or 1, 
-                                                              day=lDay or 1, 
-                                                              hour=lHour or 0, 
-                                                              min=lMinute or 0, 
-                                                              sec=lSec or 0 })
-                    end
-                else
-                    if gVerbose then 
-                        print ('No matching time for date: ' .. lDateField .. ', ' .. lTimeField)
-                        PrintRecursive(loDicomTags)
-                    end
-                end
-            end -- endif found lDateField
-        end -- loop over lDicomFields
-        for j, lDateTimeField in pairs(lDateTimeFields) do 
-            if loDicomTags[lDateTimeField] and string.len(trim(loDicomTags[lDateTimeField])) > 0 then
-                local lYear           = tonumber(string.sub(loDicomTags[lDateTimeField],1,4))
-                local lMonth          = tonumber(string.sub(loDicomTags[lDateTimeField],5,6))
-                local lDay            = tonumber(string.sub(loDicomTags[lDateTimeField],7,8))
-                local lHour           = tonumber(string.sub(loDicomTags[lDateTimeField],9,10))
-                local lMinute         = tonumber(string.sub(loDicomTags[lDateTimeField],11,12))
-                local lSec = math.floor(tonumber(string.sub(loDicomTags[lDateTimeField],13)) or 0)
-                if not lMinEpoch then
-                    lMinEpoch = os.time{year=lYear, 
-                                       month=lMonth or 1, 
-                                       day=lDay or 1, 
-                                       hour=lHour or 0, 
-                                       min=lMinute or 0, 
-                                       sec=lSec or 0}
-                else
-                    lMinEpoch = math.min(lMinEpoch, 
-                                        os.time{year=lYear, 
-                                                month=lMonth or 1, 
-                                                day=lDay or 1, 
-                                                hour=lHour or 0, 
-                                                min=lMinute or 0, 
-                                                sec=lSec or 0 })
-                end
-            end
-        end -- loop over lDateTimeFields
-    end -- loop over aoInstancesMeta
-    local lTemp = os.date("*t", lMinEpoch)
-    local lMinYear = lTemp['year']
-    local lShiftEpoch = lMinEpoch - os.time{year=lMinYear, 
-                                            month=1, 
-                                            day=1, 
-                                            hour=12, 
-                                            min=0, 
-                                            sec=0}
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    return lShiftEpoch
-
-end
-
+-- -- ======================================================
+-- function LoadShiftEpochFromDB(aSQLpid)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local lSQLQuery = string.format([[SELECT value FROM shiftepoch WHERE pid=%d]],aSQLpid)
+--     local lSQLStatus, lSQLCursor
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
+--     if not lSQLStatus then 
+--         CloseSQL()
+--         error("Problem selecting shiftepoch")
+--     end
+--     if lSQLCursor:numrows() > 0 then
+--         local lSQLRow = lSQLCursor:fetch({}, "a")
+--         gIndent = gIndent - 3
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--         if gIndent > 0 then gIndent = gIndent - 3 end
+--         return lSQLRow.value
+--     end
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+-- 
+-- end
+-- 
+-- -- ======================================================
+-- function SaveShiftEpochToDB(aShiftEpoch,aSQLpid)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
+--     local lSQLResult = gSQLConn:setautocommit(false)
+--     local lSQLQuery = string.format(
+--                         [[INSERT INTO shiftepoch (value,pid) VALUES(%d,%d)]],
+--                         aShiftEpoch, aSQLpid)
+--     local lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
+--     if not lSQLStatus then
+--         lSQLResult = gSQLConn:rollback()
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--         lSQLResult = gSQLConn:setautocommit(true)
+--         CloseSQL()
+--         error("Problem inserting shiftepoch")
+--     end
+--     lSQLResult = gSQLConn:commit()
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+--     lSQLResult = gSQLConn:setautocommit(true)
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+-- 
+-- end
+-- 
+-- -- ======================================================
+-- function ComputeShiftEpochFromEarliestDate(aoInstancesMeta)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local lDicomFields = { 'Study', 'Series', 'Acquisition', 
+--                            'Content', 'InstanceCreation',
+--                            'PerformedProcedureStepStart' }
+--     local lDateTimeFields = { 'AcquisitionDateTime' }
+--     -- Default to current time if no date/time fields found
+--     local lMinEpoch = os.time()
+--     local lDateField, lTimeField
+--     for i, loInstanceMeta in pairs(aoInstancesMeta) do
+--         local loInstanceID = (loInstanceMeta['ID'])
+--         local lSuccess, loDicomTagsJson =pcall(RestApiGet,
+--                                                '/instances/' .. loInstanceID .. '/simplified-tags',
+--                                                 false)
+--         if not lSuccess then
+--             gSQLConn:rollback()
+--             CloseSQL()
+--             error('Could not query instance for tags')
+--         end
+--         local loDicomTags = ParseJson(loDicomTagsJson)
+--         -- local loDicomTags = 
+--         --        ParseJson(RestApiGet('/instances/' .. 
+--         --                             loInstanceID .. '/simplified-tags', false))
+--         for j, lDicomField in pairs(lDicomFields) do
+--             local lDateField = lDicomField .. 'Date'
+--             local lTimeField = lDicomField .. 'Time'
+--             if loDicomTags[lDateField] and string.len(trim(loDicomTags[lDateField])) > 0 then
+--                 if loDicomTags[lTimeField] and string.len(trim(loDicomTags[lTimeField])) > 0 then
+--                     local lYear           = tonumber(string.sub(loDicomTags[lDateField],1,4))
+--                     local lMonth          = tonumber(string.sub(loDicomTags[lDateField],5,6))
+--                     local lDay            = tonumber(string.sub(loDicomTags[lDateField],7,8))
+--                     local lHour           = tonumber(string.sub(loDicomTags[lTimeField],1,2))
+--                     local lMinute         = tonumber(string.sub(loDicomTags[lTimeField],3,4))
+--                     local lSec = math.floor(tonumber(string.sub(loDicomTags[lTimeField],5)) or 0)
+--                     if not lMinEpoch then
+--                         lMinEpoch = os.time{year=lYear, 
+--                                            month=lMonth or 1, 
+--                                            day=lDay or 1, 
+--                                            hour=lHour or 0, 
+--                                            min=lMinute or 0, 
+--                                            sec=lSec or 0}
+--                     else
+--                         lMinEpoch = math.min(lMinEpoch, os.time{year=lYear, 
+--                                                               month=lMonth or 1, 
+--                                                               day=lDay or 1, 
+--                                                               hour=lHour or 0, 
+--                                                               min=lMinute or 0, 
+--                                                               sec=lSec or 0 })
+--                     end
+--                 else
+--                     if gVerbose then 
+--                         print ('No matching time for date: ' .. lDateField .. ', ' .. lTimeField)
+--                         PrintRecursive(loDicomTags)
+--                     end
+--                 end
+--             end -- endif found lDateField
+--         end -- loop over lDicomFields
+--         for j, lDateTimeField in pairs(lDateTimeFields) do 
+--             if loDicomTags[lDateTimeField] and string.len(trim(loDicomTags[lDateTimeField])) > 0 then
+--                 local lYear           = tonumber(string.sub(loDicomTags[lDateTimeField],1,4))
+--                 local lMonth          = tonumber(string.sub(loDicomTags[lDateTimeField],5,6))
+--                 local lDay            = tonumber(string.sub(loDicomTags[lDateTimeField],7,8))
+--                 local lHour           = tonumber(string.sub(loDicomTags[lDateTimeField],9,10))
+--                 local lMinute         = tonumber(string.sub(loDicomTags[lDateTimeField],11,12))
+--                 local lSec = math.floor(tonumber(string.sub(loDicomTags[lDateTimeField],13)) or 0)
+--                 if not lMinEpoch then
+--                     lMinEpoch = os.time{year=lYear, 
+--                                        month=lMonth or 1, 
+--                                        day=lDay or 1, 
+--                                        hour=lHour or 0, 
+--                                        min=lMinute or 0, 
+--                                        sec=lSec or 0}
+--                 else
+--                     lMinEpoch = math.min(lMinEpoch, 
+--                                         os.time{year=lYear, 
+--                                                 month=lMonth or 1, 
+--                                                 day=lDay or 1, 
+--                                                 hour=lHour or 0, 
+--                                                 min=lMinute or 0, 
+--                                                 sec=lSec or 0 })
+--                 end
+--             end
+--         end -- loop over lDateTimeFields
+--     end -- loop over aoInstancesMeta
+--     local lTemp = os.date("*t", lMinEpoch)
+--     local lMinYear = lTemp['year']
+--     local lShiftEpoch = lMinEpoch - os.time{year=lMinYear, 
+--                                             month=1, 
+--                                             day=1, 
+--                                             hour=12, 
+--                                             min=0, 
+--                                             sec=0}
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     return lShiftEpoch
+-- 
+-- end
+-- 
 -- ======================================================
 function RecursiveReplaceUID(aParent, aLevelIn)
 
@@ -2787,100 +2951,100 @@ function RecursiveReplaceUID(aParent, aLevelIn)
 
 end
 
--- ======================================================
-function ShiftDateTimeString(aShiftEpoch,aYYYYMMDDString,aHHMMSSString)
-   
-    local lYear = tonumber(string.sub(aYYYYMMDDString, 1, 4))
-    local lMonth = tonumber(string.sub(aYYYYMMDDString,5,6))
-    local lDay = tonumber(string.sub(aYYYYMMDDString,7,8))
-
-    local lHour, lMinute, lSec, lSecFrac
-    local lHHMMSSString 
-    if aHHMMSSString then
-        if string.len(trim(aHHMMSSString)) >= 6 then
-           lHHMMSSString = aHHMMSSString
-        else
-           if gVerbose then print(string.rep(' ', gIndent+3) .. 'Bad shift date time string ' .. aHHMMSSString) end
-           lHHMMSSString = nil
-        end
-    end
-    if lHHMMSSString then
-        lHour = tonumber(string.sub(lHHMMSSString, 1, 2))
-        lMinute = tonumber(string.sub(lHHMMSSString,3,4))
-        local lSecString = string.sub(lHHMMSSString,5)
-        lSec = math.floor(tonumber(lSecString) or 0)
-        if string.find(lSecString,'%.') then
-            lSecFrac = string.sub(lSecString,3)
-        else
-            lSecFrac = nil
-        end
-    elseif string.len(aYYYYMMDDString) > 12 then
-        lHour = tonumber(string.sub(aYYYYMMDDString, 9, 10))
-        lMinute = tonumber(string.sub(aYYYYMMDDString,11,12))
-        local lSecString 
-        if string.find(aYYYYMMDDString, '%-') then
-            lSecString = string.sub(aYYYYMMDDString,13,14)
-        else
-            lSecString = string.sub(aYYYYMMDDString,13)
-        end
-        lSec = math.floor(tonumber(lSecString))
-        if string.find(lSecString,'%.') then
-            lSecFrac = string.sub(lSecString,3)
-        else
-            lSecFrac = nil
-        end
-    else
-        lHour = 0
-        lMinute = 0
-        lSec = 0
-    end
-    local lThisEpoch = os.time{year=lYear, 
-                               month=lMonth or 1, 
-                               day=lDay or 1, 
-                               hour=lHour or 0, 
-                               min=lMinute or 0, 
-                               sec=lSec or 0}
-    local lTemp = os.date("*t", lThisEpoch)
-    local lThisDST = lTemp['isdst']
-
-    local lNewEpoch = lThisEpoch - aShiftEpoch
-    local lTemp = os.date("*t", lNewEpoch)
-    local lNewDST = lTemp['isdst']
-
-    -- Preserve the original hour, minute, second
-    local lNewHour = lHour
-
-    local lNewDateString
-    if string.len(aYYYYMMDDString) > 12 then
-        if lSecFrac then
-            lNewDateString = 
-                string.format("%04d%02d%02d%02d%02d%0d%s", 
-                              lTemp['year'], lTemp['month'], 
-                              lTemp['day'], lNewHour, 
-                              lTemp['min'], lTemp['sec'], lSecFrac)
-        else
-            lNewDateString = 
-                string.format("%04d%02d%02d%02d%02d%02d.0", 
-                              lTemp['year'], lTemp['month'], 
-                              lTemp['day'], lNewHour, 
-                              lTemp['min'], lTemp['sec'])
-        end
-    else
-        lNewDateString = string.format("%04d%02d%02d", lTemp['year'], lTemp['month'], lTemp['day'])
-    end
-    local lNewTimeString = nil
-    if aHHMMSSString then
-        if lSecFrac then
-           lNewTimeString = string.format("%02d%02d%02d%s", lNewHour, lTemp['min'], lTemp['sec'], lSecFrac)
-        else
-           lNewTimeString = string.format("%02d%02d%02d.0", lNewHour, lTemp['min'], lTemp['sec'])
-        end
-    end
-
-    return lNewDateString, lNewtimeString
-
-end
-   
+-- -- ======================================================
+-- function ShiftDateTimeString(aShiftEpoch,aYYYYMMDDString,aHHMMSSString)
+--    
+--     local lYear = tonumber(string.sub(aYYYYMMDDString, 1, 4))
+--     local lMonth = tonumber(string.sub(aYYYYMMDDString,5,6))
+--     local lDay = tonumber(string.sub(aYYYYMMDDString,7,8))
+-- 
+--     local lHour, lMinute, lSec, lSecFrac
+--     local lHHMMSSString 
+--     if aHHMMSSString then
+--         if string.len(trim(aHHMMSSString)) >= 6 then
+--            lHHMMSSString = aHHMMSSString
+--         else
+--            if gVerbose then print(string.rep(' ', gIndent+3) .. 'Bad shift date time string ' .. aHHMMSSString) end
+--            lHHMMSSString = nil
+--         end
+--     end
+--     if lHHMMSSString then
+--         lHour = tonumber(string.sub(lHHMMSSString, 1, 2))
+--         lMinute = tonumber(string.sub(lHHMMSSString,3,4))
+--         local lSecString = string.sub(lHHMMSSString,5)
+--         lSec = math.floor(tonumber(lSecString) or 0)
+--         if string.find(lSecString,'%.') then
+--             lSecFrac = string.sub(lSecString,3)
+--         else
+--             lSecFrac = nil
+--         end
+--     elseif string.len(aYYYYMMDDString) > 12 then
+--         lHour = tonumber(string.sub(aYYYYMMDDString, 9, 10))
+--         lMinute = tonumber(string.sub(aYYYYMMDDString,11,12))
+--         local lSecString 
+--         if string.find(aYYYYMMDDString, '%-') then
+--             lSecString = string.sub(aYYYYMMDDString,13,14)
+--         else
+--             lSecString = string.sub(aYYYYMMDDString,13)
+--         end
+--         lSec = math.floor(tonumber(lSecString))
+--         if string.find(lSecString,'%.') then
+--             lSecFrac = string.sub(lSecString,3)
+--         else
+--             lSecFrac = nil
+--         end
+--     else
+--         lHour = 0
+--         lMinute = 0
+--         lSec = 0
+--     end
+--     local lThisEpoch = os.time{year=lYear, 
+--                                month=lMonth or 1, 
+--                                day=lDay or 1, 
+--                                hour=lHour or 0, 
+--                                min=lMinute or 0, 
+--                                sec=lSec or 0}
+--     local lTemp = os.date("*t", lThisEpoch)
+--     local lThisDST = lTemp['isdst']
+-- 
+--     local lNewEpoch = lThisEpoch - aShiftEpoch
+--     local lTemp = os.date("*t", lNewEpoch)
+--     local lNewDST = lTemp['isdst']
+-- 
+--     -- Preserve the original hour, minute, second
+--     local lNewHour = lHour
+-- 
+--     local lNewDateString
+--     if string.len(aYYYYMMDDString) > 12 then
+--         if lSecFrac then
+--             lNewDateString = 
+--                 string.format("%04d%02d%02d%02d%02d%0d%s", 
+--                               lTemp['year'], lTemp['month'], 
+--                               lTemp['day'], lNewHour, 
+--                               lTemp['min'], lTemp['sec'], lSecFrac)
+--         else
+--             lNewDateString = 
+--                 string.format("%04d%02d%02d%02d%02d%02d.0", 
+--                               lTemp['year'], lTemp['month'], 
+--                               lTemp['day'], lNewHour, 
+--                               lTemp['min'], lTemp['sec'])
+--         end
+--     else
+--         lNewDateString = string.format("%04d%02d%02d", lTemp['year'], lTemp['month'], lTemp['day'])
+--     end
+--     local lNewTimeString = nil
+--     if aHHMMSSString then
+--         if lSecFrac then
+--            lNewTimeString = string.format("%02d%02d%02d%s", lNewHour, lTemp['min'], lTemp['sec'], lSecFrac)
+--         else
+--            lNewTimeString = string.format("%02d%02d%02d.0", lNewHour, lTemp['min'], lTemp['sec'])
+--         end
+--     end
+-- 
+--     return lNewDateString, lNewtimeString
+-- 
+-- end
+--    
 -- ======================================================
 function ShiftDateTimePatAgeOfInstances(aoInstancesMeta, aShiftEpoch, aReplaceRoot)
 
@@ -2897,14 +3061,26 @@ function ShiftDateTimePatAgeOfInstances(aoInstancesMeta, aShiftEpoch, aReplaceRo
     local lNumInstances = 0
     for i, loInstanceMeta in pairs(aoInstancesMeta) do lNumInstances = lNumInstances+1 end
     local lTenPercent = math.ceil(lNumInstances / 10)
+    local lPostData = {}
+    lPostData['orthanc_instance_ids'] = {}
     for i, loInstanceMeta in pairs(aoInstancesMeta) do
+        table.insert(lPostData['orthanc_instance_ids'], loInstanceMeta['ID'])
+    end
+    local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
+    if not lResults then
+       error('Problem calling send_instances_to_remote_filter_lua')
+    end 
+    -- for i, loInstanceMeta in pairs(aoInstancesMeta) do
+    local i = 0
+    for loInstanceID, lFlagSendToRemote in pairs(lResults) do
+        i = i + 1
         if gVerbose and (((i-1) % lTenPercent) == 0) then print(string.rep(' ', gIndent) .. 'Progress', i, 'of', lNumInstances) end
         local lReplace = {}
         for lReplaceRootKey, lReplaceRootVal in pairs(aReplaceRoot) do
             lReplace[lReplaceRootKey] = lReplaceRootVal
         end
-        local loInstanceID = (loInstanceMeta['ID'])
-        local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
+        -- local loInstanceID = (loInstanceMeta['ID'])
+        -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
         local loDicomTags
         if lFlagSendToRemote then
             loDicomTags = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/simplified-tags', false))
@@ -2917,11 +3093,16 @@ function ShiftDateTimePatAgeOfInstances(aoInstancesMeta, aShiftEpoch, aReplaceRo
             local lTimeField = lDicomField .. 'Time'
             if loDicomTags[lDateField] and string.len(trim(loDicomTags[lDateField])) > 0 then
                 if loDicomTags[lTimeField] and string.len(trim(loDicomTags[lTimeField])) > 0 then
-                    local lNewDateString, lNewTimeString
-                    lNewDateString, lNewTimeString = 
-                        ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateField], loDicomTags[lTimeField])
-                    lReplace[lDateField] = lNewDateString
-                    lReplace[lTimeField] = lNewTimeString
+                    -- local lNewDateString, lNewTimeString
+                    -- lNewDateString, lNewTimeString = 
+                    --     ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateField], loDicomTags[lTimeField])
+                    local lPostData = {}
+                    lPostData['ShiftEpoch'] = aShiftEpoch
+                    lPostData['YYYYMMDD'] = loDicomTags[lDateField]
+                    lPostData['HHMMSS'] = loDicomTags[lTimeField]
+                    local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+                    lReplace[lDateField] = lResults['NewDateString']
+                    lReplace[lTimeField] = lResults['NewTimeString']
                 else
                     if gVerbose then 
                         print ('No matching time for date: ' .. lDateField .. ', ' .. lTimeField)
@@ -2932,7 +3113,13 @@ function ShiftDateTimePatAgeOfInstances(aoInstancesMeta, aShiftEpoch, aReplaceRo
         end -- loop over lDicomFields
         for j, lDateTimeField in pairs(lDateTimeFields) do 
             if loDicomTags[lDateTimeField] and string.len(trim(loDicomTags[lDateTimeField])) > 0 then
-                lReplace[lDateTimeField] = ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateTimeField])
+                -- lReplace[lDateTimeField] = ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateTimeField])
+                local lPostData = {}
+                lPostData['ShiftEpoch'] = aShiftEpoch
+                lPostData['YYYYMMDD'] = loDicomTags[lDateTimeField]
+                local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+                lReplace[lDateTimeField] = lResults['NewDateString']
+                -- lReplace[lDateTimeField] = ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateTimeField])
             end
         end -- loop over lDateTimeFields
         local lRadio = 'RadiopharmaceuticalInformationSequence'
@@ -2941,14 +3128,24 @@ function ShiftDateTimePatAgeOfInstances(aoInstancesMeta, aShiftEpoch, aReplaceRo
             for lItem, lTags in pairs(loDicomTags[lRadio]) do
                 for j, lDateTimeField in pairs(lDateTimeFieldsRadio) do 
                     if lTags[lDateTimeField] and string.len(trim(lTags[lDateTimeField])) > 0 then
-                        lReplace[lRadio][lItem][lDateTimeField] = ShiftDateTimeString(aShiftEpoch, lTags[lDateTimeField])
+                        -- lReplace[lRadio][lItem][lDateTimeField] = ShiftDateTimeString(aShiftEpoch, lTags[lDateTimeField])
+                        local lPostData = {}
+                        lPostData['ShiftEpoch'] = aShiftEpoch
+                        lPostData['YYYYMMDD'] = lTags[lDateTimeField]
+                        local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+                        lReplace[lRadio][lItem][lDateTimeField] = lResults['NewDateString']
                     end
                 end -- loop over lDateTimeFields
             end
         end
 
         if loDicomTags['PatientBirthDate'] then
-            lReplace['PatientBirthDate'] = ShiftDateTimeString(aShiftEpoch, loDicomTags['PatientBirthDate'])
+            -- lReplace['PatientBirthDate'] = ShiftDateTimeString(aShiftEpoch, loDicomTags['PatientBirthDate'])
+            local lPostData = {}
+            lPostData['ShiftEpoch'] = aShiftEpoch
+            lPostData['YYYYMMDD'] = loDicomTags['PatientBirthDate']
+            local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+            lReplace['PatientBirthDate'] = lResults['NewDateString']
         end
         if loDicomTags['PatientAge'] then
             local lAgeNumber = tonumber(string.sub(loDicomTags['PatientAge'], 1, 3))
@@ -3032,194 +3229,215 @@ function ShiftDateTimePatAgeOfInstances(aoInstancesMeta, aShiftEpoch, aReplaceRo
 
 end
  
--- ======================================================
-function SendToRemoteFilter(aoInstanceID)
-
-    local loDicomTags = ParseJson(RestApiGet('/instances/' .. aoInstanceID .. '/simplified-tags', false))
-    -- By default we assume derived (for safety) unless proven otherwise by existing ImageType 
-    local lFlagAssumeOriginalPrimary = os.getenv('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY') == 'true'
-
-    local lFlagOriginalPrimary = lFlagAssumeOriginalPrimary
-    local lFlagPrimary = lFlagAssumeOriginalPrimary
-    local lCharStartOriginal, lCharStopOriginal, lCharStartPrimary, lCharStopPrimary
-    if not lFlagAssumeOriginalPrimary then -- Turn off in order to keep Derived/Secondaries
-        if loDicomTags['ImageType'] then
-            lCharStartOriginal, lCharStopOriginal = string.find(loDicomTags['ImageType'],'ORIGINAL')
-            lCharStartPrimary, lCharStopPrimary = string.find(loDicomTags['ImageType'],'PRIMARY')
-            lFlagOriginalPrimary = (lCharStartOriginal == 1) and (lCharStartPrimary == (lCharStopOriginal + 2))
-            lFlagPrimary = lFlagPrimary or lCharStartPrimary
-        else
-            if loDicomTags['FrameType'] then
-                lCharStartOriginal, lCharStopOriginal = string.find(loDicomTags['FrameType'],'ORIGINAL')
-                lCharStartPrimary, lCharStopPrimary = string.find(loDicomTags['FrameType'],'PRIMARY')
-                lFlagPrimary = lFlagPrimary or lCharStartPrimary
-                lFlagOriginalPrimary = (lCharStartOriginal == 1) and (lCharStartPrimary == (lCharStopOriginal + 2))
-            end
-        end
-    end
-    
-    -- Checking for non-mammo images
-    local lFlagScreenForReports = os.getenv('LUA_FLAG_SCREEN_FOR_REPORTS') == 'true' -- turn on to weed out reports
-    local lFlagNonReport
-    if loDicomTags['ImageType'] then
-        lFlagNonReport = true
-    else
-        lFlagNonReport = false
-    end
-    if lFlagScreenForReports then -- Test for unwanted mammo studies
-        if lFlagNonReport and loDicomTags['ImageType'] then
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'dose'))
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'screen'))
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'report'))
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'exam protocol'))
-        end
-        if lFlagNonReport and loDicomTags['StudyDescription'] then
-            -- lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StudyDescription']), 'no rpt'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['StudyDescription'], 'SecurView'))
-        end
-        if lFlagNonReport and loDicomTags['SecondaryCaptureDeviceManufacturer'] then
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturer'], 'PACSGEAR'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturer'], 'HipGrahics'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturer'], 'Lexmark'))
-        end
-        if lFlagNonReport and loDicomTags['SecondaryCaptureDeviceManufacturerModelName'] then
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturerModelName'], 'PACSSCAN'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturerModelName'], 'InSpace'))
-        end
-        if lFlagNonReport and loDicomTags['StationName'] then
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StationName']), 'rapid'))
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StationName']), 'sonosite'))
-        end
-        if lFlagNonReport and loDicomTags['Manufacturer'] then
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['Manufacturer']), 'ischemaview'))
-        end
-        if lFlagNonReport and loDicomTags['ManufacturerModelName'] then
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['ManufacturerModelName'], 'SecurView'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['ManufacturerModelName'], 'Blackford'))
-        end
-        if lFlagNonReport and loDicomTags['SeriesDescription'] then
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'screen snapshot'))
-            lFlagNonReport = lFlagNonReport and (not string.match(string.lower(loDicomTags['SeriesDescription']), 'screen *s[a-z]*er*'))
-            lFlagNonReport = lFlagNonReport and (not string.match(string.lower(loDicomTags['SeriesDescription']), '*dose report*'))
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'no rpt'))
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'summary'))
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'vpct'))
-            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'history'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'RAPID'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'SecurView'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Patient Protocol'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Phoenix'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Carestream'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'REQ'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'REPORT'))
-            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Blackford'))
-        end
-    end
-    -- Consider both original and primary
-    if (os.getenv('LUA_FLAG_MUST_BE_ORIGINAL') == 'true') then 
-       return lFlagOriginalPrimary and lFlagNonReport
-    -- else only primary
-    else
-       return lFlagPrimary and lFlagNonReport
-    end
-
-end
- 
--- ======================================================
-function PreScreenSendToRemote(aoStudyID)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local lFlagDeleted = false
-    local loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
-    local lNSeriesStart = #loStudyMeta['Series']
-    for i, loSeriesID in pairs(loStudyMeta['Series']) do
-        local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
-        if loSeriesMeta['MainDicomTags'] then 
-            if loSeriesMeta['Instances'] then
-                for ioInstanceID, oInstanceID in pairs(loSeriesMeta['Instances']) do
-                    local lFlagSendToRemote = SendToRemoteFilter(oInstanceID)
-                    if not lFlagSendToRemote then
-                        if gVerbose then print(string.rep(' ', gIndent) .. 'Prefilter will delete non orig/prim /instances/' .. oInstanceID .. '/simplified-tags') end
-                        RestApiDelete('/instances/' .. oInstanceID, false)
-                    end
-                end
-            end
-        end
-    end
-    loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
-    local lNSeriesEnd = 0
-    if loStudyMeta then
-        if loStudyMeta['Series'] then
-            lNSeriesEnd = #loStudyMeta['Series']
-        end
-    end
-    local lNSeriesDeleted = lNSeriesStart - lNSeriesEnd
-    if lNSeriesStart > lNSeriesEnd then lFlagDeleted = true end
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    return lFlagDeleted, lNSeriesStart, lNSeriesDeleted
-
-end
-
--- ======================================================
-function PreScreenSeriesByModality(aoStudyID)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local lFlagDeleted = false
-    local lAllowedModalities = {}
-    if string.len(trim(os.getenv('LUA_ALLOWED_MODALITIES'))) > 0 then
-        for lModality in string.gmatch(os.getenv('LUA_ALLOWED_MODALITIES'), '[^," ]+') do
-            if lModality and string.len(trim(lModality)) > 0 then
-                table.insert(lAllowedModalities,lModality)
-            end
-        end
-    end
-    local lDeniedModalities = {}
-    if string.len(trim(os.getenv('LUA_DENIED_MODALITIES'))) > 0 then
-        for lModality in string.gmatch(os.getenv('LUA_DENIED_MODALITIES'), '[^," ]+') do
-            if lModality and string.len(trim(lModality)) > 0 then
-                table.insert(lDeniedModalities, lModality)
-            end
-        end
-    end
-    local lFlagAllowed 
-    local loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
-    local lNSeriesStart = #loStudyMeta['Series']
-    local lNSeriesDeleted = 0
-    for i, loSeriesID in pairs(loStudyMeta['Series']) do
-        local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
-        if loSeriesMeta['MainDicomTags'] then 
-             if loSeriesMeta['MainDicomTags']['Modality'] then
-                 lFlagAllowed = #lAllowedModalities == 0
-                 for j, lAllowedModality in pairs(lAllowedModalities) do
-                     lFlagAllowed = lFlagAllowed or (loSeriesMeta['MainDicomTags']['Modality'] == lAllowedModality)
-                 end
-                 for j, lDeniedModality in pairs(lDeniedModalities) do
-                     lFlagAllowed = lFlagAllowed and (loSeriesMeta['MainDicomTags']['Modality'] ~= lDeniedModality)
-                 end
-                 if not lFlagAllowed then
-                     if gVerbose then print(string.rep(' ', gIndent) .. 'Deleting non modality series', loSeriesID) end
-                     RestApiDelete('/series/' .. loSeriesID, false)
-                     lFlagDeleted = true
-                     lNSeriesDeleted = lNSeriesDeleted + 1
-                 end
-             end
-         end
-    end
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    return lFlagDeleted, lNSeriesStart, lNSeriesDeleted
-
-end
-
+-- -- ======================================================
+-- function SendToRemoteFilter(aoInstanceID)
+-- 
+--     local loDicomTags = ParseJson(RestApiGet('/instances/' .. aoInstanceID .. '/simplified-tags', false))
+--     -- By default we assume derived (for safety) unless proven otherwise by existing ImageType 
+--     local lFlagAssumeOriginalPrimary = os.getenv('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY') == 'true'
+-- 
+--     local lFlagOriginalPrimary = lFlagAssumeOriginalPrimary
+--     local lFlagPrimary = lFlagAssumeOriginalPrimary
+--     local lCharStartOriginal, lCharStopOriginal, lCharStartPrimary, lCharStopPrimary
+--     if not lFlagAssumeOriginalPrimary then -- Turn off in order to keep Derived/Secondaries
+--         if loDicomTags['ImageType'] then
+--             lCharStartOriginal, lCharStopOriginal = string.find(loDicomTags['ImageType'],'ORIGINAL')
+--             lCharStartPrimary, lCharStopPrimary = string.find(loDicomTags['ImageType'],'PRIMARY')
+--             lFlagOriginalPrimary = (lCharStartOriginal == 1) and (lCharStartPrimary == (lCharStopOriginal + 2))
+--             lFlagPrimary = lFlagPrimary or lCharStartPrimary
+--         else
+--             if loDicomTags['FrameType'] then
+--                 lCharStartOriginal, lCharStopOriginal = string.find(loDicomTags['FrameType'],'ORIGINAL')
+--                 lCharStartPrimary, lCharStopPrimary = string.find(loDicomTags['FrameType'],'PRIMARY')
+--                 lFlagPrimary = lFlagPrimary or lCharStartPrimary
+--                 lFlagOriginalPrimary = (lCharStartOriginal == 1) and (lCharStartPrimary == (lCharStopOriginal + 2))
+--             end
+--         end
+--     end
+-- 
+--     -- Exception for HIFU and Dynacad
+--     local lFlagDynacad = false
+--     -- lFlagDynacad = lFlagDynacad or string.find(loDicomTags['SeriesDescription'], 'DCAD-')
+--     -- lFlagDynacad = lFlagDynacad or (loDicomTags['0073,1003'] and string.find(loDicomTags['0073,1003'],'DYNACAD'))
+--     
+--     -- Checking for non-mammo images
+--     local lFlagScreenForReports = os.getenv('LUA_FLAG_SCREEN_FOR_REPORTS') == 'true' -- turn on to weed out reports
+--     local lFlagNonReport
+--     if loDicomTags['ImageType'] then
+--         lFlagNonReport = true
+--     else
+--         lFlagNonReport = false
+--     end
+--     if lFlagScreenForReports then -- Test for unwanted mammo studies
+--         if lFlagNonReport and loDicomTags['ImageType'] then
+--             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'dose'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'screen'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'report'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'exam protocol'))
+--         end
+--         if lFlagNonReport and loDicomTags['StudyDescription'] then
+--             -- lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StudyDescription']), 'no rpt'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['StudyDescription'], 'SecurView'))
+--         end
+--         if lFlagNonReport and loDicomTags['SecondaryCaptureDeviceManufacturer'] then
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturer'], 'PACSGEAR'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturer'], 'HipGrahics'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturer'], 'Lexmark'))
+--         end
+--         if lFlagNonReport and loDicomTags['SecondaryCaptureDeviceManufacturerModelName'] then
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturerModelName'], 'PACSSCAN'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturerModelName'], 'InSpace'))
+--         end
+--         if lFlagNonReport and loDicomTags['StationName'] then
+--             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StationName']), 'rapid'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StationName']), 'sonosite'))
+--         end
+--         if lFlagNonReport and loDicomTags['Manufacturer'] then
+--             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['Manufacturer']), 'ischemaview'))
+--         end
+--         if lFlagNonReport and loDicomTags['ManufacturerModelName'] then
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['ManufacturerModelName'], 'SecurView'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['ManufacturerModelName'], 'Blackford'))
+--         end
+--         if lFlagNonReport and loDicomTags['SeriesDescription'] then
+--             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'screen snapshot'))
+--             lFlagNonReport = lFlagNonReport and (not string.match(string.lower(loDicomTags['SeriesDescription']), 'screen *s[a-z]*er*'))
+--             lFlagNonReport = lFlagNonReport and (not string.match(string.lower(loDicomTags['SeriesDescription']), '*dose report*'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'no rpt'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'summary'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'vpct'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'history'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'RAPID'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'SecurView'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Patient Protocol'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Phoenix'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Carestream'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'REQ'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'REPORT'))
+--             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Blackford'))
+--         end
+--     end
+--     -- Consider both original and primary
+--     if (os.getenv('LUA_FLAG_MUST_BE_ORIGINAL') == 'true') then 
+--        return lFlagDynacad or (lFlagOriginalPrimary and lFlagNonReport)
+--     -- else only primary
+--     else
+--        return lFlagDynacad or (lFlagPrimary and lFlagNonReport)
+--     end
+-- 
+-- end
+--  
+-- -- ======================================================
+-- function PreScreenSendToRemote(aoStudyID)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local lFlagDeleted = false
+--     
+--     local loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+--     local lNSeriesStart = #loStudyMeta['Series']
+-- 
+--     local lPostData = {}
+--     lPostData['orthanc_study_ids'] = { aoStudyID } 
+--     local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
+--     if not lResults then
+--        error('Problem calling send_instances_to_remote_filter_lua')
+--     end 
+--     for loInstanceID, lFlagSendToRemote in pairs(lResults) do
+--         if not lFlagSendToRemote then
+--             if gVerbose then print(string.rep(' ', gIndent) .. 'Prefilter will delete non orig/prim /instances/' .. loInstanceID .. '/simplified-tags') end
+--             RestApiDelete('/instances/' .. loInstanceID, false)
+--         end
+--     end
+--     
+--     -- for i, loSeriesID in pairs(loStudyMeta['Series']) do
+--     --     local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
+--     --     if loSeriesMeta['MainDicomTags'] then 
+--     --         if loSeriesMeta['Instances'] then
+--     --             for ioInstanceID, oInstanceID in pairs(loSeriesMeta['Instances']) do
+--     --                 local lFlagSendToRemote = SendToRemoteFilter(oInstanceID)
+--     --                 if not lFlagSendToRemote then
+--     --                     if gVerbose then print(string.rep(' ', gIndent) .. 'Prefilter will delete non orig/prim /instances/' .. oInstanceID .. '/simplified-tags') end
+--     --                     RestApiDelete('/instances/' .. oInstanceID, false)
+--     --                 end
+--     --             end
+--     --         end
+--     --     end
+--     -- end
+-- 
+--     loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+--     local lNSeriesEnd = 0
+--     if loStudyMeta then
+--         if loStudyMeta['Series'] then
+--             lNSeriesEnd = #loStudyMeta['Series']
+--         end
+--     end
+--     local lNSeriesDeleted = lNSeriesStart - lNSeriesEnd
+--     if lNSeriesStart > lNSeriesEnd then lFlagDeleted = true end
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     return lFlagDeleted, lNSeriesStart, lNSeriesDeleted
+-- 
+-- end
+-- 
+-- -- ======================================================
+-- function PreScreenSeriesByModality(aoStudyID)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local lFlagDeleted = false
+--     local lAllowedModalities = {}
+--     if string.len(trim(os.getenv('LUA_ALLOWED_MODALITIES'))) > 0 then
+--         for lModality in string.gmatch(os.getenv('LUA_ALLOWED_MODALITIES'), '[^," ]+') do
+--             if lModality and string.len(trim(lModality)) > 0 then
+--                 table.insert(lAllowedModalities,lModality)
+--             end
+--         end
+--     end
+--     local lDeniedModalities = {}
+--     if string.len(trim(os.getenv('LUA_DENIED_MODALITIES'))) > 0 then
+--         for lModality in string.gmatch(os.getenv('LUA_DENIED_MODALITIES'), '[^," ]+') do
+--             if lModality and string.len(trim(lModality)) > 0 then
+--                 table.insert(lDeniedModalities, lModality)
+--             end
+--         end
+--     end
+--     local lFlagAllowed 
+--     local loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+--     local lNSeriesStart = #loStudyMeta['Series']
+--     local lNSeriesDeleted = 0
+--     for i, loSeriesID in pairs(loStudyMeta['Series']) do
+--         local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
+--         if loSeriesMeta['MainDicomTags'] then 
+--              if loSeriesMeta['MainDicomTags']['Modality'] then
+--                  lFlagAllowed = #lAllowedModalities == 0
+--                  for j, lAllowedModality in pairs(lAllowedModalities) do
+--                      lFlagAllowed = lFlagAllowed or (loSeriesMeta['MainDicomTags']['Modality'] == lAllowedModality)
+--                  end
+--                  for j, lDeniedModality in pairs(lDeniedModalities) do
+--                      lFlagAllowed = lFlagAllowed and (loSeriesMeta['MainDicomTags']['Modality'] ~= lDeniedModality)
+--                  end
+--                  if not lFlagAllowed then
+--                      if gVerbose then print(string.rep(' ', gIndent) .. 'Deleting non modality series', loSeriesID) end
+--                      RestApiDelete('/series/' .. loSeriesID, false)
+--                      lFlagDeleted = true
+--                      lNSeriesDeleted = lNSeriesDeleted + 1
+--                  end
+--              end
+--          end
+--     end
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     return lFlagDeleted, lNSeriesStart, lNSeriesDeleted
+-- 
+-- end
+-- 
 -- ======================================================
 function CheckSplit2DFromCViewTomo(aoStudyID)
 
@@ -3325,8 +3543,33 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
         -- StudyInstanceUID is only modified when anonymizing at the series level
         local lStudyInstanceUIDModifier = lPatientIDModifier
         local lSQLpid, ldPatientIDAnon, lSQLsiuid, ldStudyInstanceUIDAnon
-        local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(aoStudyMeta,lPatientIDModifier)
-        local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(aoStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
+        --local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(aoStudyMeta,lPatientIDModifier)
+        local lPostData = {}
+        lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+        if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+        local lResults
+        lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
+        if lResults['status'] and lResults['status'] > 0 then
+            gSQLConn:rollback()
+            CloseSQL()
+            error(lResults['error_text'])
+        end
+        local lFlagNewPatientID = lResults['FlagPatientNewID']
+        -- local lSQLpid = math.floor(lResults['SQLpid']+0.5)
+        local lSQLpid = lResults['SQLpid']
+        local ldPatientIDAnon = lResults['PatientIDAnon']
+        -- local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(aoStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
+        local lPostData = {}
+        lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+        lPostData['SQLpid'] = lSQLpid
+        if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
+        local lResults
+        lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
+        if lResults['status'] then error(lResults['error_text']) end
+        local lFlagNewStudyInstanceUID = lResults['FlagNewStudyInstanceUID']
+        local lSQLsiuid = lResults['SQLsiuid']
+        local ldStudyInstanceUIDAnon = lResults['StudyInstanceUIDAnon']
+        
         lFlagNewPatientIDBySeries[loSeriesID] = lFlagNewPatientID
         lSQLpidBySeries[loSeriesID] = lSQLpid
         ldPatientIDAnonBySeries[loSeriesID] = ldPatientIDAnon
@@ -3411,7 +3654,20 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
                     -- We call "Save" again just to read in the newly saved IDs (they were saved inside the anonymize routine)
                     local lStudyInstanceUIDModifier = lPatientIDModifier
                     local lSQLpidTemp, ldPatientIDAnonTemp, lSQLsiuidTemp, ldStudyInstanceUIDAnonTemp
-                    local lFlagNewPatientIDTemp, lSQLpidTemp, ldPatientIDAnonTemp = SavePatientIDsToDB(aoStudyMeta,lPatientIDModifier)
+                    -- local lFlagNewPatientIDTemp, lSQLpidTemp, ldPatientIDAnonTemp = SavePatientIDsToDB(aoStudyMeta,lPatientIDModifier)
+                    local lPostData = {}
+                    lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+                    if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+                    local lResults
+                    lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
+                    if lResults['status'] and  lResults['status'] > 0 then
+                        gSQLConn:rollback()
+                        CloseSQL()
+                        error(lResults['error_text'])
+                    end
+                    local lFlagNewPatientIDTemp = lResults['FlagPatientNewID']
+                    local lSQLpidTemp = lResults['SQLpid']
+                    local ldPatientIDAnonTemp = lResults['PatientIDAnon']
                     if lSQLpid[lPatientIDModifier] ~= lSQLpidTemp then
                         error('Unexpected mismatch when reading SQLpid')
                     end
@@ -3422,7 +3678,17 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
                             error('Unexpected mismatch when reading dPatientIDAnon')
                         end
                     end
-                    local lFlagNewStudyInstanceUIDTemp, lSQLsiuidTemp, ldStudyInstanceUIDAnonTemp = SaveStudyInstanceUIDToDB(aoStudyMeta,lSQLpidTemp,lStudyInstanceUIDModifier)
+                    -- local lFlagNewStudyInstanceUIDTemp, lSQLsiuidTemp, ldStudyInstanceUIDAnonTemp = SaveStudyInstanceUIDToDB(aoStudyMeta,lSQLpidTemp,lStudyInstanceUIDModifier)
+                    local lPostData = {}
+                    lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+                    lPostData['SQLpid'] = lSQLpidTemp
+                    if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
+                    local lResults
+                    lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
+                    if lResults['status'] then error(lResults['error_text']) end
+                    local lFlagNewStudyInstanceUIDTemp = lResults['FlagNewStudyInstanceUID']
+                    local lSQLsiuidTemp = lResults['SQLsiuid']
+                    local ldStudyInstanceUIDAnonTemp = lResults['StudyInstanceUIDAnon']
                     if lSQLsiuid[lPatientIDModifier] ~= lSQLsiuidTemp then
                         error('Unexpected mismatch when reading SQLsiuid')
                     end
@@ -3457,7 +3723,12 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
             lReplaceRoot['StudyID'] = string.sub(loStudyIDAnon,19,26) .. string.sub(loStudyIDAnon,28,35)
     
             -- Check for existing lShiftEpoch
-            local lShiftEpoch = LoadShiftEpochFromDB(lSQLpid[lPatientIDModifier])
+            -- local lShiftEpoch = LoadShiftEpochFromDB(lSQLpid[lPatientIDModifier])
+            local lPostData = {}
+            lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
+            local lStatus = ParseJson(RestApiPost('/load_shift_epoch_from_db_lua', DumpJson(lPostData), false))
+            if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
+            local lShiftEpoch = lStatus['ShiftEpoch']
 
             -- ------------------------------------------------
             -- Compute lShiftEpoch
@@ -3479,7 +3750,14 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
             end
 
             if lSaveShiftEpoch then
-                SaveShiftEpochToDB(lShiftEpoch,lSQLpid[lPatientIDModifier])
+                -- SaveShiftEpochToDB(lShiftEpoch,lSQLpid[lPatientIDModifier])
+                local lPostData = {}
+                lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
+                lPostData['ShiftEpoch'] = lShiftEpoch
+                local lStatus = ParseJson(RestApiPost('/save_shift_epoch_to_db_lua', DumpJson(lPostData), false))
+                if lStatus['status'] and lStatus['status'] > 0 then
+                    error('Problem saving ShiftEpoch to DB')
+                end
             end
 
             -- ------------------------------------------------
@@ -3495,8 +3773,18 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
             end -- loop over loInstancesAnonMeta
     
             -- Send to receiving modality
+            local lPostData = {}
+            lPostData['orthanc_instance_ids'] = {}
             for i, loInstanceID in pairs(loInstanceIDNew) do
-                local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
+                table.insert(lPostData['orthanc_instance_ids'], loInstanceID)
+            end
+            local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
+            if not lResults then
+               error('Problem calling send_instances_to_remote_filter_lua')
+            end 
+            -- for i, loInstanceID in pairs(loInstanceIDNew) do
+            for loInstanceID, lFlagSendToRemote in pairs(lResults) do
+                -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
                 if lFlagSendToRemote then
                     local dumby=3
                     if not lFlagForceAnon then
@@ -3527,7 +3815,9 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
         print(string.rep(' ',gIndent) .. 'Images sent to remote modalities') 
     end
     
-    UpdateLookupHTML()
+    -- UpdateLookupHTML()
+    if gVerbose then print(string.rep(' ',gIndent) .. 'Updating lookup table') end
+    RestApiGet('/update_lookup_table_html_lua', false)
     local ldPatientNameAnon = '.'
     if next(ldPatientNameAnonDict) then
         ldPatientNameAnon = ':'
@@ -3588,7 +3878,11 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
         local lFlagPreScreenSendToRemote = os.getenv('LUA_FLAG_PRESCREEN_ORIGINAL_PRIMARY') == 'true'
         if lFlagPreScreenSendToRemote then
             local lFlagDeleted, lNSeriesStart, lNSeriesDeleted
-            lFlagDeleted, lNSeriesStart, lNSeriesDeleted = PreScreenSendToRemote(aoStudyID) 
+            -- lFlagDeleted, lNSeriesStart, lNSeriesDeleted = PreScreenSendToRemote(aoStudyID) 
+            lResults = ParseJson(RestApiPost('/prescreen_send_to_remote_lua', DumpJson(aoStudyID), false))
+            lFlagDeleted = lResults['FlagDeleted']
+            lNSeriesStart = lResults['NSeriesStart']
+            lNSeriesDeleted = lResults['NSeriesDeleted']
             if lFlagDeleted then
                 loStudyMeta = nil
                 for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
@@ -3612,7 +3906,11 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
         local lFlagPreScreenByModality = os.getenv('LUA_FLAG_PRESCREEN_BY_MODALITY') == 'true'
         if lFlagPreScreenByModality then
             local lFlagDeleted, lNSeriesStart, lNSeriesDeleted
-            lFlagDeleted, lNSeriesStart, lNSeriesDeleted = PreScreenSeriesByModality(aoStudyID) 
+            -- lFlagDeleted, lNSeriesStart, lNSeriesDeleted = PreScreenSeriesByModality(aoStudyID) 
+            lResults = ParseJson(RestApiPost('/prescreen_send_to_remote_lua', DumpJson(aoStudyID), false))
+            lFlagDeleted = lResults['FlagDeleted']
+            lNSeriesStart = lResults['NSeriesStart']
+            lNSeriesDeleted = lResults['NSeriesDeleted']
             if lFlagDeleted then
                 loStudyMeta = nil
                 for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
@@ -3669,8 +3967,31 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
         -- StudyInstanceUID is only modified when anonymizing at the series level
         local lStudyInstanceUIDModifier = ''
         local lSQLpid, ldPatientIDAnon, lSQLsiuid, ldStudyInstanceUIDAnon
-        local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(loStudyMeta,lPatientIDModifier)
-        local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(loStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
+        -- local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(loStudyMeta,lPatientIDModifier)
+        local lPostData = {}
+        lPostData['OrthancStudyID'] = loStudyMeta['ID']
+        if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+        local lResults
+        lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
+        if lResults['status'] and lResults['status'] > 0 then
+            gSQLConn:rollback()
+            CloseSQL()
+            error(lResults['error_text'])
+        end
+        local lFlagNewPatientID = lResults['FlagPatientNewID']
+        local lSQLpid = lResults['SQLpid']
+        local ldPatientIDAnon = lResults['PatientIDAnon']
+        -- local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(loStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
+        local lPostData = {}
+        lPostData['OrthancStudyID'] = loStudyMeta['ID']
+        lPostData['SQLpid'] = lSQLpid
+        if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
+        local lResults
+        lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
+        if lResults['status'] then error(lResults['error_text']) end
+        local lFlagNewStudyInstanceUID = lResults['FlagNewStudyInstanceUID']
+        local lSQLsiuid = lResults['SQLsiuid']
+        local ldStudyInstanceUIDAnon = lResults['StudyInstanceUIDAnon']
 
         -- We're not going to bother anonymizing unless either a new patient or study
         local lFlagNonOriginalDetected = false
@@ -3695,7 +4016,12 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
             lReplaceRoot['StudyID'] = string.sub(loStudyIDAnon,19,26) .. string.sub(loStudyIDAnon,28,35)
     
             -- Check for existing lShiftEpoch
-            local lShiftEpoch = LoadShiftEpochFromDB(lSQLpid)
+            -- local lShiftEpoch = LoadShiftEpochFromDB(lSQLpid)
+            local lPostData = {}
+            lPostData['SQLpid'] = lSQLpid
+            local lStatus = ParseJson(RestApiPost('/load_shift_epoch_from_db_lua', DumpJson(lPostData), false))
+            if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
+            local lShiftEpoch = lStatus['ShiftEpoch']
 
             -- Compute lShiftEpoch
             if not lShiftEpoch then 
@@ -3704,7 +4030,14 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
                 -- Compute random shift up to one year
                 math.randomseed(os.time())
                 lShiftEpoch = math.floor(math.floor(math.random() * 365.0) * 24.0 * 3600.0)
-                SaveShiftEpochToDB(lShiftEpoch,lSQLpid)
+                -- SaveShiftEpochToDB(lShiftEpoch,lSQLpid)
+                local lPostData = {}
+                lPostData['SQLpid'] = lSQLpid
+                lPostData['ShiftEpoch'] = lShiftEpoch
+                local lStatus = ParseJson(RestApiPost('/save_shift_epoch_to_db_lua', DumpJson(lPostData), false))
+                if lStatus['status'] and lStatus['status'] > 0 then
+                    error('Problem saving ShiftEpoch to DB')
+                end
             end
 
             -- For some cases, we keep the dates, so lShiftEpoch=0
@@ -3726,8 +4059,18 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
             end -- loop over loInstancesAnonMeta
     
             -- Send to receiving modality
+            local lPostData = {}
+            lPostData['orthanc_instance_ids'] = {}
             for i, loInstanceID in pairs(loInstanceIDNew) do
-                local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
+                table.insert(lPostData['orthanc_instance_ids'], loInstanceID)
+            end
+            local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
+            if not lResults then
+               error('Problem calling send_instances_to_remote_filter_lua')
+            end 
+            -- for i, loInstanceID in pairs(loInstanceIDNew) do
+            for loInstanceID, lFlagSendToRemote in pairs(lResults) do
+                -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
                 if lFlagSendToRemote then
                     local dumby=3
                     if not lFlagForceAnon then
@@ -3740,7 +4083,9 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
                 end
             end
 
-            UpdateLookupHTML()
+            if gVerbose then print(string.rep(' ',gIndent) .. 'Updating lookup table') end
+            RestApiGet('/update_lookup_table_html_lua', false)
+            -- UpdateLookupHTML()
             if ldPatientNameAnon then
                 SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete:' .. ldPatientNameAnon)
             else
@@ -3806,7 +4151,7 @@ function ReAnonymizeStudy(aoStudyID)
     local lFlagSQLAlreadyOpen = gSQLOpen
     if not lFlagSQLAlreadyOpen then OpenSQL() end
     -- ConfirmLookupTablesSQL()
-    local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
+    local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql_lua', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
     if lStatus['error_text'] then
         error(lStatus['error_text'])
     end
@@ -3877,287 +4222,287 @@ end
 --     gIndent = nil
 -- 
 -- end
-
--- ======================================================
-function LoadPHI2AnonMap()
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local lFlagSQLAlreadyOpen = gSQLOpen
-    if not lFlagSQLAlreadyOpen then OpenSQL() end
-    -- ConfirmLookupTablesSQL()
-    local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
-    if lStatus['error_text'] then
-        error(lStatus['error_text'])
-    end
-
-    local lPatientMap = {}
-    local lPatientReverseMap = {}
-    lPatientReverseMap['Primary'] = {}
-    lPatientReverseMap['Secondary'] = {}
-    lPatientReverseMap['Both'] = {}
-
-    local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
-
-    -- Check for siuid2patientname_anon
-    lSQLQuery = [[SELECT table_name 
-                  FROM information_schema.tables 
-                  WHERE table_name='siuid2patientname_anon']]
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-    local lFlagSIUID2Anon
-    if not lSQLStatus then
-        lFlagSIUID2Anon = false
-    else
-        lFlagSIUID2Anon = true
-    end
-
-    -- Get PatientID 
-    lSQLQuery = [[SELECT pid,value 
-                  FROM patientid 
-                  WHERE parent_pid is NULL]]
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-    if not lSQLStatus then 
-        CloseSQL()
-        error("Problem querying pid, value")
-    end
-    if lSQLCursor:numrows() > 0 then
-        lSQLRow = lSQLCursor:fetch({}, "a")
-        while lSQLRow do
-            lPatientMap[lSQLRow.pid] = {}
-            lPatientMap[lSQLRow.pid]['PatientID'] = lSQLRow.value
-            lPatientMap[lSQLRow.pid]['OtherPatientIDs'] = {}
-            lPatientMap[lSQLRow.pid]['StudyInstanceUIDMap'] = {}
-            if lFlagSIUID2Anon then
-                lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'] = {}
-            end
-            lPatientReverseMap['Primary'][lSQLRow.value] = lSQLRow.pid
-            lPatientReverseMap['Both'][lSQLRow.value] = lSQLRow.pid
-            lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
-        end
-    end
-    lSQLQuery = [[SELECT parent_pid,value 
-                  FROM patientid 
-                  WHERE parent_pid is not NULL]]
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-    if not lSQLStatus then 
-        CloseSQL()
-        error("Problem querying pid, parent_pid")
-    end
-    if lSQLCursor:numrows() > 0 then
-        lSQLRow = lSQLCursor:fetch({}, "a")
-        while lSQLRow do
-            if lPatientMap[lSQLRow.parent_pid] then
-                table.insert(lPatientMap[lSQLRow.parent_pid]['OtherPatientIDs'],
-                             lSQLRow.value)
-                lPatientReverseMap['Secondary'][lSQLRow.value] = lSQLRow.parent_pid
-                lPatientReverseMap['Both'][lSQLRow.value] = lSQLRow.parent_pid
-            end
-            lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
-        end
-    end
-
-    lSQLQuery = [[SELECT value, pid 
-                  FROM patientid_anon]]
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-    if not lSQLStatus then 
-        CloseSQL()
-        error("Problem querying patientid_anon")
-    end
-    if lSQLCursor:numrows() > 0 then
-        lSQLRow = lSQLCursor:fetch({}, "a")
-        while lSQLRow do
-            if lPatientMap[lSQLRow.pid] then
-                lPatientMap[lSQLRow.pid]['PatientIDAnon'] = lSQLRow.value
-            end
-            lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
-        end
-    end
-
-    -- Get shift epoch
-    lSQLQuery = [[SELECT value, pid 
-                  FROM shiftepoch]]
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-    if not lSQLStatus then 
-        CloseSQL()
-        error("Problem querying shiftepoch")
-    end
-    if lSQLCursor:numrows() > 0 then
-        lSQLRow = lSQLCursor:fetch({}, "a")
-        while lSQLRow do
-            if lPatientMap[lSQLRow.pid] then
-                lPatientMap[lSQLRow.pid]['ShiftEpoch'] = lSQLRow.value
-            end
-            lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
-        end
-    end
-
-    -- Get internal number
-    lSQLQuery = [[SELECT value, pid FROM internalnumber]]
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-    if not lSQLStatus then 
-        CloseSQL()
-        error("Problem querying pid, parent_pid")
-    end
-    if lSQLCursor:numrows() > 0 then
-        lSQLRow = lSQLCursor:fetch({}, "a")
-        while lSQLRow do
-            if lPatientMap[lSQLRow.pid] then
-                lPatientMap[lSQLRow.pid]['InternalNumber'] = lSQLRow.value
-            end
-            lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
-        end
-    end
-
-    -- Gather study info
-    lSQLQuery = [[SELECT sphi.pid, sphi.value AS phivalue, sanon.value AS anonvalue  
-                  FROM studyinstanceuid sphi 
-                      INNER JOIN studyinstanceuid_anon sanon 
-                      ON sanon.siuid = sphi.siuid]]
-    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-    if not lSQLStatus then 
-        CloseSQL()
-        error("Problem querying studyinstanceuid")
-    end
-    if lSQLCursor:numrows() > 0 then
-        lSQLRow = lSQLCursor:fetch({}, "a")
-        while lSQLRow do
-            if lPatientMap[lSQLRow.pid] then
-                lPatientMap[lSQLRow.pid]['StudyInstanceUIDMap'][lSQLRow.phivalue] = lSQLRow.anonvalue
-            end
-            lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
-        end
-    end
-
-    if lFlagSIUID2Anon then
-
-        -- Gather patientname_anon info
-        lSQLQuery = [[SELECT sphi.pid, sphi.value AS phivalue, sanon.patientname_anon AS anonvalue  
-                      FROM studyinstanceuid sphi 
-                          INNER JOIN siuid2patientname_anon sanon 
-                          ON sanon.siuid = sphi.siuid]]
-        lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-        if not lSQLStatus then 
-            CloseSQL()
-            error("Problem querying studyinstanceuid")
-        end
-        if lSQLCursor:numrows() > 0 then
-            lSQLRow = lSQLCursor:fetch({}, "a")
-            while lSQLRow do
-                if lPatientMap[lSQLRow.pid] then
-                    if not lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'][lSQLRow.phivalue] then
-                        lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'][lSQLRow.phivalue] = {}
-                    end
-                    lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'][lSQLRow.phivalue][lSQLRow.anonvalue] = true
-                end
-                lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
-            end
-        end
-
-    end
-
-    if not lFlagSQLAlreadyOpen then CloseSQL() end
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    return lPatientMap, lPatientReverseMap, lFlagSIUID2Anon
-
-end
-
--- ======================================================
-function NowOnOrthanc()
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local lFlagSQLAlreadyOpen = gSQLOpen
-    if not lFlagSQLAlreadyOpen then OpenSQL() end
-    -- ConfirmLookupTablesSQL()
-    local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
-    if lStatus['error_text'] then
-        error(lStatus['error_text'])
-    end
-
-    local lPatients = ParseJson(RestApiGet('/patients', false))
-    local lPatientIDModifier = ''
-
-    local lFlagSplitScreenFromDiagnostic = os.getenv('LUA_FLAG_SPLIT_SCREEN_DIAG') == 'true'
-    local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
-    
-    local loSystemMeta = ParseJson(RestApiGet('/system', false))
-
-    local lNowOnOrthanc = {}
-    lNowOnOrthanc['ByPatientID'] = {}
-    lNowOnOrthanc['StudyInstanceUID2PatientID'] = {}
-    lNowOnOrthanc['PatientID2oPatientID'] = {}
-    lNowOnOrthanc['StudyUID2oStudyUID'] = {}
-    local lPatientIDTemp, lPatientID, lPatientIDModified
-    local lNumPatients = 0
-    for i, loPatientID in pairs(lPatients) do lNumPatients = lNumPatients+1 end
-    for i, loPatientID in pairs(lPatients) do
-        local lRowOfData = {}
-        -- local loPatientMeta = ParseJson(RestApiGet('/patients/' .. loPatientID .. '/shared-tags?simplify', false))
-        local loPatientMeta = ParseJson(RestApiGet('/patients/' .. loPatientID, false))
-        -- if gVerbose then print(string.rep(' ', gIndent+3) .. 'Orthanc patient query') end
-        -- local lPatientName = loPatientMeta['PatientName'] or ''
-        -- lPatientIDTemp = loPatientMeta['PatientID']
-        local lPatientName = loPatientMeta['MainDicomTags']['PatientName'] or ''
-        lPatientIDTemp = loPatientMeta['MainDicomTags']['PatientID']
-        lPatientID = lPatientIDTemp
-        -- Get PatientID from database
-        local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
-        lSQLQuery = string.format(
-                [[SELECT value FROM patientid WHERE pid IN (SELECT parent_pid FROM patientid WHERE value = '%s')]], 
-                gSQLConn:escape(lPatientIDTemp))
-        lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
-        if not lSQLStatus then 
-            CloseSQL()
-            error("Problem querying pid, value")
-        end
-        if lSQLCursor:numrows() > 0 then
-            lSQLRow = lSQLCursor:fetch({}, "a")
-            while lSQLRow do
-                lPatientID = lSQLRow.value
-                break
-            end
-        end
-        lRowOfData['PatientName'] = lPatientName
-        local loStudiesMeta = ParseJson(RestApiGet('/patients/' .. loPatientID .. '/studies', false))
-        lRowOfData['StudyDate'] = {}
-        lRowOfData['AccessionNumber'] = {}
-        lRowOfData['StudyInstanceUID'] = {}
-        local lAccessionNumber = {}
-        for j, loStudyMeta in pairs(loStudiesMeta) do
-            oStudyID = loStudyMeta['ID'] or ''
-            lPatientIDModifier = ''
-            if lFlagSplitScreenFromDiagnostic and (string.find(string.lower(lPatientName), string.lower(loSystemMeta['Name'])) == nil) then
-                -- lPatientIDModifier = SetScreenOrDiagnostic(oStudyID)
-                lPatientIDModifier = RestApiGet('/studies/' .. oStudyID .. '/set_screen_or_diagnostic', false)
-            end
-            if lFlagEveryAccessionAPatient and (string.find(string.lower(lPatientName), string.lower(loSystemMeta['Name'])) == nil) then 
-                lPatientIDModifier = '_' .. loStudyMeta['MainDicomTags']['AccessionNumber']
-            end
-            lPatientIDModified = lPatientID .. lPatientIDModifier
-            lNowOnOrthanc['PatientID2oPatientID'][lPatientIDModified] = loPatientID
-            lRowOfData['StudyDate'][j] = loStudyMeta['MainDicomTags']['StudyDate'] or ''
-            lRowOfData['AccessionNumber'][j] = loStudyMeta['MainDicomTags']['AccessionNumber'] or ''
-            lRowOfData['StudyInstanceUID'][j] = loStudyMeta['MainDicomTags']['StudyInstanceUID']
-            lNowOnOrthanc['StudyInstanceUID2PatientID'][lRowOfData['StudyInstanceUID'][j]] = lPatientIDModified
-            lNowOnOrthanc['StudyUID2oStudyUID'][lRowOfData['StudyInstanceUID'][j]] = oStudyID
-        end
-        lNowOnOrthanc['ByPatientID'][lPatientIDModified] = lRowOfData
-    end
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    return lNowOnOrthanc
-
-end
-
+-- 
+-- -- ======================================================
+-- function LoadPHI2AnonMap()
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local lFlagSQLAlreadyOpen = gSQLOpen
+--     if not lFlagSQLAlreadyOpen then OpenSQL() end
+--     -- ConfirmLookupTablesSQL()
+--     local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql_lua', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
+--     if lStatus['error_text'] then
+--         error(lStatus['error_text'])
+--     end
+-- 
+--     local lPatientMap = {}
+--     local lPatientReverseMap = {}
+--     lPatientReverseMap['Primary'] = {}
+--     lPatientReverseMap['Secondary'] = {}
+--     lPatientReverseMap['Both'] = {}
+-- 
+--     local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
+-- 
+--     -- Check for siuid2patientname_anon
+--     lSQLQuery = [[SELECT table_name 
+--                   FROM information_schema.tables 
+--                   WHERE table_name='siuid2patientname_anon']]
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--     local lFlagSIUID2Anon
+--     if not lSQLStatus then
+--         lFlagSIUID2Anon = false
+--     else
+--         lFlagSIUID2Anon = true
+--     end
+-- 
+--     -- Get PatientID 
+--     lSQLQuery = [[SELECT pid,value 
+--                   FROM patientid 
+--                   WHERE parent_pid is NULL]]
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--     if not lSQLStatus then 
+--         CloseSQL()
+--         error("Problem querying pid, value")
+--     end
+--     if lSQLCursor:numrows() > 0 then
+--         lSQLRow = lSQLCursor:fetch({}, "a")
+--         while lSQLRow do
+--             lPatientMap[lSQLRow.pid] = {}
+--             lPatientMap[lSQLRow.pid]['PatientID'] = lSQLRow.value
+--             lPatientMap[lSQLRow.pid]['OtherPatientIDs'] = {}
+--             lPatientMap[lSQLRow.pid]['StudyInstanceUIDMap'] = {}
+--             if lFlagSIUID2Anon then
+--                 lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'] = {}
+--             end
+--             lPatientReverseMap['Primary'][lSQLRow.value] = lSQLRow.pid
+--             lPatientReverseMap['Both'][lSQLRow.value] = lSQLRow.pid
+--             lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+--         end
+--     end
+--     lSQLQuery = [[SELECT parent_pid,value 
+--                   FROM patientid 
+--                   WHERE parent_pid is not NULL]]
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--     if not lSQLStatus then 
+--         CloseSQL()
+--         error("Problem querying pid, parent_pid")
+--     end
+--     if lSQLCursor:numrows() > 0 then
+--         lSQLRow = lSQLCursor:fetch({}, "a")
+--         while lSQLRow do
+--             if lPatientMap[lSQLRow.parent_pid] then
+--                 table.insert(lPatientMap[lSQLRow.parent_pid]['OtherPatientIDs'],
+--                              lSQLRow.value)
+--                 lPatientReverseMap['Secondary'][lSQLRow.value] = lSQLRow.parent_pid
+--                 lPatientReverseMap['Both'][lSQLRow.value] = lSQLRow.parent_pid
+--             end
+--             lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+--         end
+--     end
+-- 
+--     lSQLQuery = [[SELECT value, pid 
+--                   FROM patientid_anon]]
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--     if not lSQLStatus then 
+--         CloseSQL()
+--         error("Problem querying patientid_anon")
+--     end
+--     if lSQLCursor:numrows() > 0 then
+--         lSQLRow = lSQLCursor:fetch({}, "a")
+--         while lSQLRow do
+--             if lPatientMap[lSQLRow.pid] then
+--                 lPatientMap[lSQLRow.pid]['PatientIDAnon'] = lSQLRow.value
+--             end
+--             lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+--         end
+--     end
+-- 
+--     -- Get shift epoch
+--     lSQLQuery = [[SELECT value, pid 
+--                   FROM shiftepoch]]
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--     if not lSQLStatus then 
+--         CloseSQL()
+--         error("Problem querying shiftepoch")
+--     end
+--     if lSQLCursor:numrows() > 0 then
+--         lSQLRow = lSQLCursor:fetch({}, "a")
+--         while lSQLRow do
+--             if lPatientMap[lSQLRow.pid] then
+--                 lPatientMap[lSQLRow.pid]['ShiftEpoch'] = lSQLRow.value
+--             end
+--             lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+--         end
+--     end
+-- 
+--     -- Get internal number
+--     lSQLQuery = [[SELECT value, pid FROM internalnumber]]
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--     if not lSQLStatus then 
+--         CloseSQL()
+--         error("Problem querying pid, parent_pid")
+--     end
+--     if lSQLCursor:numrows() > 0 then
+--         lSQLRow = lSQLCursor:fetch({}, "a")
+--         while lSQLRow do
+--             if lPatientMap[lSQLRow.pid] then
+--                 lPatientMap[lSQLRow.pid]['InternalNumber'] = lSQLRow.value
+--             end
+--             lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+--         end
+--     end
+-- 
+--     -- Gather study info
+--     lSQLQuery = [[SELECT sphi.pid, sphi.value AS phivalue, sanon.value AS anonvalue  
+--                   FROM studyinstanceuid sphi 
+--                       INNER JOIN studyinstanceuid_anon sanon 
+--                       ON sanon.siuid = sphi.siuid]]
+--     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--     if not lSQLStatus then 
+--         CloseSQL()
+--         error("Problem querying studyinstanceuid")
+--     end
+--     if lSQLCursor:numrows() > 0 then
+--         lSQLRow = lSQLCursor:fetch({}, "a")
+--         while lSQLRow do
+--             if lPatientMap[lSQLRow.pid] then
+--                 lPatientMap[lSQLRow.pid]['StudyInstanceUIDMap'][lSQLRow.phivalue] = lSQLRow.anonvalue
+--             end
+--             lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+--         end
+--     end
+-- 
+--     if lFlagSIUID2Anon then
+-- 
+--         -- Gather patientname_anon info
+--         lSQLQuery = [[SELECT sphi.pid, sphi.value AS phivalue, sanon.patientname_anon AS anonvalue  
+--                       FROM studyinstanceuid sphi 
+--                           INNER JOIN siuid2patientname_anon sanon 
+--                           ON sanon.siuid = sphi.siuid]]
+--         lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--         if not lSQLStatus then 
+--             CloseSQL()
+--             error("Problem querying studyinstanceuid")
+--         end
+--         if lSQLCursor:numrows() > 0 then
+--             lSQLRow = lSQLCursor:fetch({}, "a")
+--             while lSQLRow do
+--                 if lPatientMap[lSQLRow.pid] then
+--                     if not lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'][lSQLRow.phivalue] then
+--                         lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'][lSQLRow.phivalue] = {}
+--                     end
+--                     lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'][lSQLRow.phivalue][lSQLRow.anonvalue] = true
+--                 end
+--                 lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+--             end
+--         end
+-- 
+--     end
+-- 
+--     if not lFlagSQLAlreadyOpen then CloseSQL() end
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     return lPatientMap, lPatientReverseMap, lFlagSIUID2Anon
+-- 
+-- end
+-- 
+-- -- ======================================================
+-- function NowOnOrthanc()
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local lFlagSQLAlreadyOpen = gSQLOpen
+--     if not lFlagSQLAlreadyOpen then OpenSQL() end
+--     -- ConfirmLookupTablesSQL()
+--     local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql_lua', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
+--     if lStatus['error_text'] then
+--         error(lStatus['error_text'])
+--     end
+-- 
+--     local lPatients = ParseJson(RestApiGet('/patients', false))
+--     local lPatientIDModifier = ''
+-- 
+--     local lFlagSplitScreenFromDiagnostic = os.getenv('LUA_FLAG_SPLIT_SCREEN_DIAG') == 'true'
+--     local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
+--     
+--     local loSystemMeta = ParseJson(RestApiGet('/system', false))
+-- 
+--     local lNowOnOrthanc = {}
+--     lNowOnOrthanc['ByPatientID'] = {}
+--     lNowOnOrthanc['StudyInstanceUID2PatientID'] = {}
+--     lNowOnOrthanc['PatientID2oPatientID'] = {}
+--     lNowOnOrthanc['StudyUID2oStudyUID'] = {}
+--     local lPatientIDTemp, lPatientID, lPatientIDModified
+--     local lNumPatients = 0
+--     for i, loPatientID in pairs(lPatients) do lNumPatients = lNumPatients+1 end
+--     for i, loPatientID in pairs(lPatients) do
+--         local lRowOfData = {}
+--         -- local loPatientMeta = ParseJson(RestApiGet('/patients/' .. loPatientID .. '/shared-tags?simplify', false))
+--         local loPatientMeta = ParseJson(RestApiGet('/patients/' .. loPatientID, false))
+--         -- if gVerbose then print(string.rep(' ', gIndent+3) .. 'Orthanc patient query') end
+--         -- local lPatientName = loPatientMeta['PatientName'] or ''
+--         -- lPatientIDTemp = loPatientMeta['PatientID']
+--         local lPatientName = loPatientMeta['MainDicomTags']['PatientName'] or ''
+--         lPatientIDTemp = loPatientMeta['MainDicomTags']['PatientID']
+--         lPatientID = lPatientIDTemp
+--         -- Get PatientID from database
+--         local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
+--         lSQLQuery = string.format(
+--                 [[SELECT value FROM patientid WHERE pid IN (SELECT parent_pid FROM patientid WHERE value = '%s')]], 
+--                 gSQLConn:escape(lPatientIDTemp))
+--         lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+--         if not lSQLStatus then 
+--             CloseSQL()
+--             error("Problem querying pid, value")
+--         end
+--         if lSQLCursor:numrows() > 0 then
+--             lSQLRow = lSQLCursor:fetch({}, "a")
+--             while lSQLRow do
+--                 lPatientID = lSQLRow.value
+--                 break
+--             end
+--         end
+--         lRowOfData['PatientName'] = lPatientName
+--         local loStudiesMeta = ParseJson(RestApiGet('/patients/' .. loPatientID .. '/studies', false))
+--         lRowOfData['StudyDate'] = {}
+--         lRowOfData['AccessionNumber'] = {}
+--         lRowOfData['StudyInstanceUID'] = {}
+--         local lAccessionNumber = {}
+--         for j, loStudyMeta in pairs(loStudiesMeta) do
+--             oStudyID = loStudyMeta['ID'] or ''
+--             lPatientIDModifier = ''
+--             if lFlagSplitScreenFromDiagnostic and (string.find(string.lower(lPatientName), string.lower(loSystemMeta['Name'])) == nil) then
+--                 -- lPatientIDModifier = SetScreenOrDiagnostic(oStudyID)
+--                 lPatientIDModifier = RestApiGet('/studies/' .. oStudyID .. '/set_screen_or_diagnostic', false)
+--             end
+--             if lFlagEveryAccessionAPatient and (string.find(string.lower(lPatientName), string.lower(loSystemMeta['Name'])) == nil) then 
+--                 lPatientIDModifier = '_' .. loStudyMeta['MainDicomTags']['AccessionNumber']
+--             end
+--             lPatientIDModified = lPatientID .. lPatientIDModifier
+--             lNowOnOrthanc['PatientID2oPatientID'][lPatientIDModified] = loPatientID
+--             lRowOfData['StudyDate'][j] = loStudyMeta['MainDicomTags']['StudyDate'] or ''
+--             lRowOfData['AccessionNumber'][j] = loStudyMeta['MainDicomTags']['AccessionNumber'] or ''
+--             lRowOfData['StudyInstanceUID'][j] = loStudyMeta['MainDicomTags']['StudyInstanceUID']
+--             lNowOnOrthanc['StudyInstanceUID2PatientID'][lRowOfData['StudyInstanceUID'][j]] = lPatientIDModified
+--             lNowOnOrthanc['StudyUID2oStudyUID'][lRowOfData['StudyInstanceUID'][j]] = oStudyID
+--         end
+--         lNowOnOrthanc['ByPatientID'][lPatientIDModified] = lRowOfData
+--     end
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     return lNowOnOrthanc
+-- 
+-- end
+-- 
 -- -- ======================================================
 -- function LoadLookupTable(aFileLookup,aMakeBackup)
 -- 
@@ -4236,689 +4581,699 @@ end
 --     
 -- end
 -- 
--- ======================================================
-function LoadLookupTableFast(aFileLookup, aMakeBackup)
-
-    -- I'm going to hard code the lookup location just in case someone gets the idea to escape the execute statement and wreak havoc
-    local lFileLookup = "/media/html/lookup/master/lookuptable.html"
-    local lTempFile = os.tmpname()
-    -- local lCommand = "sed 's/&nbsp//g' " .. aFileLookup .. " | html2text -nobs -width 2048 | grep \"|\" | sed 's/_//g'" .. " > " .. lTempFile
-    local lCommand = "sed 's/&nbsp//g' " .. lFileLookup .. " | html2text -nobs -width 2048 | grep \"|\" | sed 's/_/ /g'" .. " > " .. lTempFile
-    local lResult = os.execute(lCommand)
-    if lResult == 1 then
-        return nil
-    end
-
-    local lLun = io.open(lTempFile,"r")
-    if lLun == nil then
-        return nil
-    end
-    lLun:close()
-
-    local lLun = io.open(lFileLookup,"r")
-    if lLun == nil then
-        return nil
-    end
-    lLun:close()
-
-    if aMakeBackup then
-        -- local lLun = assert(io.open(aFileLookup,"r"))
-        local lLun = assert(io.open(lFileLookup,"r"))
-        local lFileData = lLun:read("*all")
-        lLun:close()
-        -- local lOut = assert(io.open(aFileLookup .. "." .. os.date("%Y%m%d%H%M%S"),"w"))
-        local lOut = assert(io.open(lFileLookup .. "." .. os.date("%Y%m%d%H%M%S"),"w"))
-        lOut:write(lFileData)
-        lOut:close()
-    end
-
-    local lLines = {}
-    for lLine in io.lines(lTempFile) do
-        lLines[#lLines + 1] = lLine
-    end
-    if not os.remove(lTempFile) then
-       return nil
-    end
-
-    local lLookupTable = {}
-    local lDataKeys = {}
-    local lIndexCol = 1
-    for lHeader in string.gmatch(string.sub(lLines[1],2,-1),"([^|]*)|") do
-        lDataKeys[lIndexCol] = trim(lHeader)
-        lIndexCol = lIndexCol + 1
-        lLookupTable[trim(lHeader)] = {}
-    end
-
-    local lIndexRow = 1
-    for i = 2, #lLines do
-        local lRow = string.sub(lLines[i],2,-1)
-        local lIndexCol = 1
-        for lColumnStripped in string.gmatch(lRow, "([^|]*)|") do
-            local lEntry = nil
-            if string.match(trim(lColumnStripped),",") then
-                local lIndexEntry = 1
-                lEntry = {}
-                local lSingleEntry
-                for lSingleEntry in string.gmatch(trim(lColumnStripped), "([^,]*)[,%s]*") do
-                    if string.match(lSingleEntry,"[^%s]+") then
-                        lEntry[lIndexEntry] = lSingleEntry
-                        lIndexEntry = lIndexEntry + 1
-                    end
-                end
-                if lIndexEntry < 2 then
-                    lEntry = nil
-                end
-            else
-                if string.len(trim(lColumnStripped)) > 0 then
-                    lEntry = trim(lColumnStripped)
-                end
-            end
-            if lEntry then
-                lLookupTable[lDataKeys[lIndexCol]][lIndexRow] = lEntry
-            else
-                lLookupTable[lDataKeys[lIndexCol]][lIndexRow] = 'BLANK'
-            end
-            lIndexCol = lIndexCol + 1
-        end
-        lIndexRow = lIndexRow + 1
-    end
-
-    return lLookupTable
-
-end
-
--- ======================================================
-function FindPACSInLookupTableFromSIUID(aLookupTable,aStudyInstanceUID)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    gIndent = gIndent + 3
-    -- if gVerbose then print(string.rep(' ', gIndent) .. 'Scanning existing lookup table') end
-    local lRow, lFound
-    for lRowTemp, lStudyInstanceUIDs in pairs(aLookupTable['StudyInstanceUID']) do 
-        lFound = false
-        lRow = lRowTemp
-        if type(lStudyInstanceUIDs) == 'table' then
-            for lCol, lStudyInstanceUID in ipairs(lStudyInstanceUIDs) do
-                lFound = lStudyInstanceUID == aStudyInstanceUID
-                if lFound then break end
-            end
-        else
-            lFound = lStudyInstanceUIDs == aStudyInstanceUID
-        end
-        if lFound then break end
-    end
-    gIndent = gIndent - 3
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    if not lFound then return nil,nil end
-
-    local lPACSData = nil
-    if aLookupTable['Name'][lRow] then
-        local lPatientName = nil
-        if type(aLookupTable['Name'][lRow]) == 'table' then
-            lPatientName = table.concat(aLookupTable['Name'][lRow],',')
-        else
-            lPatientName = aLookupTable['Name'][lRow]
-        end
-        if lPatientName and (lPatientName ~= 'BLANK') then
-            if not lPACSData then lPACSData = {} end
-            lPACSData['0010,0010'] = {}
-            lPACSData['0010,0010']['Value'] = lPatientName
-        end
-    end
-    if aLookupTable['PatientID'][lRow] then
-        local lPatientID = nil
-        if type(aLookupTable['PatientID'][lRow]) == 'table' then
-            lPatientID = table.concat(aLookupTable['PatientID'][lRow],',')
-        else
-            lPatientID = aLookupTable['PatientID'][lRow]
-        end
-        if lPatientID and (lPatientID ~= 'BLANK') then
-            if not lPACSData then lPACSData = {} end
-            lPACSData['0010,0020'] = {}
-            lPACSData['0010,0020']['Value'] = lPatientID
-        end
-    end
-    if aLookupTable['Date'][lRow] then
-        local lStudyDate = nil
-        if type(aLookupTable['Date'][lRow]) == 'table' then
-            lStudyDate = table.concat(aLookupTable['Date'][lRow],',')
-        else
-            lStudyDate = aLookupTable['Date'][lRow]
-        end
-        if lStudyDate and (lStudyDate ~= 'BLANK') then
-            local lAnonDate = nil
-            if aLookupTable['Anon Date'] then
-                if type(aLookupTable['Anon Date'][lRow]) == 'table' then
-                    lAnonDate = table.concat(aLookupTable['Anon Date'][lRow],',')
-                else
-                    lAnonDate = aLookupTable['Anon Date'][lRow]
-                end
-            else
-                lAnonDate = 'BLANK'
-            end
-            if not lPACSData then lPACSData = {} end
-            lPACSData['0008,0020'] = {}
-            lPACSData['0008,0020']['Value'] = lStudyDate
-            if lAnonDate and (lAnonDate ~= 'BLANK') then
-                lPACSData['AnonDate'] = lAnonDate
-            end
-        end
-    end
-    if aLookupTable['Accession'][lRow] then
-        local lAccession = nil
-        if type(aLookupTable['Accession'][lRow]) == 'table' then
-            lAccession = table.concat(aLookupTable['Accession'][lRow],',')
-        else
-            lAccession = aLookupTable['Accession'][lRow]
-        end
-        if lAccession and (lAccession ~= 'BLANK') then
-            if not lPACSData then lPACSData = {} end
-            lPACSData['0008,0050'] = {}
-            lPACSData['0008,0050']['Value'] = lAccession
-        end
-    end
-
-    if not lPACSData then
-        lFound = nil
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Subject not in lookup table') end
-    else
-        lFound = true
-        -- if gVerbose then print(string.rep(' ', gIndent) .. 'Subject in lookup table') end
-    end
-    gIndent = gIndent - 3
-    if gIndent > 0 then gIndent = gIndent - 3 end
- 
-    return lPACSData, lFound 
-
-end
-
--- ======================================================
-function FindPACSInLookupTableFromPatientID(aLookupTable,aPatientID)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    gIndent = gIndent + 3
-    -- if gVerbose then print(string.rep(' ', gIndent) .. 'Scanning existing lookup table') end
-    local lRow, lFound
-    for lRowTemp, lPatientIDs in pairs(aLookupTable['PatientID']) do 
-        lFound = false
-        lRow = lRowTemp
-        if type(lPatientIDs) == 'table' then
-            for lCol, lPatientID in ipairs(lPatientIDs) do
-                lFound = lPatientID == aPatientID
-                if lFound then break end
-            end
-        else
-            lFound = lPatientIDs == aPatientID
-        end
-        if lFound then break end
-    end
-
-    gIndent = gIndent - 3
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    if not lFound then return nil,nil end
-
-    local lPACSData = nil
-    if aLookupTable['Name'][lRow] then
-        local lPatientName = nil
-        if type(aLookupTable['Name'][lRow]) == 'table' then
-            lPatientName = table.concat(aLookupTable['Name'][lRow],',')
-        else
-            lPatientName = aLookupTable['Name'][lRow]
-        end
-        if lPatientName and (lPatientName ~= 'BLANK') then
-            if not lPACSData then lPACSData = {} end
-            lPACSData['0010,0010'] = {}
-            lPACSData['0010,0010']['Value'] = lPatientName
-        end
-    end
-    if aLookupTable['PatientID'][lRow] then
-        local lPatientID = nil
-        if type(aLookupTable['PatientID'][lRow]) == 'table' then
-            lPatientID = table.concat(aLookupTable['PatientID'][lRow],',')
-        else
-            lPatientID = aLookupTable['PatientID'][lRow]
-        end
-        if lPatientID and (lPatientID ~= 'BLANK') then
-            if not lPACSData then lPACSData = {} end
-            lPACSData['0010,0020'] = {}
-            lPACSData['0010,0020']['Value'] = lPatientID
-        end
-    end
-    if aLookupTable['Date'][lRow] then
-        local lStudyDate = nil
-        if type(aLookupTable['Date'][lRow]) == 'table' then
-            lStudyDate = table.concat(aLookupTable['Date'][lRow],',')
-        else
-            lStudyDate = aLookupTable['Date'][lRow]
-        end
-        if lStudyDate and (lStudyDate ~= 'BLANK') then
-            local lAnonDate = nil
-            if aLookupTable['Anon Date'] then
-                if type(aLookupTable['Anon Date'][lRow]) == 'table' then
-                    lAnonDate = table.concat(aLookupTable['Anon Date'][lRow],',')
-                else
-                    lAnonDate = aLookupTable['Anon Date'][lRow]
-                end
-            else
-                lAnonDate = 'BLANK'
-            end
-            if not lPACSData then lPACSData = {} end
-            lPACSData['0008,0020'] = {}
-            lPACSData['0008,0020']['Value'] = lStudyDate
-            if lAnonDate and (lAnonDate ~= 'BLANK') then
-                lPACSData['AnonDate'] = lAnonDate
-            end
-        end
-    end
-    if aLookupTable['Accession'][lRow] then
-        local lAccession = nil
-        if type(aLookupTable['Accession'][lRow]) == 'table' then
-            lAccession = table.concat(aLookupTable['Accession'][lRow],',')
-        else
-            lAccession = aLookupTable['Accession'][lRow]
-        end
-        if lAccession and (lAccession ~= 'BLANK') then
-            if not lPACSData then lPACSData = {} end
-            lPACSData['0008,0050'] = {}
-            lPACSData['0008,0050']['Value'] = lAccession
-        end
-    end
-
-    if not lPACSData then
-        lFound = nil
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Subject not in lookup table') end
-    else
-        lFound = true
-        if gVerbose then print(string.rep(' ', gIndent) .. 'Subject in lookup table') end
-    end
- 
-    gIndent = gIndent - 3
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    return lPACSData, lFound 
-
-end
-
--- ======================================================
-function UpdateLookupHTML()
-
-    local lFlagKeepOriginalDates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES') == 'true'
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local lPatientMap, lPatientReverseMap, lFlagSIUID2Anon
-    lPatientMap, lPatientReverseMap, lFlagSIUID2Anon = LoadPHI2AnonMap()
-    local lNowOnOrthanc = NowOnOrthanc()
-
-    -- Check for the main modality that could be queried
-    local lFlagXRefModality=false
-    local lXRefModality=nil
-    if os.getenv('LUA_XREF_MODALITY') then
-        for _, lModality in pairs(ParseJson(RestApiGet('/modalities', false))) do
-            if lModality == os.getenv('LUA_XREF_MODALITY') then
-                lFlagXRefModality = true
-                lXRefModality = lModality
-                break
-            end
-        end  
-    end
-    if lFlagXRefModality then
-        if gVerbose then print(string.rep(' ', gIndent+3) .. 'FlagXRefModality=1') end
-    else
-        if gVerbose then print(string.rep(' ', gIndent+3) .. 'FlagXRefModality=1') end
-    end
-
-    -- Check for existing lookup table
-    local lFileLookup = "/media/html/lookup/master/lookuptable.html"
-    local lBackup = true
-    -- local lLookupTable = LoadLookupTable(lFileLookup,lBackup)
-    local lLookupTable = LoadLookupTableFast(lFileLookup,lBackup)
-
-    -- Prepare to output the new
-    file_out = io.open(lFileLookup, "w")
-    io.output(file_out)
-
-    io.write('<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">\n')
-    io.write('<head>\n')
-    io.write('<link rel="stylesheet" href="style.css" type="text/css" id="" media="print, projection, screen" />\n')
-    io.write('<link rel="stylesheet" href="theme.blue.min.css">\n')
-    io.write('<script type="text/javascript" src="../../../app/libs/jquery.min.js"></script>\n')
-    io.write('<script type="text/javascript" src="jquery.tablesorter.combined.min.js"></script>\n')
-    io.write('<script type="text/javascript">\n')
-    io.write('$(document).ready(function() { \n')
-    io.write('    // call the tablesorter plugin \n')
-    io.write('    $("table").tablesorter({\n')
-    io.write('        theme: "blue",\n')
-    io.write('        widgets: ["zebra", "filter"],\n')
-    io.write('        widgetOptions : {\n')
-    io.write('            filter_columnFilters: true,\n')
-    io.write('            filter_reset: ".reset",\n')
-    io.write('            zebra : [ "normal-row", "alt-row" ]\n')
-    io.write('        },\n')
-    io.write('        sortList : [[2,0]]\n')
-    io.write('    }); \n')
-    io.write('}); \n')
-    io.write('</script>\n')
-    io.write('</head>\n')
-    
-    io.write('<body>\n')
-    io.write('<a href="../../../app/explorer.html">Return to Orthanc home page</a></br>')
-    io.write('Click a column heading to sort.</br>')
-    io.write('Click <a href="updatelookup.html">here</a> to force an update of this table.</br>\n')
-    io.write('<!-- targeted by the "filter_reset" option -->\n')
-    io.write('<button type="button" class="reset">Reset Search</button>\n')
-    io.write('<table class="tablesorter-blue" border=1>\n')
-    io.write('<thead>\n')
-    io.write('<tr>\n')
-    io.write('<th>Name</th>\n')
-    io.write('<th>PatientID</th>\n')
-    io.write('<th>ID</th>\n')
-    if lFlagSIUID2Anon then
-        io.write('<th>Name Anon</th>\n')
-    end
-    io.write('<th>Date</th>\n')
-    io.write('<th>Anon Date</th>\n')
-    io.write('<th>Accession</th>\n')
-    io.write('<th>Alt PatientID</th>\n')
-    io.write('<th>Anon PatientID</th>\n')
-    io.write('<th>StudyInstanceUID</th>\n')
-    io.write('<th>Anon StudyInstanceUID</th>\n')
-    io.write('</tr>\n')
-    io.write('</thead>\n')
-    io.write('<tbody>\n')
-    local lPatientIDShort, lPostData, lPostResult
-    for lPatientID, lPID in pairs(lPatientReverseMap['Primary']) do
-
-        local lShiftEpoch
-        if lFlagKeepOriginalDates then
-           lShiftEpoch = 0
-        else 
-           lShiftEpoch = lPatientMap[lPID]['ShiftEpoch']
-        end
-        if string.sub(lPatientID, -3) == 'n2d' then
-            lPatientIDShort = string.sub(lPatientID,1,string.find(lPatientID,'n2d')-1)
-        elseif string.sub(lPatientID, -2) == '2d' then
-            lPatientIDShort = string.sub(lPatientID,1,string.find(lPatientID,'2d')-1)
-        else
-            lPatientIDShort = lPatientID
-        end
-
-        local lStudyInstanceUIDPrinted = {}
-        if lNowOnOrthanc['ByPatientID'][lPatientID] then
-
-            -- if gVerbose then print(string.rep(' ', gIndent) .. 'Now on orthanc: ' .. lPID) end
-            for j, lDate in pairs(lNowOnOrthanc['ByPatientID'][lPatientID]['StudyDate']) do 
-                lStudyInstanceUIDPrinted[lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]] = true
-                io.write('<tr>\n')
-                io.write('<td>\n')
-                io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientID] .. '">\n')
-                io.write(lNowOnOrthanc['ByPatientID'][lPatientID]['PatientName'])
-                io.write('</a>\n')
-                io.write('</td>\n')
-                io.write('<td align="right">' .. lPatientIDShort .. '</td>\n')
-                io.write('<td align="right">\n')
-                if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
-                    io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientMap[lPID]['PatientIDAnon']] .. '">\n')
-                end
-                io.write(lPatientMap[lPID]['InternalNumber'])
-                if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
-                    io.write('</a>\n')
-                end
-                io.write('</td>\n')
-                if lFlagSIUID2Anon then
-                    if lPatientMap[lPID]['SIUID2NameAnonMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID']] then
-                        io.write('<td>\n')
-                        for k, _ in pairs(lPatientMap[lPID]['SIUID2NameAnonMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID']]) do
-                            io.write(k .. ', ')
-                        end
-                        io.write('</td>\n')
-                    else
-                        io.write('<td>&nbsp</td>\n')
-                    end
-                end
-                io.write('<td align="center">' .. lDate .. '</td>\n')
-                if lFlagKeepOriginalDates or not lShiftEpoch then
-                    if lFlagKeepOriginalDates then
-                        io.write('<td align="center">' .. lDate .. '</td>\n')
-                    else
-                        io.write('<td align="center">&nbsp</td>\n')
-                    end
-                else
-                    local lNewDateString = ShiftDateTimeString(lShiftEpoch, lDate)
-                    io.write('<td align="center">' .. lNewDateString .. '</td>\n')
-                end
-                io.write('<td align="right">' .. lNowOnOrthanc['ByPatientID'][lPatientID]['AccessionNumber'][j] .. '</td>\n')
-                io.write('<td>\n')
-                for k, lAltPID in pairs(lPatientMap[lPID]['OtherPatientIDs']) do 
-                    io.write(lAltPID .. ', \n')
-                end
-                io.write('</td>\n')
-                io.write('<td align="center">\n')
-                if lPatientMap[lPID]['PatientIDAnon'] then
-                    if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
-                        io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientMap[lPID]['PatientIDAnon']] .. '">\n')
-                    end
-                    io.write(lPatientMap[lPID]['PatientIDAnon'])
-                    if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
-                        io.write('</a>\n')
-                    end
-                else
-                    io.write('&nbsp')
-                end
-                io.write('</td>\n')
-                io.write('<td align="right">\n')
-                io.write('<a href="../../../app/explorer.html#study?uuid=' .. lNowOnOrthanc['StudyUID2oStudyUID'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]] .. '">\n')
-                io.write(lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j])
-                io.write('</a>\n')
-                io.write('</td>\n')
-                io.write('<td align="right">\n')
-                if lNowOnOrthanc['StudyUID2oStudyUID'][lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]]] then
-                    io.write('<a href="../../../app/explorer.html#study?uuid=' .. lNowOnOrthanc['StudyUID2oStudyUID'][lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]]] .. '">\n')
-                end
-                if lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]] then
-                    io.write(lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]])
-                else
-                    io.write('')
-                end
-                if lNowOnOrthanc['StudyUID2oStudyUID'][lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]]] then
-                    io.write('</a>\n')
-                end
-                io.write('</td>\n')
-                io.write('</tr>\n')
-            end
-        end
-        for lStudyInstanceUID, lStudyInstanceUIDAnon in pairs(lPatientMap[lPID]['StudyInstanceUIDMap']) do
-            -- if gVerbose then print(string.rep(' ', gIndent) .. 'With studies: ' .. lPID) end
-            if not lStudyInstanceUIDPrinted[lStudyInstanceUID] then
-                local lPACSData = nil
-                local lLookupMatch = false
-                if lLookupTable then
-                    lPACSData, lLookupMatch = FindPACSInLookupTableFromSIUID(lLookupTable,lStudyInstanceUID)
-                    if not lPACSData then
-                        if gVerbose then print('Not found in lookup: ' .. lStudyInstanceUID) end
-                    end
-                end
-                if lFlagXRefModality and (not lPACSData) and (not string.match(lPatientMap[lPID]['PatientID'], '[^0-9]')) then
-                    local lPatientIDList = {}
-                    table.insert(lPatientIDList, lPatientMap[lPID]['PatientID'])
-                    if next(lPatientMap[lPID]['OtherPatientIDs']) then
-                        local lOtherPatientID
-                        for _, lOtherPatientID in pairs(lPatientMap[lPID]['OtherPatientIDs']) do
-                            if not string.match(lOtherPatientID, '[^0-9]') then
-                                table.insert(lPatientIDList, lOtherPatientID)
-                            end
-                        end
-                    end
-                    for _, lOtherPatientID in pairs(lPatientIDList) do 
-                        lPostData = {}
-                        lPostData['Level'] = 'Study'
-                        lPostData['Query'] = {}
-                        lPostData['Query']['StudyInstanceUID'] = lStudyInstanceUID
-                        lPostData['Query']['PatientID'] = lOtherPatientID
-                        lPostResult = ParseJson(RestApiPost('/modalities/' .. lXRefModality .. '/query', DumpJson(lPostData,true), false))
-                        if lPostResult['ID'] then
-                            local lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'], false))
-                            if lQuery[1] == "answers" then
-                                lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers', false))
-                                if lQuery[1] == "0" then
-                                    lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0', false))
-                                    if lQuery[1] == "content" then
-                                        lPACSData = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0/content', false))
-                                        if lPACSData then
-                                            break
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                    if not lPACSData then
-                        for _, lOtherPatientID in pairs(lPatientIDList) do 
-                            lPostData = {}
-                            lPostData['Level'] = 'Patient'
-                            lPostData['Query'] = {}
-                            lPostData['Query']['PatientID'] = lOtherPatientID
-                            lPostResult = ParseJson(RestApiPost('/modalities/' .. lXRefModality .. '/query', DumpJson(lPostData,true), false))
-                            if lPostResult['ID'] then
-                                local lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'], false))
-                                if lQuery[1] == "answers" then
-                                    lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers', false))
-                                    if lQuery[1] == "0" then
-                                        lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0', false))
-                                        if lQuery[1] == "content" then
-                                            lPACSData = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0/content', false))
-                                            if lPACSData then
-                                                break
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-                io.write('<tr>\n')
-                if lPACSData then
-                    if lPACSData['0010,0010'] then
-                        io.write('<td>' .. lPACSData['0010,0010']['Value'] .. '</td>\n')
-                    else
-                        io.write('<td>&nbsp</td>\n')
-                    end
-                else
-                    io.write('<td>&nbsp</td>\n')
-                end
-                if lPACSData then
-                    if lPACSData['0010,0020'] then
-                        io.write('<td>' .. lPACSData['0010,0020']['Value'] .. '</td>\n')
-                    else
-                        io.write('<td>&nbsp</td>\n')
-                    end
-                else
-                    io.write('<td align="right">' .. lPatientIDShort .. '</td>\n')
-                end
-                io.write('<td align="right">\n')
-                if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
-                    io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientMap[lPID]['PatientIDAnon']] .. '">\n')
-                end
-                if lPatientMap[lPID]['InternalNumber'] then
-                    io.write(lPatientMap[lPID]['InternalNumber'])
-                else
-                    io.write('')
-                end
-                if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
-                    io.write('</a>\n')
-                end
-                io.write('</td>\n')
-                if lFlagSIUID2Anon then
-                    if lPatientMap[lPID]['SIUID2NameAnonMap'][lStudyInstanceUID] then
-                        io.write('<td>\n')
-                        for k, _ in pairs(lPatientMap[lPID]['SIUID2NameAnonMap'][lStudyInstanceUID]) do
-                            io.write(k .. ', ')
-                        end
-                        io.write('</td>\n')
-                    else
-                        io.write('<td>&nbsp</td>\n')
-                    end
-                end
-                if lPACSData then
-                    if lPACSData['0008,0020'] then
-                        io.write('<td>' .. lPACSData['0008,0020']['Value'] .. '</td>\n')
-                        if lFlagKeepOriginalDates or not lShiftEpoch then
-                            if lFlagKeepOriginalDates then
-                                io.write('<td>' .. lPACSData['0008,0020']['Value'] .. '</td>\n')
-                            else
-                                io.write('<td>&nbsp</td>\n')
-                            end
-                        else
-                            local lNewDateString
-                            if (not lLookupMatch) or (lLookupTable and (not lPACSData['AnonDate']) and (lPACSData['0008,0020']['Value'] ~= 'NotInPACS')) then
-                                lNewDateString = ShiftDateTimeString(lShiftEpoch,lPACSData['0008,0020']['Value'])
-                            else
-                                lNewDateString = lPACSData['AnonDate'] or 'BLANK'
-                            end
-                            io.write('<td>' .. lNewDateString .. '</td>\n')
-                        end
-                    else
-                        io.write('<td>NotInPACS</td>\n')
-                        io.write('<td>&nbsp</td>\n')
-                    end
-                else
-                    io.write('<td>NotInPACS</td>\n')
-                    io.write('<td>&nbsp</td>\n')
-                end
-                if lPACSData then
-                    if lPACSData['0008,0050'] then
-                        io.write('<td>' .. lPACSData['0008,0050']['Value'] .. '</td>\n')
-                    else
-                        io.write('<td>NotInPACS</td>\n')
-                    end
-                else
-                    io.write('<td>NotInPACS</td>\n')
-                end
-                io.write('<td>\n')
-                for k, lAltPID in pairs(lPatientMap[lPID]['OtherPatientIDs']) do 
-                    io.write(lAltPID .. ', \n')
-                end
-                if lPACSData then
-                    if lPACSData['0010,0020'] then
-                        if lPACSData['0010,0020']['Value'] ~= lPatientIDShort then
-                            io.write(lPatientIDShort)
-                        end
-                    end
-                end
-                io.write('</td>\n')
-                if lPatientMap[lPID]['PatientIDAnon'] then
-                    io.write('<td align="center">' .. lPatientMap[lPID]['PatientIDAnon'] .. '</td>\n')
-                else
-                    io.write('<td align="center">&nbsp</td>\n')
-                end
-                io.write('<td align="right">' .. lStudyInstanceUID .. '</td>\n')
-                io.write('<td align="right">\n')
-                if lNowOnOrthanc['StudyUID2oStudyUID'][lStudyInstanceUIDAnon] then
-                    io.write('<a href="../../../app/explorer.html#study?uuid=' .. lNowOnOrthanc['StudyUID2oStudyUID'][lStudyInstanceUIDAnon] .. '">\n')
-                end
-                io.write(lStudyInstanceUIDAnon)
-                if lNowOnOrthanc['StudyUID2oStudyUID'][lStudyInstanceUIDAnon] then
-                    io.write('</a>\n')
-                end
-                io.write('</td>\n')
-                io.write('</tr>\n')
-            end
-        end
-        io.flush()
-    end
-    io.write('</tbody>\n')
-    io.write('</table>\n')
-    io.write('</body>\n')
-    io.write('</html>\n')
-    io.close(file_out)
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-
-end
-
+-- -- ======================================================
+-- function LoadLookupTableFast(aFileLookup, aMakeBackup)
+-- 
+--     -- I'm going to hard code the lookup location just in case someone gets the idea to escape the execute statement and wreak havoc
+--     local lFileLookup = "/media/html/lookup/master/lookuptable.html"
+--     local lTempFile = os.tmpname()
+--     -- local lCommand = "sed 's/&nbsp//g' " .. aFileLookup .. " | html2text -nobs -width 2048 | grep \"|\" | sed 's/_//g'" .. " > " .. lTempFile
+--     local lCommand = "sed 's/&nbsp//g' " .. lFileLookup .. " | html2text -nobs -width 2048 | grep \"|\" | sed 's/_/ /g'" .. " > " .. lTempFile
+--     local lResult = os.execute(lCommand)
+--     if lResult == 1 then
+--         return nil
+--     end
+-- 
+--     local lLun = io.open(lTempFile,"r")
+--     if lLun == nil then
+--         return nil
+--     end
+--     lLun:close()
+-- 
+--     local lLun = io.open(lFileLookup,"r")
+--     if lLun == nil then
+--         return nil
+--     end
+--     lLun:close()
+-- 
+--     if aMakeBackup then
+--         -- local lLun = assert(io.open(aFileLookup,"r"))
+--         local lLun = assert(io.open(lFileLookup,"r"))
+--         local lFileData = lLun:read("*all")
+--         lLun:close()
+--         -- local lOut = assert(io.open(aFileLookup .. "." .. os.date("%Y%m%d%H%M%S"),"w"))
+--         local lOut = assert(io.open(lFileLookup .. "." .. os.date("%Y%m%d%H%M%S"),"w"))
+--         lOut:write(lFileData)
+--         lOut:close()
+--     end
+-- 
+--     local lLines = {}
+--     for lLine in io.lines(lTempFile) do
+--         lLines[#lLines + 1] = lLine
+--     end
+--     if not os.remove(lTempFile) then
+--        return nil
+--     end
+-- 
+--     local lLookupTable = {}
+--     local lDataKeys = {}
+--     local lIndexCol = 1
+--     for lHeader in string.gmatch(string.sub(lLines[1],2,-1),"([^|]*)|") do
+--         lDataKeys[lIndexCol] = trim(lHeader)
+--         lIndexCol = lIndexCol + 1
+--         lLookupTable[trim(lHeader)] = {}
+--     end
+-- 
+--     local lIndexRow = 1
+--     for i = 2, #lLines do
+--         local lRow = string.sub(lLines[i],2,-1)
+--         local lIndexCol = 1
+--         for lColumnStripped in string.gmatch(lRow, "([^|]*)|") do
+--             local lEntry = nil
+--             if string.match(trim(lColumnStripped),",") then
+--                 local lIndexEntry = 1
+--                 lEntry = {}
+--                 local lSingleEntry
+--                 for lSingleEntry in string.gmatch(trim(lColumnStripped), "([^,]*)[,%s]*") do
+--                     if string.match(lSingleEntry,"[^%s]+") then
+--                         lEntry[lIndexEntry] = lSingleEntry
+--                         lIndexEntry = lIndexEntry + 1
+--                     end
+--                 end
+--                 if lIndexEntry < 2 then
+--                     lEntry = nil
+--                 end
+--             else
+--                 if string.len(trim(lColumnStripped)) > 0 then
+--                     lEntry = trim(lColumnStripped)
+--                 end
+--             end
+--             if lEntry then
+--                 lLookupTable[lDataKeys[lIndexCol]][lIndexRow] = lEntry
+--             else
+--                 lLookupTable[lDataKeys[lIndexCol]][lIndexRow] = 'BLANK'
+--             end
+--             lIndexCol = lIndexCol + 1
+--         end
+--         lIndexRow = lIndexRow + 1
+--     end
+-- 
+--     return lLookupTable
+-- 
+-- end
+-- 
+-- -- ======================================================
+-- function FindPACSInLookupTableFromSIUID(aLookupTable,aStudyInstanceUID)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     gIndent = gIndent + 3
+--     -- if gVerbose then print(string.rep(' ', gIndent) .. 'Scanning existing lookup table') end
+--     local lRow, lFound
+--     for lRowTemp, lStudyInstanceUIDs in pairs(aLookupTable['StudyInstanceUID']) do 
+--         lFound = false
+--         lRow = lRowTemp
+--         if type(lStudyInstanceUIDs) == 'table' then
+--             for lCol, lStudyInstanceUID in ipairs(lStudyInstanceUIDs) do
+--                 lFound = lStudyInstanceUID == aStudyInstanceUID
+--                 if lFound then break end
+--             end
+--         else
+--             lFound = lStudyInstanceUIDs == aStudyInstanceUID
+--         end
+--         if lFound then break end
+--     end
+--     gIndent = gIndent - 3
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     if not lFound then return nil,nil end
+-- 
+--     local lPACSData = nil
+--     if aLookupTable['Name'][lRow] then
+--         local lPatientName = nil
+--         if type(aLookupTable['Name'][lRow]) == 'table' then
+--             lPatientName = table.concat(aLookupTable['Name'][lRow],',')
+--         else
+--             lPatientName = aLookupTable['Name'][lRow]
+--         end
+--         if lPatientName and (lPatientName ~= 'BLANK') then
+--             if not lPACSData then lPACSData = {} end
+--             lPACSData['0010,0010'] = {}
+--             lPACSData['0010,0010']['Value'] = lPatientName
+--         end
+--     end
+--     if aLookupTable['PatientID'][lRow] then
+--         local lPatientID = nil
+--         if type(aLookupTable['PatientID'][lRow]) == 'table' then
+--             lPatientID = table.concat(aLookupTable['PatientID'][lRow],',')
+--         else
+--             lPatientID = aLookupTable['PatientID'][lRow]
+--         end
+--         if lPatientID and (lPatientID ~= 'BLANK') then
+--             if not lPACSData then lPACSData = {} end
+--             lPACSData['0010,0020'] = {}
+--             lPACSData['0010,0020']['Value'] = lPatientID
+--         end
+--     end
+--     if aLookupTable['Date'][lRow] then
+--         local lStudyDate = nil
+--         if type(aLookupTable['Date'][lRow]) == 'table' then
+--             lStudyDate = table.concat(aLookupTable['Date'][lRow],',')
+--         else
+--             lStudyDate = aLookupTable['Date'][lRow]
+--         end
+--         if lStudyDate and (lStudyDate ~= 'BLANK') then
+--             local lAnonDate = nil
+--             if aLookupTable['Anon Date'] then
+--                 if type(aLookupTable['Anon Date'][lRow]) == 'table' then
+--                     lAnonDate = table.concat(aLookupTable['Anon Date'][lRow],',')
+--                 else
+--                     lAnonDate = aLookupTable['Anon Date'][lRow]
+--                 end
+--             else
+--                 lAnonDate = 'BLANK'
+--             end
+--             if not lPACSData then lPACSData = {} end
+--             lPACSData['0008,0020'] = {}
+--             lPACSData['0008,0020']['Value'] = lStudyDate
+--             if lAnonDate and (lAnonDate ~= 'BLANK') then
+--                 lPACSData['AnonDate'] = lAnonDate
+--             end
+--         end
+--     end
+--     if aLookupTable['Accession'][lRow] then
+--         local lAccession = nil
+--         if type(aLookupTable['Accession'][lRow]) == 'table' then
+--             lAccession = table.concat(aLookupTable['Accession'][lRow],',')
+--         else
+--             lAccession = aLookupTable['Accession'][lRow]
+--         end
+--         if lAccession and (lAccession ~= 'BLANK') then
+--             if not lPACSData then lPACSData = {} end
+--             lPACSData['0008,0050'] = {}
+--             lPACSData['0008,0050']['Value'] = lAccession
+--         end
+--     end
+-- 
+--     if not lPACSData then
+--         lFound = nil
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Subject not in lookup table') end
+--     else
+--         lFound = true
+--         -- if gVerbose then print(string.rep(' ', gIndent) .. 'Subject in lookup table') end
+--     end
+--     gIndent = gIndent - 3
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--  
+--     return lPACSData, lFound 
+-- 
+-- end
+-- 
+-- -- ======================================================
+-- function FindPACSInLookupTableFromPatientID(aLookupTable,aPatientID)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     gIndent = gIndent + 3
+--     -- if gVerbose then print(string.rep(' ', gIndent) .. 'Scanning existing lookup table') end
+--     local lRow, lFound
+--     for lRowTemp, lPatientIDs in pairs(aLookupTable['PatientID']) do 
+--         lFound = false
+--         lRow = lRowTemp
+--         if type(lPatientIDs) == 'table' then
+--             for lCol, lPatientID in ipairs(lPatientIDs) do
+--                 lFound = lPatientID == aPatientID
+--                 if lFound then break end
+--             end
+--         else
+--             lFound = lPatientIDs == aPatientID
+--         end
+--         if lFound then break end
+--     end
+-- 
+--     gIndent = gIndent - 3
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     if not lFound then return nil,nil end
+-- 
+--     local lPACSData = nil
+--     if aLookupTable['Name'][lRow] then
+--         local lPatientName = nil
+--         if type(aLookupTable['Name'][lRow]) == 'table' then
+--             lPatientName = table.concat(aLookupTable['Name'][lRow],',')
+--         else
+--             lPatientName = aLookupTable['Name'][lRow]
+--         end
+--         if lPatientName and (lPatientName ~= 'BLANK') then
+--             if not lPACSData then lPACSData = {} end
+--             lPACSData['0010,0010'] = {}
+--             lPACSData['0010,0010']['Value'] = lPatientName
+--         end
+--     end
+--     if aLookupTable['PatientID'][lRow] then
+--         local lPatientID = nil
+--         if type(aLookupTable['PatientID'][lRow]) == 'table' then
+--             lPatientID = table.concat(aLookupTable['PatientID'][lRow],',')
+--         else
+--             lPatientID = aLookupTable['PatientID'][lRow]
+--         end
+--         if lPatientID and (lPatientID ~= 'BLANK') then
+--             if not lPACSData then lPACSData = {} end
+--             lPACSData['0010,0020'] = {}
+--             lPACSData['0010,0020']['Value'] = lPatientID
+--         end
+--     end
+--     if aLookupTable['Date'][lRow] then
+--         local lStudyDate = nil
+--         if type(aLookupTable['Date'][lRow]) == 'table' then
+--             lStudyDate = table.concat(aLookupTable['Date'][lRow],',')
+--         else
+--             lStudyDate = aLookupTable['Date'][lRow]
+--         end
+--         if lStudyDate and (lStudyDate ~= 'BLANK') then
+--             local lAnonDate = nil
+--             if aLookupTable['Anon Date'] then
+--                 if type(aLookupTable['Anon Date'][lRow]) == 'table' then
+--                     lAnonDate = table.concat(aLookupTable['Anon Date'][lRow],',')
+--                 else
+--                     lAnonDate = aLookupTable['Anon Date'][lRow]
+--                 end
+--             else
+--                 lAnonDate = 'BLANK'
+--             end
+--             if not lPACSData then lPACSData = {} end
+--             lPACSData['0008,0020'] = {}
+--             lPACSData['0008,0020']['Value'] = lStudyDate
+--             if lAnonDate and (lAnonDate ~= 'BLANK') then
+--                 lPACSData['AnonDate'] = lAnonDate
+--             end
+--         end
+--     end
+--     if aLookupTable['Accession'][lRow] then
+--         local lAccession = nil
+--         if type(aLookupTable['Accession'][lRow]) == 'table' then
+--             lAccession = table.concat(aLookupTable['Accession'][lRow],',')
+--         else
+--             lAccession = aLookupTable['Accession'][lRow]
+--         end
+--         if lAccession and (lAccession ~= 'BLANK') then
+--             if not lPACSData then lPACSData = {} end
+--             lPACSData['0008,0050'] = {}
+--             lPACSData['0008,0050']['Value'] = lAccession
+--         end
+--     end
+-- 
+--     if not lPACSData then
+--         lFound = nil
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Subject not in lookup table') end
+--     else
+--         lFound = true
+--         if gVerbose then print(string.rep(' ', gIndent) .. 'Subject in lookup table') end
+--     end
+--  
+--     gIndent = gIndent - 3
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     return lPACSData, lFound 
+-- 
+-- end
+-- 
+-- -- ======================================================
+-- function UpdateLookupHTML()
+-- 
+--     local lFlagKeepOriginalDates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES') == 'true'
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local lPatientMap, lPatientReverseMap, lFlagSIUID2Anon
+--     lPatientMap, lPatientReverseMap, lFlagSIUID2Anon = LoadPHI2AnonMap()
+--     local lNowOnOrthanc = NowOnOrthanc()
+-- 
+--     -- Check for the main modality that could be queried
+--     local lFlagXRefModality=false
+--     local lXRefModality=nil
+--     if os.getenv('LUA_XREF_MODALITY') then
+--         for _, lModality in pairs(ParseJson(RestApiGet('/modalities', false))) do
+--             if lModality == os.getenv('LUA_XREF_MODALITY') then
+--                 lFlagXRefModality = true
+--                 lXRefModality = lModality
+--                 break
+--             end
+--         end  
+--     end
+--     if lFlagXRefModality then
+--         if gVerbose then print(string.rep(' ', gIndent+3) .. 'FlagXRefModality=1') end
+--     else
+--         if gVerbose then print(string.rep(' ', gIndent+3) .. 'FlagXRefModality=1') end
+--     end
+-- 
+--     -- Check for existing lookup table
+--     local lFileLookup = "/media/html/lookup/master/lookuptable.html"
+--     local lBackup = true
+--     -- local lLookupTable = LoadLookupTable(lFileLookup,lBackup)
+--     local lLookupTable = LoadLookupTableFast(lFileLookup,lBackup)
+-- 
+--     -- Prepare to output the new
+--     file_out = io.open(lFileLookup, "w")
+--     io.output(file_out)
+-- 
+--     io.write('<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">\n')
+--     io.write('<head>\n')
+--     io.write('<link rel="stylesheet" href="style.css" type="text/css" id="" media="print, projection, screen" />\n')
+--     io.write('<link rel="stylesheet" href="theme.blue.min.css">\n')
+--     io.write('<script type="text/javascript" src="../../../app/libs/jquery.min.js"></script>\n')
+--     io.write('<script type="text/javascript" src="jquery.tablesorter.combined.min.js"></script>\n')
+--     io.write('<script type="text/javascript">\n')
+--     io.write('$(document).ready(function() { \n')
+--     io.write('    // call the tablesorter plugin \n')
+--     io.write('    $("table").tablesorter({\n')
+--     io.write('        theme: "blue",\n')
+--     io.write('        widgets: ["zebra", "filter"],\n')
+--     io.write('        widgetOptions : {\n')
+--     io.write('            filter_columnFilters: true,\n')
+--     io.write('            filter_reset: ".reset",\n')
+--     io.write('            zebra : [ "normal-row", "alt-row" ]\n')
+--     io.write('        },\n')
+--     io.write('        sortList : [[2,0]]\n')
+--     io.write('    }); \n')
+--     io.write('}); \n')
+--     io.write('</script>\n')
+--     io.write('</head>\n')
+--     
+--     io.write('<body>\n')
+--     io.write('<a href="../../../app/explorer.html">Return to Orthanc home page</a></br>')
+--     io.write('Click a column heading to sort.</br>')
+--     io.write('Click <a href="updatelookup.html">here</a> to force an update of this table.</br>\n')
+--     io.write('<!-- targeted by the "filter_reset" option -->\n')
+--     io.write('<button type="button" class="reset">Reset Search</button>\n')
+--     io.write('<table class="tablesorter-blue" border=1>\n')
+--     io.write('<thead>\n')
+--     io.write('<tr>\n')
+--     io.write('<th>Name</th>\n')
+--     io.write('<th>PatientID</th>\n')
+--     io.write('<th>ID</th>\n')
+--     if lFlagSIUID2Anon then
+--         io.write('<th>Name Anon</th>\n')
+--     end
+--     io.write('<th>Date</th>\n')
+--     io.write('<th>Anon Date</th>\n')
+--     io.write('<th>Accession</th>\n')
+--     io.write('<th>Alt PatientID</th>\n')
+--     io.write('<th>Anon PatientID</th>\n')
+--     io.write('<th>StudyInstanceUID</th>\n')
+--     io.write('<th>Anon StudyInstanceUID</th>\n')
+--     io.write('</tr>\n')
+--     io.write('</thead>\n')
+--     io.write('<tbody>\n')
+--     local lPatientIDShort, lPostData, lPostResult
+--     for lPatientID, lPID in pairs(lPatientReverseMap['Primary']) do
+-- 
+--         local lShiftEpoch
+--         if lFlagKeepOriginalDates then
+--            lShiftEpoch = 0
+--         else 
+--            lShiftEpoch = lPatientMap[lPID]['ShiftEpoch']
+--         end
+--         if string.sub(lPatientID, -3) == 'n2d' then
+--             lPatientIDShort = string.sub(lPatientID,1,string.find(lPatientID,'n2d')-1)
+--         elseif string.sub(lPatientID, -2) == '2d' then
+--             lPatientIDShort = string.sub(lPatientID,1,string.find(lPatientID,'2d')-1)
+--         else
+--             lPatientIDShort = lPatientID
+--         end
+-- 
+--         local lStudyInstanceUIDPrinted = {}
+--         if lNowOnOrthanc['ByPatientID'][lPatientID] then
+-- 
+--             -- if gVerbose then print(string.rep(' ', gIndent) .. 'Now on orthanc: ' .. lPID) end
+--             for j, lDate in pairs(lNowOnOrthanc['ByPatientID'][lPatientID]['StudyDate']) do 
+--                 lStudyInstanceUIDPrinted[lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]] = true
+--                 io.write('<tr>\n')
+--                 io.write('<td>\n')
+--                 io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientID] .. '">\n')
+--                 io.write(lNowOnOrthanc['ByPatientID'][lPatientID]['PatientName'])
+--                 io.write('</a>\n')
+--                 io.write('</td>\n')
+--                 io.write('<td align="right">' .. lPatientIDShort .. '</td>\n')
+--                 io.write('<td align="right">\n')
+--                 if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
+--                     io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientMap[lPID]['PatientIDAnon']] .. '">\n')
+--                 end
+--                 io.write(lPatientMap[lPID]['InternalNumber'])
+--                 if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
+--                     io.write('</a>\n')
+--                 end
+--                 io.write('</td>\n')
+--                 if lFlagSIUID2Anon then
+--                     if lPatientMap[lPID]['SIUID2NameAnonMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID']] then
+--                         io.write('<td>\n')
+--                         for k, _ in pairs(lPatientMap[lPID]['SIUID2NameAnonMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID']]) do
+--                             io.write(k .. ', ')
+--                         end
+--                         io.write('</td>\n')
+--                     else
+--                         io.write('<td>&nbsp</td>\n')
+--                     end
+--                 end
+--                 io.write('<td align="center">' .. lDate .. '</td>\n')
+--                 if lFlagKeepOriginalDates or not lShiftEpoch then
+--                     if lFlagKeepOriginalDates then
+--                         io.write('<td align="center">' .. lDate .. '</td>\n')
+--                     else
+--                         io.write('<td align="center">&nbsp</td>\n')
+--                     end
+--                 else
+--                     -- local lNewDateString = hiftDateTimeString(lShiftEpoch, lDate)
+--                     local lPostData = {}
+--                     lPostData['ShiftEpoch'] = lShiftEpoch
+--                     lPostData['YYYYMMDD'] = lDate
+--                     local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+--                     local lNewDateString = lResults['NewDateString']
+--                     io.write('<td align="center">' .. lNewDateString .. '</td>\n')
+--                 end
+--                 io.write('<td align="right">' .. lNowOnOrthanc['ByPatientID'][lPatientID]['AccessionNumber'][j] .. '</td>\n')
+--                 io.write('<td>\n')
+--                 for k, lAltPID in pairs(lPatientMap[lPID]['OtherPatientIDs']) do 
+--                     io.write(lAltPID .. ', \n')
+--                 end
+--                 io.write('</td>\n')
+--                 io.write('<td align="center">\n')
+--                 if lPatientMap[lPID]['PatientIDAnon'] then
+--                     if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
+--                         io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientMap[lPID]['PatientIDAnon']] .. '">\n')
+--                     end
+--                     io.write(lPatientMap[lPID]['PatientIDAnon'])
+--                     if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
+--                         io.write('</a>\n')
+--                     end
+--                 else
+--                     io.write('&nbsp')
+--                 end
+--                 io.write('</td>\n')
+--                 io.write('<td align="right">\n')
+--                 io.write('<a href="../../../app/explorer.html#study?uuid=' .. lNowOnOrthanc['StudyUID2oStudyUID'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]] .. '">\n')
+--                 io.write(lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j])
+--                 io.write('</a>\n')
+--                 io.write('</td>\n')
+--                 io.write('<td align="right">\n')
+--                 if lNowOnOrthanc['StudyUID2oStudyUID'][lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]]] then
+--                     io.write('<a href="../../../app/explorer.html#study?uuid=' .. lNowOnOrthanc['StudyUID2oStudyUID'][lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]]] .. '">\n')
+--                 end
+--                 if lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]] then
+--                     io.write(lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]])
+--                 else
+--                     io.write('')
+--                 end
+--                 if lNowOnOrthanc['StudyUID2oStudyUID'][lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]]] then
+--                     io.write('</a>\n')
+--                 end
+--                 io.write('</td>\n')
+--                 io.write('</tr>\n')
+--             end
+--         end
+--         for lStudyInstanceUID, lStudyInstanceUIDAnon in pairs(lPatientMap[lPID]['StudyInstanceUIDMap']) do
+--             -- if gVerbose then print(string.rep(' ', gIndent) .. 'With studies: ' .. lPID) end
+--             if not lStudyInstanceUIDPrinted[lStudyInstanceUID] then
+--                 local lPACSData = nil
+--                 local lLookupMatch = false
+--                 if lLookupTable then
+--                     lPACSData, lLookupMatch = FindPACSInLookupTableFromSIUID(lLookupTable,lStudyInstanceUID)
+--                     if not lPACSData then
+--                         if gVerbose then print('Not found in lookup: ' .. lStudyInstanceUID) end
+--                     end
+--                 end
+--                 if lFlagXRefModality and (not lPACSData) and (not string.match(lPatientMap[lPID]['PatientID'], '[^0-9]')) then
+--                     local lPatientIDList = {}
+--                     table.insert(lPatientIDList, lPatientMap[lPID]['PatientID'])
+--                     if next(lPatientMap[lPID]['OtherPatientIDs']) then
+--                         local lOtherPatientID
+--                         for _, lOtherPatientID in pairs(lPatientMap[lPID]['OtherPatientIDs']) do
+--                             if not string.match(lOtherPatientID, '[^0-9]') then
+--                                 table.insert(lPatientIDList, lOtherPatientID)
+--                             end
+--                         end
+--                     end
+--                     for _, lOtherPatientID in pairs(lPatientIDList) do 
+--                         lPostData = {}
+--                         lPostData['Level'] = 'Study'
+--                         lPostData['Query'] = {}
+--                         lPostData['Query']['StudyInstanceUID'] = lStudyInstanceUID
+--                         lPostData['Query']['PatientID'] = lOtherPatientID
+--                         lPostResult = ParseJson(RestApiPost('/modalities/' .. lXRefModality .. '/query', DumpJson(lPostData,true), false))
+--                         if lPostResult['ID'] then
+--                             local lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'], false))
+--                             if lQuery[1] == "answers" then
+--                                 lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers', false))
+--                                 if lQuery[1] == "0" then
+--                                     lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0', false))
+--                                     if lQuery[1] == "content" then
+--                                         lPACSData = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0/content', false))
+--                                         if lPACSData then
+--                                             break
+--                                         end
+--                                     end
+--                                 end
+--                             end
+--                         end
+--                     end
+--                     if not lPACSData then
+--                         for _, lOtherPatientID in pairs(lPatientIDList) do 
+--                             lPostData = {}
+--                             lPostData['Level'] = 'Patient'
+--                             lPostData['Query'] = {}
+--                             lPostData['Query']['PatientID'] = lOtherPatientID
+--                             lPostResult = ParseJson(RestApiPost('/modalities/' .. lXRefModality .. '/query', DumpJson(lPostData,true), false))
+--                             if lPostResult['ID'] then
+--                                 local lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'], false))
+--                                 if lQuery[1] == "answers" then
+--                                     lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers', false))
+--                                     if lQuery[1] == "0" then
+--                                         lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0', false))
+--                                         if lQuery[1] == "content" then
+--                                             lPACSData = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0/content', false))
+--                                             if lPACSData then
+--                                                 break
+--                                             end
+--                                         end
+--                                     end
+--                                 end
+--                             end
+--                         end
+--                     end
+--                 end
+--                 io.write('<tr>\n')
+--                 if lPACSData then
+--                     if lPACSData['0010,0010'] then
+--                         io.write('<td>' .. lPACSData['0010,0010']['Value'] .. '</td>\n')
+--                     else
+--                         io.write('<td>&nbsp</td>\n')
+--                     end
+--                 else
+--                     io.write('<td>&nbsp</td>\n')
+--                 end
+--                 if lPACSData then
+--                     if lPACSData['0010,0020'] then
+--                         io.write('<td>' .. lPACSData['0010,0020']['Value'] .. '</td>\n')
+--                     else
+--                         io.write('<td>&nbsp</td>\n')
+--                     end
+--                 else
+--                     io.write('<td align="right">' .. lPatientIDShort .. '</td>\n')
+--                 end
+--                 io.write('<td align="right">\n')
+--                 if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
+--                     io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientMap[lPID]['PatientIDAnon']] .. '">\n')
+--                 end
+--                 if lPatientMap[lPID]['InternalNumber'] then
+--                     io.write(lPatientMap[lPID]['InternalNumber'])
+--                 else
+--                     io.write('')
+--                 end
+--                 if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
+--                     io.write('</a>\n')
+--                 end
+--                 io.write('</td>\n')
+--                 if lFlagSIUID2Anon then
+--                     if lPatientMap[lPID]['SIUID2NameAnonMap'][lStudyInstanceUID] then
+--                         io.write('<td>\n')
+--                         for k, _ in pairs(lPatientMap[lPID]['SIUID2NameAnonMap'][lStudyInstanceUID]) do
+--                             io.write(k .. ', ')
+--                         end
+--                         io.write('</td>\n')
+--                     else
+--                         io.write('<td>&nbsp</td>\n')
+--                     end
+--                 end
+--                 if lPACSData then
+--                     if lPACSData['0008,0020'] then
+--                         io.write('<td>' .. lPACSData['0008,0020']['Value'] .. '</td>\n')
+--                         if lFlagKeepOriginalDates or not lShiftEpoch then
+--                             if lFlagKeepOriginalDates then
+--                                 io.write('<td>' .. lPACSData['0008,0020']['Value'] .. '</td>\n')
+--                             else
+--                                 io.write('<td>&nbsp</td>\n')
+--                             end
+--                         else
+--                             local lNewDateString
+--                             if (not lLookupMatch) or (lLookupTable and (not lPACSData['AnonDate']) and (lPACSData['0008,0020']['Value'] ~= 'NotInPACS')) then
+--                                 -- lNewDateString = ShiftDateTimeString(lShiftEpoch,lPACSData['0008,0020']['Value'])
+--                                 local lPostData = {}
+--                                 lPostData['ShiftEpoch'] = lShiftEpoch
+--                                 lPostData['YYYYMMDD'] = lPACSData['0008,0020']['Value']
+--                                 local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+--                                 lNewDateString = lResults['NewDateString']
+--                             else
+--                                 lNewDateString = lPACSData['AnonDate'] or 'BLANK'
+--                             end
+--                             io.write('<td>' .. lNewDateString .. '</td>\n')
+--                         end
+--                     else
+--                         io.write('<td>NotInPACS</td>\n')
+--                         io.write('<td>&nbsp</td>\n')
+--                     end
+--                 else
+--                     io.write('<td>NotInPACS</td>\n')
+--                     io.write('<td>&nbsp</td>\n')
+--                 end
+--                 if lPACSData then
+--                     if lPACSData['0008,0050'] then
+--                         io.write('<td>' .. lPACSData['0008,0050']['Value'] .. '</td>\n')
+--                     else
+--                         io.write('<td>NotInPACS</td>\n')
+--                     end
+--                 else
+--                     io.write('<td>NotInPACS</td>\n')
+--                 end
+--                 io.write('<td>\n')
+--                 for k, lAltPID in pairs(lPatientMap[lPID]['OtherPatientIDs']) do 
+--                     io.write(lAltPID .. ', \n')
+--                 end
+--                 if lPACSData then
+--                     if lPACSData['0010,0020'] then
+--                         if lPACSData['0010,0020']['Value'] ~= lPatientIDShort then
+--                             io.write(lPatientIDShort)
+--                         end
+--                     end
+--                 end
+--                 io.write('</td>\n')
+--                 if lPatientMap[lPID]['PatientIDAnon'] then
+--                     io.write('<td align="center">' .. lPatientMap[lPID]['PatientIDAnon'] .. '</td>\n')
+--                 else
+--                     io.write('<td align="center">&nbsp</td>\n')
+--                 end
+--                 io.write('<td align="right">' .. lStudyInstanceUID .. '</td>\n')
+--                 io.write('<td align="right">\n')
+--                 if lNowOnOrthanc['StudyUID2oStudyUID'][lStudyInstanceUIDAnon] then
+--                     io.write('<a href="../../../app/explorer.html#study?uuid=' .. lNowOnOrthanc['StudyUID2oStudyUID'][lStudyInstanceUIDAnon] .. '">\n')
+--                 end
+--                 io.write(lStudyInstanceUIDAnon)
+--                 if lNowOnOrthanc['StudyUID2oStudyUID'][lStudyInstanceUIDAnon] then
+--                     io.write('</a>\n')
+--                 end
+--                 io.write('</td>\n')
+--                 io.write('</tr>\n')
+--             end
+--         end
+--         io.flush()
+--     end
+--     io.write('</tbody>\n')
+--     io.write('</table>\n')
+--     io.write('</body>\n')
+--     io.write('</html>\n')
+--     io.close(file_out)
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+-- 
+-- end
+-- 
 -- -- ========================================
 -- function IncomingHttpRequestFilter(method, uri, ip, username, httpHeaders)
 -- 
@@ -4981,11 +5336,11 @@ function SendEmailUpdate(aSubject, aMessage)
     if lFlagSendEmailUpdate then
 
         local lDataToPython = {}
-        lDataToPython['subject'] = aSubject
-        lDataToPython['message'] = aMessage
-        local lPostEmail = ParseJson(RestApiPost('/email_message', DumpJson(lDataToPython,true), false, {['x-remote-user']='lua-SendEmailUpdate'}))
+        lDataToPython['Subject'] = aSubject
+        lDataToPython['Message'] = aMessage
+        local lPostEmail = ParseJson(RestApiPost('/email_message_lua', DumpJson(lDataToPython,true), false, {['x-remote-user']='lua-SendEmailUpdate'}))
         if lPostEmail['error_text'] then
-            error(lPostEmail['error_text'])
+            if gVerbose then print(string.rep(' ', gIndent+3) .. 'Error sending mail ' .. lPostEmail['error_text']) end
         end
         
 --         local lMailTo = os.getenv('LUA_MAIL_TO'):gsub("^['\"]*(.-)['\"]*$", "%1")

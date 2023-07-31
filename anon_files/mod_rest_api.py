@@ -12,6 +12,165 @@ address_re = re.compile('([^<]+)<([^@]+)@([^>]+)>.*')
 # Common variables
 website = os.getenv('ORTHANC__NAME', default='UnknownOrthanc')
 fqdn = os.getenv('HOST_FQDN', default='Unknown.Host')
+python_verbose_logwarning = os.getenv('PYTHON_VERBOSE_LOGWARNING', default='false') == 'true' or \
+                            os.getenv('ORTHANC__PYTHON_VERBOSE', default='false') == 'true'
+log_indent_level = 0
+
+# ============================================================================
+# Modify the GUI
+# ----------------------------------------------------------------------------
+# Attempt to add logout button:  Work in progress.
+# ----------------------------------------------------------------------------
+#logout_button_js = "$('#lookup').live('pagebeforecreate', function() {" + \
+#                       " var b = $('<a>')" + \
+#                         " .attr('data-role', 'button')" + \
+#                         " .attr('href', '#')" + \
+#                         " .attr('data-icon', 'action')" + \
+#                         " .attr('data-theme', 'e')" + \
+#                         " .text('Logout');" + \
+#                       " b.insertAfter($('#content').parent());" + \
+#                       " b.click(function() {" + \
+#                         " var uuid='none'; " + \
+#                         " if ($.mobile.pageData) {" + \
+#                         "   uuid = $.mobile.pageData.uuid" + \
+#                         " };" + \
+#                         " window.open('https://go.utah.edu/cas/logout', '_self');" + \
+#                         "}" + \
+#                       ");" + \
+#                     "});"
+#orthanc.ExtendOrthancExplorer(logout_button_js)
+
+# ----------------------------------------------------------------------------
+# Buttons on patient page
+# ----------------------------------------------------------------------------
+# Same as API patients/uid
+button_js_patient_meta = "$('#patient').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-icon', 'action')" + \
+                         " .attr('data-theme', 'e')" + \
+                         " .text('Patient Metadata');" + \
+                       " b.insertBefore($('#patient-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/patients/' + uuid);" % website + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# Same as API patients/uid/statistics
+button_js_patient_stats = "$('#patient').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-icon', 'action')" + \
+                         " .attr('data-theme', 'e')" + \
+                         " .text('Patient Stats');" + \
+                       " b.insertBefore($('#patient-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/patients/' + uuid + '/statistics');" % website + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# ----------------------------------------------------------------------------
+# Buttons on study page
+# ----------------------------------------------------------------------------
+# Same as API studies/uid
+button_js_study_meta = "$('#study').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-icon', 'action')" + \
+                         " .attr('data-theme', 'e')" + \
+                         " .text('Study Metadata');" + \
+                       " b.insertBefore($('#study-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/studies/' + uuid);" % website + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# Same as API studies/uid/statistics
+button_js_study_stats = "$('#study').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-icon', 'action')" + \
+                         " .attr('data-theme', 'e')" + \
+                         " .text('Study Stats');" + \
+                       " b.insertBefore($('#study-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/studies/' + uuid + '/statistics');" % website + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# ----------------------------------------------------------------------------
+# Buttons on series page
+# ----------------------------------------------------------------------------
+# Same as API series/uid
+button_js_series_meta = "$('#series').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-icon', 'action')" + \
+                         " .attr('data-theme', 'e')" + \
+                         " .text('Series Metadata');" + \
+                       " b.insertBefore($('#series-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/series/' + uuid);" % website + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# Same as API series/uid/statistics
+button_js_series_stats = "$('#series').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-icon', 'action')" + \
+                         " .attr('data-theme', 'e')" + \
+                         " .text('Series Stats');" + \
+                       " b.insertBefore($('#series-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/series/' + uuid + '/statistics');" % website + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# ----------------------------------------------------------------------------
+# Inserting the above button definitions into the explorer
+# ----------------------------------------------------------------------------
+orthanc.ExtendOrthancExplorer(' '.join([button_js_patient_meta, button_js_patient_stats, \
+                                        button_js_study_meta, button_js_study_stats, \
+                                        button_js_series_meta, button_js_series_stats]))
+
+
 
 # =======================================================
 def email_message(subject, message_body, subtype='plain', alternates=None, cc=None):
@@ -70,7 +229,10 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
     msg['To'] = addresses
 
     smtp_server = os.environ['PYTHON_MAIL_SERVER']
-    s = smtplib.SMTP(smtp_server)
+    try:
+        s = smtplib.SMTP(smtp_server)
+    except:
+        return {'status':3, 'error_text':'email_message: Is the smtp down?'}
     s.send_message(msg)
     s.quit()
 
@@ -176,20 +338,25 @@ def user_permitted(uri, remote_user):
     """ Check remote user against list of permitted users """
 # -------------------------------------------------------
 
-    orthanc.LogWarning('Checking whether remote user (%s) is permitted to \n%s' % (remote_user,uri))
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * log_indent_level + 'Checking whether remote user (%s) is permitted to \n%s' % (remote_user,uri))
     permissions = os.getenv('PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER')
     if permissions is None:
-        orthanc.LogWarning('Rejecting anon due to missing permissions')
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * log_indent_level + 'Rejecting anon due to missing permissions')
         return False
     allowed_to_trigger = []
     for permitted in permissions.split('.'):
         if permitted.strip() not in allowed_to_trigger:
             allowed_to_trigger += [permitted.strip()]
-    orthanc.LogWarning('Allowed users: %s' % ' '.join(allowed_to_trigger))
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * log_indent_level + 'Allowed users: %s' % ' '.join(allowed_to_trigger))
     if remote_user not in allowed_to_trigger:
-        orthanc.LogWarning('Operation not permitted to user: %s %s' % (uri, remote_user))
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * log_indent_level + 'Operation not permitted to user: %s %s' % (uri, remote_user))
         return False
-    orthanc.LogWarning('Remote user is permitted (%s)' % remote_user)
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * log_indent_level + 'Remote user is permitted (%s)' % remote_user)
 
     return True
 
@@ -238,7 +405,8 @@ def IncomingFilter(uri, **request):
     for key,value in request['headers'].items():
         headers_str = '%s %s.%s' % (headers_str, key, value)
     if not('x-remote-user' in request['headers'] and 'x-forwarded-for' in request['headers']):
-        orthanc.LogWarning('Rejecting incoming access: %s' % headers_str)
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * log_indent_level + 'Rejecting incoming access: %s' % headers_str)
         return False
 
     remote_user = get_remote_user(request['headers'])
@@ -260,7 +428,8 @@ def IncomingFilter(uri, **request):
         method = 'Unknown method'
 
     if uri.find('images') < 0:
-        orthanc.LogWarning('%s %s %s %s' % (remote_user, remote_ip, method, uri))
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * log_indent_level + '%s %s %s %s' % (remote_user, remote_ip, method, uri))
 
     if method in ['DELETE', 'PUT']:
         return user_permitted(uri, remote_user)
@@ -302,15 +471,18 @@ def ToggleLuaVerbose(output, uri, **request):
             response_post = orthanc.RestApiPost('/tools/execute-script', 'if gVerbose then print(1) else print(0) end')
             state = json.loads(response_post)
             if state == 1:
-                orthanc.LogWarning('gVerbose is ON, turning OFF...')
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * log_indent_level + 'gVerbose is ON, turning OFF...')
                 orthanc.RestApiPost('/tools/execute-script', 'gVerbose=nil')
                 output.AnswerBuffer('gVerbose was ON, now OFF', 'text/plain')
             else:
-                orthanc.LogWarning('gVerbose is OFF, turning ON...')
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * log_indent_level + 'gVerbose is OFF, turning ON...')
                 orthanc.RestApiPost('/tools/execute-script', 'gVerbose=1')
                 output.AnswerBuffer('gVerbose was OFF, now ON', 'text/plain')
         except:
-            orthanc.LogWarning('Problem getting gVerbose state')
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * log_indent_level + 'Problem getting gVerbose state')
             output.AnswerBuffer('Problem getting gVerbose state', 'text/plain')
  
 # ============================================================================
