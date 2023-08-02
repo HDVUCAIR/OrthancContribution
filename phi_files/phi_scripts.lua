@@ -2262,7 +2262,10 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
 
     -- Load tag keep/remove info
     local lTagHandling, lTagHandlingList
-    lTagHandling, lTagHandlingList = BaseTagHandling()
+    -- lTagHandling, lTagHandlingList = BaseTagHandling()
+    local lResults = ParseJson(RestApiGet('/base_tag_handling_lua', false))
+    lTagHandling = lResults['TagHandling']
+    lTagHandlingList = lResults['TagHandlingList']
  
     -- Capture all UID values for all instances and collect keep/remove data
     if gVerbose then print(string.rep(' ', gIndent) .. 'Capturing UID for all instances') end
@@ -2586,141 +2589,141 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
 
 end
 
--- ======================================================
-function MapUIDOldToNew(aoStudyIDNew, aFlagRemapSOPInstanceUID, aFlagRemapKeptUID)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local lFlagRemapSOPInstanceUID = aFlagRemapSOPInstanceUID
-    local lFlagRemapKeptUID = aFlagRemapKeptUID
-    local lUIDMap = {}
-    local lUIDType = {}
-
-    -- Cycle through anonymized versions to set up one-to-one maps
-    -- First at the study level
-    local loStudyIDOld, loStudyIDMod
-    local loStudyMetaNew, loStudyMetaOld, loStudyMetaMod
-    local ldStudyInstanceUIDNew, ldStudyInstanceUIDOld, ldStudyInstanceUIDMod
-    loStudyMetaNew = ParseJson(RestApiGet('/studies/' .. aoStudyIDNew, false))
-    ldStudyInstanceUIDNew = loStudyMetaNew['MainDicomTags']['StudyInstanceUID']
-
-    loStudyIDMod = loStudyMetaNew['AnonymizedFrom']
-    loStudyMetaMod = ParseJson(RestApiGet('/studies/' .. loStudyIDMod, false))
-    ldStudyInstanceUIDMod = loStudyMetaMod['MainDicomTags']['StudyInstanceUID']
-
-    loStudyIDOld = loStudyMetaMod['ModifiedFrom']
-    loStudyMetaOld = ParseJson(RestApiGet('/studies/' .. loStudyIDOld, false))
-    ldStudyInstanceUIDOld = loStudyMetaOld['MainDicomTags']['StudyInstanceUID']
-    lUIDMap[ldStudyInstanceUIDOld] = ldStudyInstanceUIDNew
-    lUIDType[ldStudyInstanceUIDOld] = 'StudyInstanceUID'
-
-    local loSeriesIDOld, loSeiesIDMod
-    local loSeriesMetaNew, loSeriesMetaOld, loSeriesMetaMod
-    local ldSeriesInstanceUIDNew, ldSeriesInstanceUIDOld, ldSeriesInstanceUIDMod
-
-    local loInstanceIDOld
-    local loInstanceMetaNew, loInstanceMetaOld, loInstanceMetaMod
-    local ldSOPInstanceUIDNew, ldSOPInstanceUIDOld, ldSOPInstanceUIDMod
-
-    for i, loSeriesIDNew in pairs(loStudyMetaNew['Series']) do
-
-        -- Now series
-        loSeriesMetaNew = ParseJson(RestApiGet('/series/' .. loSeriesIDNew, false))
-        ldSeriesInstanceUIDNew = loSeriesMetaNew['MainDicomTags']['SeriesInstanceUID']
-
-        loSeriesIDMod = loSeriesMetaNew['AnonymizedFrom']
-        loSeriesMetaMod = ParseJson(RestApiGet('/series/' .. loSeriesIDMod, false))
-        if not loSeriesMetaMod then
-            if gVerbose then print(string.rep(' ', gIndent) .. 'Missing series:' .. loSeriesIDMod .. ' of ' .. aoStudyIDNew ) end
-        end
-        ldSeriesInstanceUIDMod = loSeriesMetaMod['MainDicomTags']['SeriesInstanceUID']
-
-        loSeriesIDOld = loSeriesMetaMod['ModifiedFrom']
-        loSeriesMetaOld = ParseJson(RestApiGet('/series/' .. loSeriesIDOld, false))
-        ldSeriesInstanceUIDOld = loSeriesMetaOld['MainDicomTags']['SeriesInstanceUID']
-
-        lUIDMap[ldSeriesInstanceUIDOld] = ldSeriesInstanceUIDNew
-        lUIDType[ldSeriesInstanceUIDOld] = 'SeriesInstanceUID'
-
-        for j, loInstanceIDNew in pairs(loSeriesMetaNew['Instances']) do
-            -- Now instances 
-            loInstanceMetaNew = ParseJson(RestApiGet('/instances/' .. loInstanceIDNew, false))
-            ldSOPInstanceUIDNew = loInstanceMetaNew['MainDicomTags']['SOPInstanceUID']
-            loInstanceIDMod = loInstanceMetaNew['AnonymizedFrom'] 
-            loInstanceMetaMod = ParseJson(RestApiGet('/instances/' .. loInstanceIDMod, false))
-            ldSOPInstanceUIDMod = loInstanceMetaMod['MainDicomTags']['SOPInstanceUID']
-            loInstanceIDOld = loInstanceMetaMod['ModifiedFrom'] 
-            if loInstanceIDOld then 
-                loInstanceMetaOld = ParseJson(RestApiGet('/instances/' .. loInstanceIDOld, false))
-                ldSOPInstanceUIDOld = loInstanceMetaOld['MainDicomTags']['SOPInstanceUID']
-                lUIDMap[ldSOPInstanceUIDOld] = ldSOPInstanceUIDNew
-                lUIDType[ldSOPInstanceUIDOld] = 'SOPInstanceUID'
-                -- Delete the Modified intermediate
-                RestApiDelete('/instances/' .. loInstanceIDMod, false)
-            end
-
-            if lFlagRemapSOPInstanceUID then
-                local ldInstanceUIDRemap = RestApiGet('/tools/generate-uid?level=instance') 
-                lUIDMap[ldSOPInstanceUIDNew] = ldInstanceUIDRemap
-                lUIDType[ldSOPInstanceUIDNew] = 'SOPInstanceUID'
-            end
-
-        end
-
-    end
-
-    -- Now check for non-modified UID
-    if lFlagRemapKeptUID then
-        for lKeptUIDVal, lKeptUIDType in pairs(gKeptUID) do
-
-            -- We really only care if it does not exist
-            if not lUIDMap[lKeptUIDVal] then
-
-                if string.find(lKeptUIDType['Name'], 'StudyInstanceUID') or string.find(lKeptUIDType['Name'], 'FrameOfReferenceUID') then
-                    ldStudyInstanceUIDNew = RestApiGet('/tools/generate-uid?level=study') 
-                    lUIDMap[lKeptUIDVal] =  ldStudyInstanceUIDNew
-                    lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
-                end
-
-                if string.find(lKeptUIDType['Name'], 'SeriesInstanceUID') then
-                    ldSeriesInstanceUIDNew = RestApiGet('/tools/generate-uid?level=series') 
-                    lUIDMap[lKeptUIDVal] =  ldSeriesInstanceUIDNew
-                    lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
-                end
-
-                if string.find(lKeptUIDType['Name'], 'SOPInstanceUID') then
-                    local ldInstanceUIDRemap
-                    ldInstanceUIDRemap = RestApiGet('/tools/generate-uid?level=instance') 
-                    lUIDMap[lKeptUIDVal] = ldInstanceUIDRemap
-                    lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
-                end
-
-                if string.find(lKeptUIDType['Name'], 'SOPClassUID') or string.find(lKeptUIDType['Name'], 'CodingScheme') then -- we keep these
-                    lUIDMap[lKeptUIDVal] = lKeptUIDVal
-                    lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
-                end
-
-                -- Generic catch all will be a study uid
-                if not lUIDMap[lKeptUIDVal] then
-                    ldStudyInstanceUIDNew = RestApiGet('/tools/generate-uid?level=study') 
-                    lUIDMap[lKeptUIDVal] =  ldStudyInstanceUIDNew
-                    lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
-                end
-
-            end
-
-        end
-    end
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    return lUIDMap, lUIDType
-
-end
-
+-- -- ======================================================
+-- function MapUIDOldToNew(aoStudyIDNew, aFlagRemapSOPInstanceUID, aFlagRemapKeptUID)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local lFlagRemapSOPInstanceUID = aFlagRemapSOPInstanceUID
+--     local lFlagRemapKeptUID = aFlagRemapKeptUID
+--     local lUIDMap = {}
+--     local lUIDType = {}
+-- 
+--     -- Cycle through anonymized versions to set up one-to-one maps
+--     -- First at the study level
+--     local loStudyIDOld, loStudyIDMod
+--     local loStudyMetaNew, loStudyMetaOld, loStudyMetaMod
+--     local ldStudyInstanceUIDNew, ldStudyInstanceUIDOld, ldStudyInstanceUIDMod
+--     loStudyMetaNew = ParseJson(RestApiGet('/studies/' .. aoStudyIDNew, false))
+--     ldStudyInstanceUIDNew = loStudyMetaNew['MainDicomTags']['StudyInstanceUID']
+-- 
+--     loStudyIDMod = loStudyMetaNew['AnonymizedFrom']
+--     loStudyMetaMod = ParseJson(RestApiGet('/studies/' .. loStudyIDMod, false))
+--     ldStudyInstanceUIDMod = loStudyMetaMod['MainDicomTags']['StudyInstanceUID']
+-- 
+--     loStudyIDOld = loStudyMetaMod['ModifiedFrom']
+--     loStudyMetaOld = ParseJson(RestApiGet('/studies/' .. loStudyIDOld, false))
+--     ldStudyInstanceUIDOld = loStudyMetaOld['MainDicomTags']['StudyInstanceUID']
+--     lUIDMap[ldStudyInstanceUIDOld] = ldStudyInstanceUIDNew
+--     lUIDType[ldStudyInstanceUIDOld] = 'StudyInstanceUID'
+-- 
+--     local loSeriesIDOld, loSeiesIDMod
+--     local loSeriesMetaNew, loSeriesMetaOld, loSeriesMetaMod
+--     local ldSeriesInstanceUIDNew, ldSeriesInstanceUIDOld, ldSeriesInstanceUIDMod
+-- 
+--     local loInstanceIDOld
+--     local loInstanceMetaNew, loInstanceMetaOld, loInstanceMetaMod
+--     local ldSOPInstanceUIDNew, ldSOPInstanceUIDOld, ldSOPInstanceUIDMod
+-- 
+--     for i, loSeriesIDNew in pairs(loStudyMetaNew['Series']) do
+-- 
+--         -- Now series
+--         loSeriesMetaNew = ParseJson(RestApiGet('/series/' .. loSeriesIDNew, false))
+--         ldSeriesInstanceUIDNew = loSeriesMetaNew['MainDicomTags']['SeriesInstanceUID']
+-- 
+--         loSeriesIDMod = loSeriesMetaNew['AnonymizedFrom']
+--         loSeriesMetaMod = ParseJson(RestApiGet('/series/' .. loSeriesIDMod, false))
+--         if not loSeriesMetaMod then
+--             if gVerbose then print(string.rep(' ', gIndent) .. 'Missing series:' .. loSeriesIDMod .. ' of ' .. aoStudyIDNew ) end
+--         end
+--         ldSeriesInstanceUIDMod = loSeriesMetaMod['MainDicomTags']['SeriesInstanceUID']
+-- 
+--         loSeriesIDOld = loSeriesMetaMod['ModifiedFrom']
+--         loSeriesMetaOld = ParseJson(RestApiGet('/series/' .. loSeriesIDOld, false))
+--         ldSeriesInstanceUIDOld = loSeriesMetaOld['MainDicomTags']['SeriesInstanceUID']
+-- 
+--         lUIDMap[ldSeriesInstanceUIDOld] = ldSeriesInstanceUIDNew
+--         lUIDType[ldSeriesInstanceUIDOld] = 'SeriesInstanceUID'
+-- 
+--         for j, loInstanceIDNew in pairs(loSeriesMetaNew['Instances']) do
+--             -- Now instances 
+--             loInstanceMetaNew = ParseJson(RestApiGet('/instances/' .. loInstanceIDNew, false))
+--             ldSOPInstanceUIDNew = loInstanceMetaNew['MainDicomTags']['SOPInstanceUID']
+--             loInstanceIDMod = loInstanceMetaNew['AnonymizedFrom'] 
+--             loInstanceMetaMod = ParseJson(RestApiGet('/instances/' .. loInstanceIDMod, false))
+--             ldSOPInstanceUIDMod = loInstanceMetaMod['MainDicomTags']['SOPInstanceUID']
+--             loInstanceIDOld = loInstanceMetaMod['ModifiedFrom'] 
+--             if loInstanceIDOld then 
+--                 loInstanceMetaOld = ParseJson(RestApiGet('/instances/' .. loInstanceIDOld, false))
+--                 ldSOPInstanceUIDOld = loInstanceMetaOld['MainDicomTags']['SOPInstanceUID']
+--                 lUIDMap[ldSOPInstanceUIDOld] = ldSOPInstanceUIDNew
+--                 lUIDType[ldSOPInstanceUIDOld] = 'SOPInstanceUID'
+--                 -- Delete the Modified intermediate
+--                 RestApiDelete('/instances/' .. loInstanceIDMod, false)
+--             end
+-- 
+--             if lFlagRemapSOPInstanceUID then
+--                 local ldInstanceUIDRemap = RestApiGet('/tools/generate-uid?level=instance') 
+--                 lUIDMap[ldSOPInstanceUIDNew] = ldInstanceUIDRemap
+--                 lUIDType[ldSOPInstanceUIDNew] = 'SOPInstanceUID'
+--             end
+-- 
+--         end
+-- 
+--     end
+-- 
+--     -- Now check for non-modified UID
+--     if lFlagRemapKeptUID then
+--         for lKeptUIDVal, lKeptUIDType in pairs(gKeptUID) do
+-- 
+--             -- We really only care if it does not exist
+--             if not lUIDMap[lKeptUIDVal] then
+-- 
+--                 if string.find(lKeptUIDType['Name'], 'StudyInstanceUID') or string.find(lKeptUIDType['Name'], 'FrameOfReferenceUID') then
+--                     ldStudyInstanceUIDNew = RestApiGet('/tools/generate-uid?level=study') 
+--                     lUIDMap[lKeptUIDVal] =  ldStudyInstanceUIDNew
+--                     lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
+--                 end
+-- 
+--                 if string.find(lKeptUIDType['Name'], 'SeriesInstanceUID') then
+--                     ldSeriesInstanceUIDNew = RestApiGet('/tools/generate-uid?level=series') 
+--                     lUIDMap[lKeptUIDVal] =  ldSeriesInstanceUIDNew
+--                     lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
+--                 end
+-- 
+--                 if string.find(lKeptUIDType['Name'], 'SOPInstanceUID') then
+--                     local ldInstanceUIDRemap
+--                     ldInstanceUIDRemap = RestApiGet('/tools/generate-uid?level=instance') 
+--                     lUIDMap[lKeptUIDVal] = ldInstanceUIDRemap
+--                     lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
+--                 end
+-- 
+--                 if string.find(lKeptUIDType['Name'], 'SOPClassUID') or string.find(lKeptUIDType['Name'], 'CodingScheme') then -- we keep these
+--                     lUIDMap[lKeptUIDVal] = lKeptUIDVal
+--                     lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
+--                 end
+-- 
+--                 -- Generic catch all will be a study uid
+--                 if not lUIDMap[lKeptUIDVal] then
+--                     ldStudyInstanceUIDNew = RestApiGet('/tools/generate-uid?level=study') 
+--                     lUIDMap[lKeptUIDVal] =  ldStudyInstanceUIDNew
+--                     lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
+--                 end
+-- 
+--             end
+-- 
+--         end
+--     end
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     return lUIDMap, lUIDType
+-- 
+-- end
+-- 
 -- -- ======================================================
 -- function LoadShiftEpochFromDB(aSQLpid)
 -- 
@@ -3722,8 +3725,16 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
             -- Set up old-->new UID map
             local lFlagRemapSOPInstanceUID = true
             local lFlagRemapKeptUID = true
-            gUIDMap, gUIDType = MapUIDOldToNew(loStudyIDAnon,lFlagRemapSOPInstanceUID,lFlagRemapKeptUID)
-            
+            -- gUIDMap, gUIDType = MapUIDOldToNew(loStudyIDAnon,lFlagRemapSOPInstanceUID,lFlagRemapKeptUID)
+            local lPostData = {}
+            lPostData['StudyIDNew'] = loStudyIDAnon
+            lPostData['FlagRemapSOPInstanceUID'] = lFlagRemapSOPInstanceUID
+            lPostData['FlagRemapKeptUID'] = lFlagRemapKeptUID
+            lPostData['KeptUID'] = gKeptUID
+            local lResults = ParseJson(RestApiPost('/map_uid_old_to_new_lua', DumpJson(lPostData), false))
+            gUIDMap = lResults['UIDMap']
+            gUIDType = lResults['UIDType']
+
             -- Set up replacements for AccessionNumber and StudyID
             local lReplaceRoot = {}
             lReplaceRoot['AccessionNumber'] = string.sub(loStudyIDAnon,1,8) .. string.sub(loStudyIDAnon,10,17)
@@ -4029,7 +4040,15 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
             -- Set up old-->new UID map
             local lFlagRemapSOPInstanceUID = true
             local lFlagRemapKeptUID = true
-            gUIDMap, gUIDType = MapUIDOldToNew(loStudyIDAnon,lFlagRemapSOPInstanceUID,lFlagRemapKeptUID)
+            -- gUIDMap, gUIDType = MapUIDOldToNew(loStudyIDAnon,lFlagRemapSOPInstanceUID,lFlagRemapKeptUID)
+            local lPostData = {}
+            lPostData['StudyIDNew'] = loStudyIDAnon
+            lPostData['FlagRemapSOPInstanceUID'] = lFlagRemapSOPInstanceUID
+            lPostData['FlagRemapKeptUID'] = lFlagRemapKeptUID
+            lPostData['KeptUID'] = gKeptUID
+            local lResults = ParseJson(RestApiPost('/map_uid_old_to_new_lua', DumpJson(lPostData), false))
+            gUIDMap = lResults['UIDMap']
+            gUIDType = lResults['UIDType']
             
             -- Set up replacements for AccessionNumber and StudyID
             local lReplaceRoot = {}
