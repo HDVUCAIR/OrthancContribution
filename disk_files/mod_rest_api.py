@@ -10,28 +10,22 @@ import re
 from email.message import EmailMessage
 from email.headerregistry import Address
 
-# Regular expressions
-address_re = re.compile('([^<]+)<([^@]+)@([^>]+)>.*')
+global_var = {'flag' : {}, 'privileged' : {}, 'regexp': {}}
 
-# Common variables
-website = os.getenv('ORTHANC__NAME', default='UnknownOrthanc')
-fqdn = os.getenv('HOST_FQDN', default='Unknown.Host')
+# Regular expressions
+global_var['regexp']['address'] = re.compile('([^<]+)<([^@]+)@([^>]+)>.*')
+
+# Global variables
 python_verbose_logwarning = os.getenv('PYTHON_VERBOSE_LOGWARNING', default='false') == 'true' or \
                             os.getenv('ORTHANC__PYTHON_VERBOSE', default='false') == 'true'
-log_indent_level = 0
 
-if os.getenv('PYTHON_WRITE_DICOM_DEFAULT') is not None:
-    flag_write_dicom = os.getenv('PYTHON_WRITE_DICOM_DEFAULT') == 'true'
-else:
-    flag_write_dicom = False
-
-if os.getenv('PYTHON_FLAG_AUTO_ANON_WHEN_STABLE') is not None:
-    flag_auto_anon = os.getenv('PYTHON_FLAG_AUTO_ANON_WHEN_STABLE') == 'true'
-else:
-    flag_auto_anon = False
-
-privileged_ip = os.getenv('PYTHON_X_REMOTE_IP_ALLOWED_TO_TRIGGER')
-privileged_user = os.getenv('PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER')
+global_var['flag']['auto_anon'] = os.getenv('PYTHON_FLAG_AUTO_ANON_WHEN_STABLE', default='false') == 'true'
+global_var['flag']['write_dicom'] = os.getenv('PYTHON_WRITE_DICOM_DEFAULT', default='false') == 'true'
+global_var['fqdn'] = os.getenv('HOST_FQDN', default='Unknown.Host')
+global_var['privileged']['ip'] = os.getenv('PYTHON_X_REMOTE_IP_ALLOWED_TO_TRIGGER')
+global_var['privileged']['user'] = os.getenv('PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER')
+global_var['log_indent_level'] = 0
+global_var['website'] = os.getenv('ORTHANC__NAME', default='UnknownOrthanc')
 
 # Set the umask to u=+rwx,g=+rx,o= (octal 0o027)
 os.umask(0o027)
@@ -77,7 +71,7 @@ button_js_patient_meta = "$('#patient').live('pagebeforecreate', function() {" +
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/patients/' + uuid);" % website + \
+                         " window.open('/%s/patients/' + uuid);" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -96,7 +90,7 @@ button_js_patient_stats = "$('#patient').live('pagebeforecreate', function() {" 
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/patients/' + uuid + '/statistics');" % website + \
+                         " window.open('/%s/patients/' + uuid + '/statistics');" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -118,7 +112,7 @@ button_js_study_meta = "$('#study').live('pagebeforecreate', function() {" + \
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/studies/' + uuid);" % website + \
+                         " window.open('/%s/studies/' + uuid);" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -137,7 +131,7 @@ button_js_study_stats = "$('#study').live('pagebeforecreate', function() {" + \
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/studies/' + uuid + '/statistics');" % website + \
+                         " window.open('/%s/studies/' + uuid + '/statistics');" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -156,7 +150,7 @@ button_js_study_to_disk = "$('#study').live('pagebeforecreate', function() {" + 
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/studies/' + uuid + '/send_to_disk');" % website + \
+                         " window.open('/%s/studies/' + uuid + '/send_to_disk');" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -178,7 +172,7 @@ button_js_series_meta = "$('#series').live('pagebeforecreate', function() {" + \
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/series/' + uuid);" % website + \
+                         " window.open('/%s/series/' + uuid);" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -197,7 +191,7 @@ button_js_series_stats = "$('#series').live('pagebeforecreate', function() {" + 
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/series/' + uuid + '/statistics');" % website + \
+                         " window.open('/%s/series/' + uuid + '/statistics');" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -216,7 +210,7 @@ button_js_series_to_disk = "$('#series').live('pagebeforecreate', function() {" 
                          " if ($.mobile.pageData) {" + \
                          "   uuid = $.mobile.pageData.uuid" + \
                          " };" + \
-                         " window.open('/%s/series/' + uuid + '/send_to_disk');" % website + \
+                         " window.open('/%s/series/' + uuid + '/send_to_disk');" % global_var['website'] + \
                          "}" + \
                        ");" + \
                      "});"
@@ -264,13 +258,13 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
     addresses = []
     for address_text in recipients:
         address_trim = address_text.strip()
-        address_res = address_re.match(address_trim)
+        address_res = global_var['regexp']['address'].match(address_trim)
         if address_res is not None:
             addresses += [Address(address_res.group(1),address_res.group(2),address_res.group(3))]
     if cc is not None:
         for address_text in cc.split(','):
             address_trim = address_text.strip()
-            address_res = address_re.match(address_trim)
+            address_res = global_var['regexp']['address'].match(address_trim)
             if address_res is not None:
                 addresses += [Address(address_res.group(1),address_res.group(2),address_res.group(3))]
         
@@ -327,8 +321,8 @@ def email_study_report(orthanc_study_id):
     # Main study info
     message_body += [' '*4 + '<table border=1>']
     message_body += [' '*6 + '<tr><th>Item</th><th>Value</th></tr>']
-    message_body += [' '*6 + '<tr><td>Study</td><td><a href="https://%s/%s/app/explorer.html#study?uuid=%s">%s</a></td></tr>' % (fqdn, website, orthanc_study_id,study_description)]
-    message_body += [' '*6 + '<tr><td>Patient</td><td><a href="https://%s/%s/app/explorer.html#patient?uuid=%s">%s</a></td></tr>' % (fqdn, website, orthanc_patient_id,patient_name)]
+    message_body += [' '*6 + '<tr><td>Study</td><td><a href="https://%s/%s/app/explorer.html#study?uuid=%s">%s</a></td></tr>' % (global_var['fqdn'], global_var['website'], orthanc_study_id,study_description)]
+    message_body += [' '*6 + '<tr><td>Patient</td><td><a href="https://%s/%s/app/explorer.html#patient?uuid=%s">%s</a></td></tr>' % (global_var['fqdn'], global_var['website'], orthanc_patient_id,patient_name)]
     for key in ['InstitutionName', 'ReferringPhysicianName']:
         if key in meta_study['MainDicomTags']:
             value = meta_study['MainDicomTags'][key]
@@ -366,7 +360,7 @@ def email_study_report(orthanc_study_id):
         line_of_text += '<td align="center">%d</td>' % series_data[series_number]['Instances']
         for key in ['StationName', 'BodyPartExamined', 'SeriesDescription']:
             if key == 'SeriesDescription' and len(series_data[series_number][key]) > 0:
-                line_of_text += '<td><a href="https://%s/%s/app/explorer.html#series?uuid=%s">%s</a></td>' % (fqdn, website, series_data[series_number]['orthanc_series_id'],series_data[series_number][key])
+                line_of_text += '<td><a href="https://%s/%s/app/explorer.html#series?uuid=%s">%s</a></td>' % (global_var['fqdn'], global_var['website'], series_data[series_number]['orthanc_series_id'],series_data[series_number][key])
             else:
                 line_of_text += '<td>%s</td>' % series_data[series_number][key]
         line_of_text += '</tr>'
@@ -391,7 +385,7 @@ def get_remote_user(request_headers):
     return remote_user
 
 # ============================================================================
-def series_to_disk(orthanc_series_id, study_data=None, flag_write_dicom=flag_write_dicom):
+def series_to_disk(orthanc_series_id, study_data=None, flag_write_dicom=global_var['flag']['write_dicom']):
     """
     PURPOSE:  Write selected series to disk
     INPUT:    Orthanc ID for series
@@ -403,15 +397,15 @@ def series_to_disk(orthanc_series_id, study_data=None, flag_write_dicom=flag_wri
         response_series = orthanc.RestApiGet('/series/%s' % orthanc_series_id)
     except ValueError as e:
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Problem querying series: %s' % orthanc_series_id)
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem querying series: %s' % orthanc_series_id)
         return {'status' : 1, 'error_text' : 'Problem querying series'}
     except orthanc.OrthancException as e:
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Problem querying series: %s' % orthanc_series_id)
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem querying series: %s' % orthanc_series_id)
         orthanc.LogWarning(e)
         if e.args[0] == orthanc.ErrorCode.UNKNOWN_RESOURCE:
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'Unknown resource')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Unknown resource')
         return {'status' : 2, 'error_text' : 'Unknown resource'}
     meta_series = json.loads(response_series)
 
@@ -460,7 +454,7 @@ def series_to_disk(orthanc_series_id, study_data=None, flag_write_dicom=flag_wri
         os.chmod(dir_path_analysis, stat.S_IRWXU | stat.S_IRWXG | stat.S_ISGID)
     except:
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Problem creating directories')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem creating directories')
         return {'status' : 4, 'error_text' : 'Problem creating directories'}
 
     # Dump the instances to disk
@@ -477,10 +471,10 @@ def series_to_disk(orthanc_series_id, study_data=None, flag_write_dicom=flag_wri
                 file_dicom = '%s/%s.dcm' % (dir_path_dicom, sop_instance_uid)
             if os.path.exists(file_dicom):
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + '%s exists.  Skipping' % file_dicom)
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + '%s exists.  Skipping' % file_dicom)
             else:
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + 'Writing %s' % file_dicom)
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Writing %s' % file_dicom)
                 file_blob = orthanc.RestApiGet('/instances/%s/file' % orthanc_instance_id)
                 dicom_struct = pydicom.dcmread(io.BytesIO(file_blob))
                 dicom_struct.save_as(file_dicom)
@@ -488,7 +482,7 @@ def series_to_disk(orthanc_series_id, study_data=None, flag_write_dicom=flag_wri
     return {'status' : 0, 'error_text' : ''}
 
 # ============================================================================
-def study_to_disk(orthanc_study_id, flag_write_dicom=flag_write_dicom):
+def study_to_disk(orthanc_study_id, flag_write_dicom=global_var['flag']['write_dicom']):
     """
     PURPOSE:  Write selected study to disk
     INPUT:    Orthanc ID for study
@@ -499,10 +493,10 @@ def study_to_disk(orthanc_study_id, flag_write_dicom=flag_write_dicom):
 
     if flag_write_dicom:
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Triggered anon:\n   Directories will be created.\n   DICOM will be written.')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Triggered anon:\n   Directories will be created.\n   DICOM will be written.')
     else:
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Stable anon:\n   Directories will be created.\n   DICOM will NOT be written.')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Stable anon:\n   Directories will be created.\n   DICOM will NOT be written.')
 
     # Extract data used in directory names
     status, study_data, meta_study = useful_study_data(orthanc_study_id, return_meta=True)
@@ -535,7 +529,7 @@ def study_to_disk(orthanc_study_id, flag_write_dicom=flag_write_dicom):
         status = series_to_disk(orthanc_series_id, study_data=study_data, flag_write_dicom=flag_write_dicom)
         if status['status'] != 0:
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'Problem dumping series to disk')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem dumping series to disk')
             return {'status' : status['status']+1000, 'error_text' : 'Problem dumping to disk %s' % status['error_text']}
 
     return {'status' : 0, 'error_text' : ''}
@@ -554,7 +548,7 @@ def useful_study_data(orthanc_study_id, return_meta=False):
         response_study = orthanc.RestApiGet('/studies/%s' % orthanc_study_id)
     except:
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Problem querying study: %s' % orthanc_study_id)
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem querying study: %s' % orthanc_study_id)
         return {'status' : 1, 'error_text': 'Problem getting study meta'}, {}
 
     meta_study = json.loads(response_study)
@@ -562,13 +556,13 @@ def useful_study_data(orthanc_study_id, return_meta=False):
     for value in ['StudyDate', 'StudyTime']:
         if value not in meta_study['MainDicomTags']:
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'No %s found in meta data, skipping' % value)
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'No %s found in meta data, skipping' % value)
             return {'status' : 1, 'error_text': 'Missing %s in meta data' % value}, {}
         study_data[value] = meta_study['MainDicomTags'][value]
     for value in ['PatientName', 'PatientID']:
         if value not in meta_study['PatientMainDicomTags']:
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'No %s foudn in meta data, skipping' % value)
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'No %s foudn in meta data, skipping' % value)
             return {'status' : 1, 'error_text': 'Missing %s in meta data' % value}, {}
         study_data[value] = meta_study['PatientMainDicomTags'][value]
     for value in ['StudyDescription', 'AccessionNumber']:
@@ -595,24 +589,24 @@ def user_permitted(uri, remote_user):
 # -------------------------------------------------------
 
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Checking whether remote user (%s) is permitted to \n%s' % (remote_user,uri))
-    permissions = os.getenv('PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER')
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Checking whether remote user (%s) is permitted to \n%s' % (remote_user,uri))
+    permissions = global_var['privileged']['user']
     if permissions is None:
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Rejecting anon due to missing permissions')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Rejecting anon due to missing permissions')
         return False
     allowed_to_trigger = []
     for permitted in permissions.split(','):
         if permitted.strip() not in allowed_to_trigger:
             allowed_to_trigger += [permitted.strip()]
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Allowed users: %s' % ' '.join(allowed_to_trigger))
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Allowed users: %s' % ' '.join(allowed_to_trigger))
     if remote_user not in allowed_to_trigger:
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Operation not permitted to user: %s %s' % (uri, remote_user))
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Operation not permitted to user: %s %s' % (uri, remote_user))
         return False
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * log_indent_level + 'Remote user is permitted (%s)' % remote_user)
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Remote user is permitted (%s)' % remote_user)
 
     return True
 
@@ -662,7 +656,7 @@ def IncomingFilter(uri, **request):
         headers_str = '%s %s.%s' % (headers_str, key, value)
     if not('x-remote-user' in request['headers'] and 'x-forwarded-for' in request['headers']):
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Rejecting incoming access: %s' % headers_str)
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Rejecting incoming access: %s' % headers_str)
         return False
 
     remote_user = get_remote_user(request['headers'])
@@ -685,7 +679,7 @@ def IncomingFilter(uri, **request):
 
     if uri.find('images') < 0:
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + '%s %s %s %s' % (remote_user, remote_ip, method, uri))
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + '%s %s %s %s' % (remote_user, remote_ip, method, uri))
 
     if method in ['DELETE', 'PUT']:
         return user_permitted(uri, remote_user)
@@ -717,11 +711,11 @@ def ManualSendToDisk(output, uri, **request):
             remote_ip = ''
 
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Send to disk triggered for %s' % orthanc_id)
-        status_email = email_message('Initiated send to disk', '<a href="https://%s/%s/app/explorer.html#study?uuid=%s">Study</a> send to disk initiated by %s from %s' % (fqdn, website, orthanc_id,remote_user,remote_ip), subtype='html')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Send to disk triggered for %s' % orthanc_id)
+        status_email = email_message('Initiated send to disk', '<a href="https://%s/%s/app/explorer.html#study?uuid=%s">Study</a> send to disk initiated by %s from %s' % (global_var['fqdn'], global_var['website'], orthanc_id,remote_user,remote_ip), subtype='html')
         if status_email['status'] != 0:
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'Problem sending email prior to send to disk')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem sending email prior to send to disk')
             output.AnswerBuffer('Problem sending email prior to send to disk\n%s' % status_email['error_text'], 'text/plain')
             return
         status = {'status' : 1, 'error_text' : 'Invalid send to disk option'}
@@ -731,19 +725,19 @@ def ManualSendToDisk(output, uri, **request):
             status = series_to_disk(orthanc_id, flag_write_dicom=True)
 
         if status['status'] != 0:
-            status_email = email_message('Failed to send to disk', '<a href="https://%s/%s/app/explorer.html#study?uuid=%s">Study</a> failed to send to disk for %s from %s: %s' % (fqdn, website, orthanc_id, remote_user, remote_ip, status['error_text']), subtype='html')
+            status_email = email_message('Failed to send to disk', '<a href="https://%s/%s/app/explorer.html#study?uuid=%s">Study</a> failed to send to disk for %s from %s: %s' % (global_var['fqdn'], global_var['website'], orthanc_id, remote_user, remote_ip, status['error_text']), subtype='html')
             output.LogWarning('Failed to send to disk')
             output.AnswerBuffer('Failed to send to disk', 'text/plain')
             return
-        status_email = email_message('Completed send to disk', '<a href="https://%s/%s/app/explorer.html#study?uuid=%s">Study</a> send to disk completed for %s from %s' % (fqdn, website, orthanc_id, remote_user, remote_ip), subtype='html')
+        status_email = email_message('Completed send to disk', '<a href="https://%s/%s/app/explorer.html#study?uuid=%s">Study</a> send to disk completed for %s from %s' % (global_var['fqdn'], global_var['website'], orthanc_id, remote_user, remote_ip), subtype='html')
         if status_email['status'] != 0:
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'Problem sending email after to send to disk')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem sending email after to send to disk')
             output.AnswerBuffer('Problem sending email after send to disk', 'text/plain')
             return
         output.AnswerBuffer('Successfully wrote study to disk', 'text/plain')
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * log_indent_level + 'Send to disk complete for %s' % orthanc_id)
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Send to disk complete for %s' % orthanc_id)
 
     else:
         output.SendMethodNotAllowed('GET')
@@ -768,10 +762,11 @@ def OnChange(change_type, level, resource_id):
                 orthanc.LogWarning("Sent onstable study report")
 
         # Save to disk
-        status = study_to_disk(resource_id)
-        if status['status'] != 0:
-            if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'Problem sending stable study to disk: %s %s' % (resource_id, status['error_text']))
+        if global_var['flag']['auto_anon']:
+            status = study_to_disk(resource_id)
+            if status['status'] != 0:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem sending stable study to disk: %s %s' % (resource_id, status['error_text']))
 
 # ============================================================================
 def ToggleLuaVerbose(output, uri, **request):
@@ -784,17 +779,17 @@ def ToggleLuaVerbose(output, uri, **request):
             state = json.loads(response_post)
             if state == 1:
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + 'gVerbose is ON, turning OFF...')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'gVerbose is ON, turning OFF...')
                 orthanc.RestApiPost('/tools/execute-script', 'gVerbose=nil')
                 output.AnswerBuffer('gVerbose was ON, now OFF', 'text/plain')
             else:
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * log_indent_level + 'gVerbose is OFF, turning ON...')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'gVerbose is OFF, turning ON...')
                 orthanc.RestApiPost('/tools/execute-script', 'gVerbose=1')
                 output.AnswerBuffer('gVerbose was OFF, now ON', 'text/plain')
         except:
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * log_indent_level + 'Problem getting gVerbose state')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem getting gVerbose state')
             output.AnswerBuffer('Problem getting gVerbose state', 'text/plain')
 
 # ============================================================================

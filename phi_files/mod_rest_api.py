@@ -13,7 +13,7 @@ import threading
 from email.message import EmailMessage
 from email.headerregistry import Address
 
-global_var = {'flag' : {}, 're': {}}
+global_var = {'flag' : {}, 'regexp': {}}
 try:
     from bs4 import BeautifulSoup
     global_var['flag']['beautiful_soup'] = True
@@ -26,7 +26,7 @@ except:
     global_var['flag']['psycopg2'] = False
 
 # Regular expressions
-global_var['re']['address_re'] = re.compile('([^<]+)<([^@]+)@([^>]+)>.*')
+global_var['regexp']['address'] = re.compile('([^<]+)<([^@]+)@([^>]+)>.*')
 
 # Global variables
 python_verbose_logwarning = os.getenv('PYTHON_VERBOSE_LOGWARNING', default='false') == 'true' or \
@@ -1622,13 +1622,13 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
     addresses = []
     for address_text in recipients:
         address_trim = address_text.strip()
-        address_res = global_var['re']['address_re'].match(address_trim)
+        address_res = global_var['regexp']['address'].match(address_trim)
         if address_res is not None:
             addresses += [Address(address_res.group(1),address_res.group(2),address_res.group(3))]
     if cc is not None:
         for address_text in cc.split(','):
             address_trim = address_text.strip()
-            address_res = global_var['re']['address_re'].match(address_trim)
+            address_res = global_var['regexp']['address'].match(address_trim)
             if address_res is not None:
                 addresses += [Address(address_res.group(1),address_res.group(2),address_res.group(3))]
         
