@@ -2303,6 +2303,12 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
             lRecurseGroupRemoveRe = nil
         end
     end
+    -- print('lRecurse Groups')
+    -- print(DumpJson(lRecurseProprietary))
+    -- print(DumpJson(lRecurseRemove))
+    -- if lRecurseGroupKeep then print(DumpJson(lRecurseGroupKeep)) end
+    -- if lRecurseGroupRemoveRe then print(DumpJson(lRecurseGroupRemoveRe)) end
+    
     local loInstanceID, lGroup, lElement, lField
     for i, loLevelInstanceMeta in pairs(loLevelInstancesMeta) do
         loInstanceID = loLevelInstanceMeta['ID']
@@ -2347,7 +2353,7 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
             end
         end
     end -- loop over instances    
-    
+  
     -- Remove any private tags not already explicity kept
     if lTagHandling['KeepSomePrivate'] then
         for i, loLevelInstanceMeta in pairs(loLevelInstancesMeta) do
@@ -2373,7 +2379,13 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
             lTagsToRemove[lField] = true
         end
     end
-
+    -- print('Pre scan results')
+    -- print(DumpJson(gTopLevelTagToKeep))
+    -- print(DumpJson(gKeptUID))
+    -- print(DumpJson(lTagsEncountered))
+    -- print(DumpJson(lTagsToKeep))
+    -- print(DumpJson(lTagsToRemove))
+ 
     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (1) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
 
     local lDataToPython = {}
@@ -2463,6 +2475,10 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
             lKeep[lIndex] = lTagKey
         end
     end
+    -- print('Replace/Remove/Keep')
+    -- print(DumpJson(lReplace))
+    -- print(DumpJson(lRemove))
+    -- print(DumpJson(lKeep))
 
     -- Modify the study: It seems remove clashes with keep and I need to run them separate
     if gVerbose then print(string.rep(' ', gIndent) .. 'Starting the study modification call') end
@@ -2476,6 +2492,8 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
     end
     lModifyPostData['Force'] = true
     lModifyPostData['DicomVersion'] = '2008'
+    -- print('Modify Post')
+    -- print(DumpJson(lModifyPostData))
     if lFlagByStudy then
         local lSuccess, loStudyModMetaJson = pcall(RestApiPost, 
                                                   '/studies/' .. aoLevelID .. '/modify', 
@@ -2503,6 +2521,7 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
         loSeriesModMeta = ParseJson(RestApiGet('/series/' .. loSeriesIDMod, false))
         loStudyIDMod = loSeriesModMeta['ParentStudy']
     end
+    -- print('StudyIDMod: ' .. loStudyIDMod)
     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (3) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
 
     -- Anonymize the study
@@ -2515,6 +2534,8 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
     lAnonPostData['Keep'] = lKeep
     lAnonPostData['Force'] = true
     lAnonPostData['DicomVersion'] = '2008'
+    -- print('AnonPostData')
+    -- print(DumpJson(lAnonPostData))
     local loInstancesAnonMeta 
     if lFlagByStudy then
         local lSuccess, loStudyAnonMetaJson = pcall(RestApiPost, 
@@ -2546,17 +2567,22 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
         loStudyIDAnon = loSeriesAnonMeta['ParentStudy']
         loInstancesAnonMeta = ParseJson(RestApiGet('/series/' .. loSeriesAnonMeta['ID'] .. '/instances', false))
     end
+    -- print('InstancesAnonMeta')
+    -- print(DumpJson(loInstancesAnonMeta))
     if gVerbose then print(string.rep(' ', gIndent) .. 'N instances anon: ', #loInstancesAnonMeta) end
     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (4) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
 
-    local loStudyAnonMeta = 
-        ParseJson(RestApiGet('/studies/' .. loStudyIDAnon, false))
+    local loStudyAnonMeta = ParseJson(RestApiGet('/studies/' .. loStudyIDAnon, false))
+    -- print('MetaStudyAnon')
+    -- print(DumpJson(loStudyAnonMeta))
 
     if not adPatientIDAnon then
         -- SavePatientIDsAnonToDB(loStudyAnonMeta,aSQLpid)
         local lPostData = {}
         lPostData['OrthancStudyID'] = loStudyAnonMeta['ID']
         lPostData['SQLpid'] = aSQLpid
+        -- print('OrthancStudyID: ' .. loStudyAnonMeta['ID'])
+        -- print('SQLpid: ' .. aSQLpid)
         local lStatus = ParseJson(RestApiPost('/save_patient_ids_anon_to_db_lua', DumpJson(lPostData), false))
         if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
     end
@@ -2565,6 +2591,8 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
         local lPostData = {}
         lPostData['OrthancStudyID'] = loStudyAnonMeta['ID']
         lPostData['SQLsiuid'] = aSQLsiuid
+        -- print('OrthancStudyID: ' .. loStudyAnonMeta['ID'])
+        -- print('SQLsiuid: ' .. aSQLsiuid)
         local lStatus = ParseJson(RestApiPost('/save_study_instance_uid_anon_to_db_lua', DumpJson(lPostData), false))
         if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
     end
@@ -2574,6 +2602,8 @@ function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall,
         local lPostData = {}
         lPostData['PatientNameAnon'] = ldPatientNameAnon
         lPostData['SQLsiuid'] = aSQLsiuid
+        -- print('PatientNameAnon: ' .. ldPatientNameAnon)
+        -- print('SQLsiuid: ' .. aSQLsiuid)
         local lStatus = ParseJson(RestApiPost('/save_patient_name_anon_to_db_lua', DumpJson(lPostData), false))
         if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
     end
@@ -3650,14 +3680,40 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
             local lFlagFirstCall = true
             for i, loSeriesID in ipairs(loSeriesIDs) do 
                 local loInstancesAnonMetaTemp, loStudyIDAnonTemp , ldPatientNameAnonTemp
-                loInstancesAnonMetaTemp, loStudyIDAnonTemp, ldPatientNameAnonTemp = 
-                    AnonymizeInstances('Series', loSeriesID, lFlagFirstCall, 
-                                       lSQLpid[lPatientIDModifier],ldPatientIDAnon[lPatientIDModifier],
-                                       lSQLsiuid[lPatientIDModifier], ldStudyInstanceUIDAnon[lPatientIDModifier], 
-                                       lPatientIDModifier)
-                if ldPatientNameAnonTemp then
-                    ldPatientNameAnonDict[ldPatientNameAnonTemp] = true
-                end
+                -- loInstancesAnonMetaTemp, loStudyIDAnonTemp, ldPatientNameAnonTemp = 
+                --    AnonymizeInstances('Series', loSeriesID, lFlagFirstCall, 
+                --                        lSQLpid[lPatientIDModifier],ldPatientIDAnon[lPatientIDModifier],
+                --                        lSQLsiuid[lPatientIDModifier], ldStudyInstanceUIDAnon[lPatientIDModifier], 
+                --                        lPatientIDModifier)
+                local lPostData = {}
+                if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
+                if gAddressList then lPostData['AddressList'] = gAddressList end
+                lPostData['Level'] = 'Series'
+                lPostData['LevelID'] =loSeriesID 
+                lPostData['FlagFirstCall'] = lFlagFirstCall
+                if gKeptUID then lPostData['KeptUID'] = gKeptUID end
+                if ldPatientIDAnon[lPatientIDModifier] then lPostData['PatientIDAnon'] = ldPatientIDAnon[lPatientIDModifier] end
+                if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+                if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
+                if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
+                lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
+                lPostData['SQLsiuid'] = lSQLsiuid[lPatientIDModifier]
+                if ldStudyInstanceUIDAnon[lPatientIDModifier] then lPostData['StudyInstanceUIDAnon'] = ldStudyInstanceUIDAnon[lPatientIDModifier] end
+                if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
+                if gUIDMap then lPostData['UIDMap'] = gUIDMap end
+                local lResult = ParseJson(RestApiPost('/anonymize_instances_lua', DumpJson(lPostData,false)))
+                if lResult['status'] then error('Problem with anonymization ' .. lResult['error_text']) end
+                if lResult['AddressConstructor'] then gAddressConstructor  = lResult['AddressConstructor'] end
+                if lResult['AddressList'] then gAddressList  = lResult['AddressList'] end
+                loInstancesAnonMetaTemp = lResult['InstancesAnonMeta']
+                if lResult['KeptUID'] then gKeptUID  = lResult['KeptUID'] end
+                if lResult['PatientNameAnon'] then ldPatientNameAnonTemp = lResult['PatientNameAnon'] end
+                if lResult['PatientNameBase'] then gPatientNameBase  = lResult['PatientNameBase'] end
+                if lResult['PatientNameIDChar'] then gPatientNameIDChar  = lResult['PatientNameIDChar'] end
+                loStudyIDAnonTemp = lResult['StudyIDAnon']
+                if lResult['TopLevelTagToKeep'] then gTopLevelTagToKeep  = lResult['TopLevelTagToKeep'] end
+                if lResult['UIDMap'] then gUIDMap = lResult['UIDMap'] end
+                if ldPatientNameAnonTemp then ldPatientNameAnonDict[ldPatientNameAnonTemp] = true end
                 if lFlagFirstCall then
                     loInstancesAnonMeta = loInstancesAnonMetaTemp
                     loStudyIDAnon = loStudyIDAnonTemp
@@ -4033,9 +4089,74 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
             -- First pass anonymization
             local loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon
             local lFlagFirstCall = true
-            loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon = AnonymizeInstances('Study', aoStudyID, lFlagFirstCall, 
-                                                                                       lSQLpid,ldPatientIDAnon,
-                                                                                       lSQLsiuid,ldStudyInstanceUIDAnon, lPatientIDModifier)
+            if false then
+                loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon = AnonymizeInstances('Study', aoStudyID, lFlagFirstCall, 
+                                                                                           lSQLpid,ldPatientIDAnon,
+                                                                                           lSQLsiuid,ldStudyInstanceUIDAnon, lPatientIDModifier)
+            else
+                local lPostData = {}
+                if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
+                if gAddressList then lPostData['AddressList'] = gAddressList end
+                lPostData['FlagFirstCall'] = lFlagFirstCall
+                if gKeptUID then lPostData['KeptUID'] = gKeptUID end
+                lPostData['Level'] = 'Study'
+                lPostData['LevelID'] = aoStudyID
+                if ldPatientIDAnon then lPostData['PatientIDAnon'] = ldPatientIDAnon end
+                if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+                if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
+                if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
+                lPostData['SQLpid'] = lSQLpid
+                lPostData['SQLsiuid'] = lSQLsiuid
+                if ldStudyInstanceUIDAnon then lPostData['StudyInstanceUIDAnon'] = ldStudyInstanceUIDAnon end
+                if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
+                if gUIDMap then lPostData['UIDMap'] = gUIDMap end
+                local lResult = ParseJson(RestApiPost('/anonymize_instances_lua', DumpJson(lPostData,false)))
+                if lResult['status'] then error('Problem with anonymization ' .. lResult['error_text']) end
+                if lResult['AddressConstructor'] then gAddressConstructor = lResult['AddressConstructor'] end
+                if lResult['AddressList'] then gAddressList  = lResult['AddressList'] end
+                loInstancesAnonMeta = lResult['InstancesAnonMeta']
+                if lResult['KeptUID'] then gKeptUID = lResult['KeptUID'] end
+                if lResult['PatientNameAnon'] then ldPatientNameAnon = lResult['PatientNameAnon'] end
+                if lResult['PatientNameBase'] then gPatientNameBase  = lResult['PatientNameBase'] end
+                if lResult['PatientNameIDChar'] then gPatientNameIDChar  = lResult['PatientNameIDChar'] end
+                loStudyIDAnon = lResult['StudyIDAnon']
+                if lResult['TopLevelTagToKeep'] then gTopLevelTagToKeep  = lResult['TopLevelTagToKeep'] end
+                if lResult['UIDMap'] then gUIDMap = lResult['UIDMap'] end
+            end
+
+--             print('post anon -----------------------------------')
+--             if gAddressConstructor then
+--                 print('gAddressConstructor')
+--                 print(DumpJson(gAddressConstructor))
+--             end
+--             if gAddressList then
+--                 print('gAddressList')
+--                 print(DumpJson(gAddressList))
+--             end
+--             if gKeptUID then
+--                 print('gKeptUID')
+--                 print(DumpJson(gKeptUID))
+--             end
+--             if ldPatientNameAnon then
+--                 print('ldPatientNameAnon')
+--                 print(ldPatientNameAnon)
+--             end
+--             if gPatientNameBase then
+--                 print('gPatientNameBase')
+--                 print(gPatientNameBase)
+--             end
+--             if gPatientNameIDChar then
+--                 print('gPatientNameIDChar')
+--                 print(gPatientNameIDChar)
+--             end
+--             if gTopLevelTagToKeep then
+--                 print('gTopLevelTagToKeep')
+--                 print(DumpJson(gTopLevelTagToKeep))
+--             end
+--             if gUIDMap then
+--                 print('gUIDMap')
+--                 print(DumpJson(gUIDMap))
+--             end
 
             -- Set up old-->new UID map
             local lFlagRemapSOPInstanceUID = true
@@ -4049,6 +4170,15 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
             local lResults = ParseJson(RestApiPost('/map_uid_old_to_new_lua', DumpJson(lPostData), false))
             gUIDMap = lResults['UIDMap']
             gUIDType = lResults['UIDType']
+--             print('----------------map gen')
+--             if gUIDMap then
+--                 print('gUIDMap')
+--                 print(DumpJson(gUIDMap))
+--             end
+--             if gUIDType then
+--                 print('gUIDType')
+--                 print(DumpJson(gUIDType))
+--             end
             
             -- Set up replacements for AccessionNumber and StudyID
             local lReplaceRoot = {}

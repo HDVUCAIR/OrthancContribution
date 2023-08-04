@@ -41,7 +41,8 @@ global_var['kept_uid'] = {}
 global_var['log_indent_level'] = 0
 global_var['max_recurse_depth'] = 20
 global_var['patient_name_base'] = None
-global_var['top_level_tag_to_keep'] = None
+global_var['patient_name_id_char'] = 'ID'
+global_var['top_level_tag_to_keep'] = {}
 global_var['uid_map'] = None
 
 # ============================================================================
@@ -1491,16 +1492,15 @@ def connect_to_database():
     return {'status':0}, pg_connection, pg_cursor
 
 # ============================================================================
-def construct_patient_name(internal_number, patient_name_base_local=None, patient_name_id_char=None):
+def construct_patient_name(internal_number, 
+                           patient_name_base_local=global_var['patient_name_base'], 
+                           patient_name_id_char=global_var['patient_name_id_char']):
 # ----------------------------------------------------------------------------
 
     if patient_name_base_local is None:
         patient_name_base_local = get_patient_name_base()
 
-    if patient_name_id_char is None:
-        local_patient_name_id_char = 'ID'
-    else:
-        local_patient_name_id_char = patient_name_id_char
+    local_patient_name_id_char = patient_name_id_char
 
     patient_name = '%s^%s%06d^^^' % (patient_name_base_local, local_patient_name_id_char, internal_number)
 
@@ -2075,7 +2075,7 @@ def get_internal_number(sql_pid, patient_id_modifier,
                     internal_number_new += internal_number_offset + 1
             # Default: same as incoming sql_pid
             else:
-                internal_number = sql_pid
+                internal_number = int(sql_pid)
                 break
 
             if internal_number_new > 999999:
@@ -2096,7 +2096,7 @@ def get_internal_number(sql_pid, patient_id_modifier,
                 return {'status':2, 'error_text':'get_internal_number: querying new internal number'}, None
             row = pg_cursor.fetchone()
             if row is not None and int(row[0]) == 0:
-                internal_number = internal_number_new
+                internal_number = int(internal_number_new)
                 break
                     
         # Save the internal number to the database
@@ -3321,7 +3321,7 @@ def save_shift_epoch_to_db(sql_pid, shift_epoch,
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
-        return {'status':1, 'error_text':'save_siuid_anon problem inserting'}
+        return {'status':1, 'error_text':'save_shift_epoch_to_db problem inserting'}
 
     pg_connection.commit()
     if flag_local_db:
@@ -3364,7 +3364,7 @@ def save_study_instance_uid_anon_to_db(orthanc_study_id, sql_siuid,
             return status, None, None, None
     else:
         if pg_connection is None or pg_cursor is None:
-            return {'status':1, 'error_text': 'save_anon_siuid: Must provide both con and cur'}, None, None, None
+            return {'status':1, 'error_text': 'save_siuid_anon: Must provide both con and cur'}, None, None, None
 
     # Insert 
     sql_statement = "INSERT INTO studyinstanceuid_anon (value,siuid) VALUES(%s,%s)"
@@ -3779,6 +3779,9 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
                             for address_key, address_val in global_var['address_list'].items():
                                 replace_dict[address_key] = address_val
                     else:
+                        if dicom_tags[tag_key]['Value'] not in global_var['uid_map']:
+                            orthanc.LogWarning(json.dumps(global_var['uid_map'],indent=3))
+                            orthanc.LogWarning(json.dumps(dicom_tags,indent=3))
                         uid_new = global_var['uid_map'][dicom_tags[tag_key]['Value']]
                         while uid_new in global_var['uid_map']:
                             if uid_new == global_var['uid_map'][uid_new]:
@@ -4300,6 +4303,358 @@ def user_permitted(uri, remote_user):
     return True
 
 # ============================================================================
+def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
+                        sql_pid, patient_id_anon, 
+                        sql_siuid, study_instance_uid_anon,
+                        patient_id_modifier=''):
+# ----------------------------------------------------------------------------
+
+    global global_var
+
+    frame = inspect.currentframe()
+    if python_verbose_logwarning:
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+
+    time_0 = time.time()
+    flag_anon_at_study_level = anon_at_level.find('Study') >= 0
+
+    # Load tag keep/remove info
+    tag_handling, tag_handling_list = base_tag_handling()
+ 
+    # Capture all UID values for all instances and collect keep/remove data
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * (global_var['log_indent_level'] + 3) + 'Capturing UID for all instances')
+    tags_encountered = {}
+    tags_to_keep = {}
+    tags_to_remove = {}
+    if flag_first_call:
+        global_var['top_level_tag_to_keep'] = {}
+        global_var['kept_uid'] = {}
+    recurse_proprietary = {}
+    recurse_remove = {}
+    recurse_group_keep = {}
+    recurse_group_removere = {}
+    if flag_anon_at_study_level:
+        meta_instances = json.loads(orthanc.RestApiGet('/studies/%s/instances' % orthanc_level_id))
+        recurse_proprietary = scan_study_for_group_element(orthanc_level_id, recurse_proprietary, type_match='gggg-odd')
+        recurse_remove = scan_study_for_group_element(orthanc_level_id, recurse_remove, type_match='gggg-eeee', match_list = tag_handling_list['remove'])
+        if 'groupkeep' in tag_handling:
+            recurse_group_keep = scan_study_for_group_element(orthanc_level_id, recurse_group_keep, type_match='gggg', match_list=tag_handling_list['groupkeep'])
+        if 'groupremovere' in tag_handling:
+            recurse_group_removere = scan_study_for_group_element(orthanc_level_id, recurse_group_removere, type_match='gggg-regexp', match_list=tag_handling_list['groupremovere'])
+    else:
+        meta_instances = json.loads(orthanc.RestApiGet('/series/%s/instances' % orthanc_level_id))
+        recurse_proprietary = scan_series_for_group_element(orthanc_level_id, recurse_proprietary, type_match='gggg-odd')
+        recurse_remove = scan_series_for_group_element(orthanc_level_id, recurse_remove, type_match='gggg-eeee', match_list = tag_handling_list['remove'])
+        if 'groupkeep' in tag_handling:
+            recurse_group_keep = scan_series_for_group_element(orthanc_level_id, recurse_group_keep, type_match='gggg', match_list=tag_handling_list['groupkeep'])
+        if 'groupremovere' in tag_handling:
+            recurse_group_removere = scan_series_for_group_element(orthanc_level_id, recurse_group_removere, type_match='gggg-regexp', match_list=tag_handling_list['groupremovere'])
+    # orthanc.LogWarning('lRecurse Groups')
+    # orthanc.LogWarning(json.dumps(recurse_proprietary))
+    # orthanc.LogWarning(json.dumps(recurse_remove))
+    # if len(recurse_group_keep) > 0:
+    #     orthanc.LogWarning(json.dumps(recurse_group_keep))
+    # if len(recurse_group_removere) > 0:
+    #     orthanc.LogWarning(json.dumps(recurse_group_removere))
+    
+    # Study the tags to determine keep/remove/replace
+    i_instance = 0
+    n_instance = len(meta_instances)
+    m_instance = n_instance // 10
+    for meta_instance in meta_instances:
+        i_instance += 1
+        if python_verbose_logwarning and (i_instance % m_instance == 0):
+            orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 
+                               'Scanning instances %d of %d' % (i_instance, n_instance))
+        orthanc_instance_id = meta_instance['ID']
+        tags_instance = json.loads(orthanc.RestApiGet('/instances/%s/tags' % orthanc_instance_id))
+        try:
+            level_out, kept_uid, top_level_tag_to_keep, parent_key = recursive_find_uid_to_keep(tags_instance)
+        except:
+            return {'status' : 1, 'error_text' : 'Problem recursing instance tags'}, None, None, None
+        for kk, vv in top_level_tag_to_keep.items():
+            global_var['top_level_tag_to_keep'][kk] = vv
+        for kk, vv in kept_uid.items():
+            global_var['kept_uid'][kk] = vv
+        for tag_key, tag_val in tags_instance.items():
+            address_group_element = tag_key.replace(',','-')
+            tags_encountered[address_group_element] = True
+        if 'groupkeep' in tag_handling:
+            for tag_key, tag_val in tags_instance.items():
+                address_group, address_element = tag_key.split(',')
+                if address_group in tag_handling['groupkeep']:
+                    address_group_element = tag_key.replace(',','-')
+                    tags_to_keep[address_group_element] = True
+            for address_group_element, tag_list in recurse_group_keep.items():
+                tags_to_keep[address_group_element] = True
+        if 'groupremovere' in tag_handling:
+            for tag_key, tag_val in tags_instance.items():
+                address_group, address_element = tag_key.split(',')
+                for address_groupre, value in tag_handling['groupremovere'].items():
+                    if address_group.find(address_groupre) >= 0:
+                        address_group_element = tag_key.replace(',','-')
+                        tags_to_remove[address_group_element] = True
+            for address_group_element, value_list in recurse_group_removere.items():
+                tags_to_remove[address_group_element] = True
+    
+    # Remove any private tags not already explicity kept
+    if 'KeepSomePrivate' in tag_handling:
+        for meta_instance in meta_instances:
+            orthanc_instance_id = meta_instance['ID']
+            tags_instance = json.loads(orthanc.RestApiGet('/instances/%s/tags' % orthanc_instance_id))
+            for tag_key, tag_val in tags_instance.items():
+                address_group, address_element = tag_key.split(',')
+                if int(address_group,16) % 2 == 1:
+                    address_group_element = tag_key.replace(',','-')
+                    if not (address_group_element in tag_handling['keep'] or 
+                            address_group_element in tags_to_keep):
+                        tags_to_remove[address_group_element] = True
+        for address_group_element, value_prop in recurse_proprietary.items():
+            if not (address_group_element in tag_handling['keep'] or 
+                    address_group_element in tags_to_keep):
+                tags_to_remove[address_group_element] = True
+    else:
+        for address_group_element, value_prop in recurse_proprietary.items():
+            tags_to_remove[address_group_element] = True
+
+    # orthanc.LogWarning('Pre scan results')
+    # orthanc.LogWarning(json.dumps(global_var['top_level_tag_to_keep']))
+    # orthanc.LogWarning(json.dumps(global_var['kept_uid']))
+    # orthanc.LogWarning(json.dumps(tags_encountered))
+    # orthanc.LogWarning(json.dumps(tags_to_keep))
+    # orthanc.LogWarning(json.dumps(tags_to_remove))
+    
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Time so far (1) in %s: %d' % (frame.f_code.co_name, time.time()-time_0)) 
+
+    # Find the internal number if it exists
+    status, internal_number = get_internal_number(int(sql_pid), patient_id_modifier)
+    if status['status'] != 0:
+        orthanc.LogWarning(status['error_text'])
+        return {'status' : 2, 'error_text' : json.dumps(status)}, None, None, None
+
+    # Construct the patient name
+    patient_name_anon = construct_patient_name(internal_number)
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Time so far (2) in %s: %d ' % (frame.f_code.co_name, time.time()-time_0)) 
+
+    # Tags to be replaced
+    tag_replace = {}
+    tag_replace['PatientName'] = patient_name_anon
+    if patient_id_anon is not None:
+        tag_replace['PatientID'] = patient_id_anon
+    if study_instance_uid_anon is not None:
+        tag_replace['StudyInstanceUID'] = study_instance_uid_anon
+    if 'empty' in tag_handling:
+        for address_group_element, value in tag_handling['empty'].items():
+            tag_replace[address_group_element] = ''
+    if 'emptyseq' in tag_handling:
+        for address_group_element, value in tag_handling['emptyseq'].items():
+            tag_replace[address_group_element] = []
+    if 'emptyx' in tag_handling:
+        for address_group_element, value in tag_handling['emptyx'].items():
+            tag_replace[address_group_element] = 'xxxxxx'
+
+    # Top level tags to remove
+    tag_remove = []
+    for address_element, value_list in recurse_remove.items():
+        for value in value_list:
+            if value not in tag_remove:
+                tag_remove += [value]
+    for address_element, value in tags_to_remove.items():
+        if address_element not in tag_handling['remove']:
+            if address_element not in tag_remove:
+                tag_remove += [address_element]
+        if address_element in recurse_proprietary:
+            for value in recurse_proprietary[address_element]:
+                if value not in tag_remove:
+                    tag_remove += [value]
+        if 'groupremovere' in tag_handling and \
+            address_element in recurse_group_removere:
+            for value in recurse_group_removere[address_element]:
+                if value not in tag_remove:
+                    tag_remove += [value]
+
+    # Top level tags to keep
+    tag_keep = []
+    for address_element, value in tag_handling['keep'].items():
+        if address_element in tags_encountered and address_element not in tag_keep:
+            tag_keep += [address_element]
+    for address_element, flag_keep in tags_to_keep.items():
+        if address_element not in tag_handling['keep'] and address_element not in tag_keep:
+            tag_keep += [address_element]
+    for tag_key, tag_val in global_var['top_level_tag_to_keep'].items():
+        if tag_key.find('Unknown') < 0 and tag_key not in tag_keep:
+            tag_keep += [tag_key]
+
+    # orthanc.LogWarning('Replace/Remove/Keep')
+    # orthanc.LogWarning(json.dumps(tag_replace))
+    # orthanc.LogWarning(json.dumps(tag_remove))
+    # orthanc.LogWarning(json.dumps(tag_keep))
+
+    # Modify the study: It seems remove clashes with keep and I need to run them separate
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * (global_var['log_indent_level'] + 3) + 'Starting the study modification call')
+    modify_post_data = {}
+    modify_post_data['Remove'] = tag_remove
+    flag_remove_private_tags = os.getenv('LUA_FLAG_REMOVE_PRIVATE_TAGS', default='true') == 'true'
+    if flag_remove_private_tags and not tag_handling['KeepSomePrivate']:
+        modify_post_data['RemovePrivateTags'] = flag_remove_private_tags
+    modify_post_data['Force'] = True
+    modify_post_data['DicomVersion'] = '2008'
+    # orthanc.LogWarning('Modify Post')
+    # orthanc.LogWarning(json.dumps(modify_post_data))
+    if flag_anon_at_study_level:
+        try:
+            meta_study_mod = json.loads(orthanc.RestApiPost('/studies/%s/modify' % orthanc_level_id,
+                                        json.dumps(modify_post_data)))
+        except:
+            return {'status' : 3, 'error_text' : json.dumps(modify_post_data,indent=3)}, None, None, None
+        orthanc_study_id_mod = meta_study_mod['ID']
+    else:
+        try:
+            meta_series_mod = json.loads(orthanc.RestApiPost('/series/%s/modify' % orthanc_level_id,
+                                         json.dumps(modify_post_data)))
+        except:
+            return {'status' : 4, 'error_text' : json.dumps(modify_post_data,indent=3)}, None, None, None
+        orthanc_series_id_mod = meta_series_mod['ID']
+        meta_series_mod_full = json.loads(orthanc.RestApiGet('/series/%s' % orthanc_series_id_mod))
+        orthanc_study_id_mod = meta_series_mod_full['ParentStudy']
+    # orthanc.LogWarning('StudyIDMOd: %s' % orthanc_study_id_mod)
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Time so far (3) in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+
+    # Anonymize the study
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * (global_var['log_indent_level'] + 3) + 'Starting the study anonymization call')
+    post_data_anon = {}
+    if len(tag_replace) > 0:
+        post_data_anon['Replace'] = tag_replace
+    post_data_anon['Keep'] = tag_keep
+    post_data_anon['Force'] = True
+    post_data_anon['DicomVersion'] = '2008'
+    # orthanc.LogWarning('AnonPostData')
+    # orthanc.LogWarning(json.dumps(post_data_anon))
+    if flag_anon_at_study_level:
+        try:
+            response_study_anon = orthanc.RestApiPost('/studies/%s/anonymize' % orthanc_study_id_mod, 
+                                                      json.dumps(post_data_anon))
+        except:
+            return {'status': 5, 'error_text' : 'Problem calling anonymize study'}, None, None, None
+        meta_study_anon = json.loads(response_study_anon)
+        orthanc_study_id_anon = meta_study_anon['ID']
+        meta_instances_anon = json.loads(orthanc.RestApiGet('/studies/%s/instances' % orthanc_study_id_anon))
+    else:
+        try:
+            response_series_anon = orthanc.RestApiPost('/series/%s/anonymize' % orthanc_series_id_mod, 
+                                                       json.dumps(post_data_anon))
+        except:
+            return {'status': 6, 'error_text' : 'Problem calling anonymize series'}, None, None, None
+        meta_series_anon = json.loads(response_series_anon)
+        orthanc_series_id_anon = meta_series_anon['ID']
+        meta_series_anon = json.loads(orthanc.RestApiGet('/series/%s' % orthanc_series_id_anon))
+        orthanc_study_id_anon = meta_series_anon['ParentStudy']
+        meta_instances_anon = json.loads(orthanc.RestApiGet('/series/%s/instances' % meta_series_anon['ID']))
+    # orthanc.LogWarning('InstancesAnonMeta')
+    # orthanc.LogWarning(json.dumps(meta_instances_anon))
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'N instances anon: %d' % len(meta_instances_anon))
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Time so far (4) in %s: %d' % (frame.f_code.co_name, time.time()-time_0)) 
+
+    meta_study_anon = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_anon))
+    # orthanc.LogWarning('MetaStudyAnon')
+    # orthanc.LogWarning(json.dumps(meta_study_anon))
+    if patient_id_anon is None:
+        # orthanc.LogWarning('OrthancStudyID: %s' % meta_study_anon['ID'])
+        # orthanc.LogWarning('SQLpid: %d' % sql_pid)
+        status = save_patient_ids_anon_to_db(sql_pid, orthanc_study_id=meta_study_anon['ID'])
+        if status['status'] > 0:
+            return status, None, None, None
+    if study_instance_uid_anon is None:
+        # orthanc.LogWarning('OrthancStudyID: %s' % meta_study_anon['ID'])
+        # orthanc.LogWarning('SQLsiuid: %d' % sql_siuid)
+        status = save_study_instance_uid_anon_to_db(meta_study_anon['ID'], sql_siuid)
+        if status['status'] > 0:
+            return status, None, None, None
+    flag_save_patient_name_anon = os.getenv('LUA_FLAG_SAVE_PATIENTNAME_ANON',default='true') == 'true'
+    if flag_save_patient_name_anon:
+        # orthanc.LogWarning('PatientNameAnon: %s' % patient_name_anon)
+        # orthanc.LogWarning('SQLsiuid: %d' % sql_siuid)
+        status = save_patient_name_anon_to_db(patient_name_anon, sql_siuid)
+        if status['status'] > 0:
+            return status, None, None, None
+
+    if flag_save_patient_name_anon:
+        return {'status' : 0}, meta_instances_anon, orthanc_study_id_anon, patient_name_anon
+    else:
+        return {'status' : 0}, meta_instances_anon, orthanc_study_id_anon, None
+
+# ============================================================================
+def AnonymizeInstancesLua(output, uri, **request):
+    """API interface to replace lua AnonymizeInstances"""
+# ----------------------------------------------------------------------------
+
+    global global_var
+
+    if request['method'] == 'POST':
+        data_in = json.loads(request['body'])
+        anon_at_level = data_in['Level']
+        orthanc_level_id = data_in['LevelID']
+        flag_first_call = data_in['FlagFirstCall']
+        sql_pid = int(data_in['SQLpid'])
+        patient_id_anon = data_in['PatientIDAnon'] if 'PatientIDAnon' in data_in else None
+        sql_siuid = int(data_in['SQLsiuid'])
+        study_instance_uid_anon = data_in['StudyInstanceUIDAnon'] if 'StudyInstanceUIDAnon' in data_in else None
+        if 'TopLevelTagToKeep' in data_in:
+            global_var['top_level_tag_to_keep'] = data_in['TopLevelTagToKeep']
+        if 'KeptUID' in data_in:
+            global_var['kept_uid'] = data_in['KeptUID']
+        if 'PatientNameBase' in data_in:
+            global_var['patient_name_base'] = data_in['PatientNameBase']
+        if 'PatientNameIDChar' in data_in:
+            global_var['patient_name_id_char'] = data_in['PatientNameIDChar']
+        if 'AddressList' in data_in:
+            global_var['address_list'] = data_in['AddressList']
+        if 'AddressConstructor' in data_in:
+            global_var['address_constructor'] = data_in['AddressConstructor']
+        if 'UIDMap' in data_in:
+            global_var['uid_map'] = data_in['UIDMap']
+            
+        patient_id_modifier = data_in['PatientIDModifier'] if 'PatientIDModifier' in data_in else ''
+        status, meta_instances_anon, orthanc_study_id_anon, patient_name_anon = \
+            anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
+                                sql_pid, patient_id_anon, sql_siuid, study_instance_uid_anon,
+                                patient_id_modifier)
+        data_out = {}
+        if status['status'] == 0:
+            data_out['InstancesAnonMeta'] = meta_instances_anon
+            data_out['StudyIDAnon'] = orthanc_study_id_anon
+            if patient_name_anon is not None:
+                data_out['PatientNameAnon'] = patient_name_anon
+            data_out['TopLevelTagToKeep'] = global_var['top_level_tag_to_keep']
+            data_out['KeptUID'] = global_var['kept_uid']
+            if global_var['patient_name_base'] is not None:
+                data_out['PatientNameBase'] = global_var['patient_name_base']
+            if global_var['patient_name_id_char'] is not None:
+                data_out['PatientNameIDChar'] = global_var['patient_name_id_char']
+            if len(global_var['address_constructor']) > 0:
+                data_out['AddressConstructor'] = global_var['address_constructor']
+            if len(global_var['address_list']) > 0:
+                data_out['AddressList'] = global_var['address_list']
+            if global_var['uid_map'] is not None:
+                data_out['UIDMap'] = global_var['uid_map']
+        else:
+            data_out['status'] = status['status']
+            data_out['error_text'] = status['error_text']
+        output.AnswerBuffer(json.dumps(data_out), 'application/json')
+    else:
+        output.SendMethodNotAllowed('POST')
+
+# ============================================================================
 def BaseTagHandlingLua(output, uri, **request):
     """API interface to Replace lua BaseTagHandling"""
 # ----------------------------------------------------------------------------
@@ -4340,14 +4695,8 @@ def ConstructPatientName(output, uri, **request):
     if request['method'] == 'POST':
         incoming_data = json.loads(request['body'])
         internal_number = int(float(incoming_data['InternalNumber']))
-        if 'PatientNameBase' in incoming_data:
-            patient_name_base_local = incoming_data['PatientNameBase']
-        else:
-            patient_name_base_local = None
-        if 'PatientNameIDChar' in incoming_data:
-            patient_name_id_char = incoming_data['PatientNameIDChar']
-        else:
-            patient_name_id_char = None
+        patient_name_base_local = incoming_data['PatientNameBase'] if 'PatientNameBase' in incoming_data else None
+        patient_name_id_char = incoming_data['PatientNameIDChar'] if 'PatientNameIDChar' in incoming_data else 'ID'
         patient_name = construct_patient_name(internal_number,
                                               patient_name_base_local=patient_name_base_local, 
                                               patient_name_id_char=patient_name_id_char)
@@ -4417,7 +4766,7 @@ def GetInternalNumberLua(output, uri, **request):
         result = {}
         result['status'] = status
         if internal_number is not None:
-            result['internal_number'] = int(float(internal_number))
+            result['internal_number'] = internal_number
         output.AnswerBuffer(json.dumps(result,indent=3), 'application/json')
     else:
         output.SendMethodNotAllowed('POST')
@@ -4627,6 +4976,7 @@ def LoadShiftEpochFromDBLua(output, uri, **request):
 def MapUIDOldToNewLua(output, uri, **request):
     """API interface meant to replace Lua routine MapUIDOldToNew"""
 # ----------------------------------------------------------------------------
+    global global_var
     if request['method'] == 'POST':
         incoming_data = json.loads(request['body'])
         orthanc_study_id_new = incoming_data['StudyIDNew']
@@ -4938,10 +5288,12 @@ def RecursiveFindUIDToKeepLua(output, uri, **request):
         try:
             level_out, kept_uid, top_level_tag_to_keep, parent_key = recursive_find_uid_to_keep(meta_instance)
             result = {'status' : 0}
-            global_var['kept_uid'] = kept_uid
-            global_var['top_level_tag_to_keep'] = top_level_tag_to_keep
-            result['KeptUID'] = kept_uid
-            result['TopLevelTagToKeep'] = top_level_tag_to_keep
+            for kk, vv in kept_uid.items():
+                global_var['kept_uid'][kk] = vv
+            for kk, vv in top_level_tag_to_keep.items():
+                global_var['top_level_tag_to_keep'][kk] = vv
+            result['KeptUID'] = global_var['kept_uid']
+            result['TopLevelTagToKeep'] = global_var['top_level_tag_to_keep']
         except:
             result = {'status' : 1, 'error_text' : 'Problem recursing instance meta data'}
         output.AnswerBuffer(json.dumps(result), 'application/json')
@@ -5351,6 +5703,7 @@ def UpdateLookupTableHTMLLua(output, uri, **request):
 # Main
 orthanc.RegisterIncomingHttpRequestFilter(IncomingFilter)
 orthanc.RegisterOnChangeCallback(OnChangeThreaded)
+orthanc.RegisterRestCallback('/anonymize_instances_lua', AnonymizeInstancesLua)
 orthanc.RegisterRestCallback('/base_tag_handling_lua', BaseTagHandlingLua)
 orthanc.RegisterRestCallback('/check_split_2d_from_cview_tomo_lua', CheckSplit2DFromCViewTomoLua)
 orthanc.RegisterRestCallback('/confirm_or_create_lookup_table_sql_lua', ConfirmOrCreateLookupTableSQLLua)
