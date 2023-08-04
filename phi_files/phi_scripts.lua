@@ -2249,376 +2249,376 @@ function BaseTagHandling ()
 
 end
 
--- ======================================================
-function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall, 
-                            aSQLpid,adPatientIDAnon,
-                            aSQLsiuid, adStudyInstanceUIDAnon, aPatientIDModifier)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local lFlagByStudy = string.find(aLevel, 'Study')
-
-    -- Load tag keep/remove info
-    local lTagHandling, lTagHandlingList
-    -- lTagHandling, lTagHandlingList = BaseTagHandling()
-    local lResults = ParseJson(RestApiGet('/base_tag_handling_lua', false))
-    lTagHandling = lResults['TagHandling']
-    lTagHandlingList = lResults['TagHandlingList']
- 
-    -- Capture all UID values for all instances and collect keep/remove data
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Capturing UID for all instances') end
-    local lTagsEncountered = {}
-    local lTagsToKeep = {}
-    local lTagsToRemove = {}
-    if aFlagFirstCall then
-        gTopLevelTagToKeep = {}
-        gKeptUID = {}
-    end
-    local loLevelInstancesMeta
-    local lRecurseProprietary, lRecurseRemove, lRecurseGroupKeep, lRecurseGroupRemoveRe
-    if lFlagByStudy then
-        loLevelInstancesMeta = ParseJson(RestApiGet('/studies/' .. aoLevelID .. '/instances', false))
-        lRecurseProprietary = ParseJson(RestApiGet('/studies/' .. aoLevelID .. '/odd_group_recursive_search', false))
-        lRecurseRemove = ParseJson(RestApiPost('/studies/' .. aoLevelID .. '/group_element_recursive_search', DumpJson(lTagHandlingList['remove']), false))
-        if lTagHandling['groupkeep'] then
-            lRecurseGroupKeep = ParseJson(RestApiPost('/studies/' .. aoLevelID .. '/group_recursive_search', DumpJson(lTagHandlingList['groupkeep']), false))
-        end
-        if lTagHandling['groupremovere'] then
-            lRecurseGroupRemoveRe = ParseJson(RestApiPost('/studies/' .. aoLevelID .. '/group_regexp_recursive_search', DumpJson(lTagHandlingList['groupremovere']), false))
-        else
-            lRecurseGroupRemoveRe = nil
-        end
-    else
-        loLevelInstancesMeta = ParseJson(RestApiGet('/series/' .. aoLevelID .. '/instances', false))
-        lRecurseProprietary = ParseJson(RestApiGet('/series/' .. aoLevelID .. '/odd_group_recursive_search', false))
-        lRecurseRemove = ParseJson(RestApiPost('/series/' .. aoLevelID .. '/group_element_recursive_search', DumpJson(lTagHandlingList['remove']), false))
-        if lTagHandling['groupkeep'] then
-            lRecurseGroupKeep = ParseJson(RestApiPost('/series/' .. aoLevelID .. '/group_recursive_search', DumpJson(lTagHandlingList['groupkeep']), false))
-        end
-        if lTagHandling['groupremovere'] then
-            lRecurseGroupRemoveRe = ParseJson(RestApiPost('/series/' .. aoLevelID .. '/group_regexp_recursive_search', DumpJson(lTagHandlingList['groupremovere']), false))
-        else
-            lRecurseGroupRemoveRe = nil
-        end
-    end
-    -- print('lRecurse Groups')
-    -- print(DumpJson(lRecurseProprietary))
-    -- print(DumpJson(lRecurseRemove))
-    -- if lRecurseGroupKeep then print(DumpJson(lRecurseGroupKeep)) end
-    -- if lRecurseGroupRemoveRe then print(DumpJson(lRecurseGroupRemoveRe)) end
-    
-    local loInstanceID, lGroup, lElement, lField
-    for i, loLevelInstanceMeta in pairs(loLevelInstancesMeta) do
-        loInstanceID = loLevelInstanceMeta['ID']
-        local loInstanceMeta = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
-        -- First the UID mapping info
-        -- RecursiveFindUIDToKeep(loInstanceMeta)
-        local lResult = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/recursive_find_uid_to_keep_lua', false))
-        if lResult['status'] and lResult['status'] > 0 then error(lResult['error_text']) end
-        for kk,vv in pairs(lResult['TopLevelTagToKeep']) do gTopLevelTagToKeep[kk] = vv end
-        for kk,vv in pairs(lResult['KeptUID']) do gKeptUID[kk] = vv end
-        for lTagKey, lTagVal in pairs(loInstanceMeta) do
-            _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
-            lField = lGroup .. '-' .. lElement
-            lTagsEncountered[lField] = true
-        end
-        if lTagHandling['groupkeep'] then
-            for lTagKey, lTagVal in pairs(loInstanceMeta) do
-                _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
-                if lTagHandling['groupkeep'][lGroup] then
-                    lField = lGroup .. '-' .. lElement
-                    lTagsToKeep[lField] = true
-                end
-            end
-            for lField, lTagList in pairs(lRecurseGroupKeep) do
-                lTagsToKeep[lField] = true
-            end
-        end
-        if lTagHandling['groupremovere'] then
-            for lTagKey, lTagVal in pairs(loInstanceMeta) do
-                _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
-                for lGroupRE, lValue in pairs(lTagHandling['groupremovere']) do
-                    if string.find(lGroup,lGroupRE) then
-                        lField = lGroup .. '-' .. lElement
-                        lTagsToRemove[lField] = true
-                    end
-                end
-            end
-            if lRecurseGroupRemoveRe then
-                for lField, lValueList in pairs(lRecurseGroupRemoveRe) do
-                    lTagsToRemove[lField] = true
-                end
-            end
-        end
-    end -- loop over instances    
-  
-    -- Remove any private tags not already explicity kept
-    if lTagHandling['KeepSomePrivate'] then
-        for i, loLevelInstanceMeta in pairs(loLevelInstancesMeta) do
-            loInstanceID = loLevelInstanceMeta['ID']
-            local loInstanceMeta = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
-            for lTagKey, lTagVal in pairs(loInstanceMeta) do
-                _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
-                if ((tonumber(lGroup,16) % 2) == 1) then
-                    local lField = lGroup .. '-' .. lElement
-                    if not (lTagHandling['keep'][lField] or lTagsToKeep[lField]) then
-                        lTagsToRemove[lField] = true
-                    end
-                end
-            end
-        end
-        for lField, lProprietary in pairs(lRecurseProprietary) do 
-            if not (lTagHandling['keep'][lField] or lTagsToKeep[lField]) then
-                lTagsToRemove[lField] = true
-            end
-        end
-    else
-        for lField, lProprietary in pairs(lRecurseProprietary) do 
-            lTagsToRemove[lField] = true
-        end
-    end
-    -- print('Pre scan results')
-    -- print(DumpJson(gTopLevelTagToKeep))
-    -- print(DumpJson(gKeptUID))
-    -- print(DumpJson(lTagsEncountered))
-    -- print(DumpJson(lTagsToKeep))
-    -- print(DumpJson(lTagsToRemove))
- 
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (1) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-
-    local lDataToPython = {}
-    lDataToPython['SQLpid'] = aSQLpid
-    if aPatientIDModifier then lDataToPython['PatientIDModifier'] = aPatientIDModifier end
-    -- local lSQLInternalNumber = GetInternalNumber(aSQLpid, aPatientIDModifier)
-    local lSQLInternalNumberResult = ParseJson(RestApiPost('/get_internal_number_lua', DumpJson(lDataToPython,true), false, {['x-remote-user']='lua-GetInternalNumberLua'}))
-    local lSQLInternalNumber
-    if lSQLInternalNumberResult['internal_number'] then
-        lSQLInternalNumber = lSQLInternalNumberResult['internal_number']
-    else
---         gSQLConn:rollback()
---         CloseSQL()
-        error(lSQLInternalNumberResult['status']['error_text'])
-    end
-    -- local ldPatientNameAnon = ConstructPatientName(lSQLInternalNumber)
-    local lDataToPython = {}
-    lDataToPython['InternalNumber'] = lSQLInternalNumber
-    if gPatientNameBase then lDataToPython['PatientNameBase'] = gPatientNameBase end
-    if gPatientNameIDChar then lDataToPython['PatientNameIDChar'] = gPatientNameIDChar end
-    local ldPatientNameAnon = RestApiPost('/construct_patient_name', DumpJson(lDataToPython,true), false)
-
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (2) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-
-    -- Tags to be replaced
-    local lReplace = {}
-    lReplace['PatientName'] = ldPatientNameAnon
-    if adPatientIDAnon then
-        lReplace['PatientID'] = adPatientIDAnon
-    end
-    if adStudyInstanceUIDAnon then
-        lReplace['StudyInstanceUID'] = adStudyInstanceUIDAnon
-    end
-    if lTagHandling['empty'] then
-        for lField, lValue in pairs(lTagHandling['empty']) do
-            lReplace[lField] = ''
-        end
-    end
-    if lTagHandling['emptyseq'] then
-        for lField, lValue in pairs(lTagHandling['emptyseq']) do
-            lReplace[lField] = {}
-        end
-    end
-    if lTagHandling['emptyx'] then
-        for lField, lValue in pairs(lTagHandling['emptyx']) do
-            lReplace[lField] = 'xxxxxx'
-        end
-    end
-
-    local lRemove = {}
-    -- Top level tags
-    -- for lElement, lValue in pairs(lTagHandling['remove']) do
-    --     if lTagsEncountered[lElement] then table.insert(lRemove,lElement) end
-    -- end
-    -- The above is now accomplised by the python recursive routine.
-    for lElement, lValueList in pairs(lRecurseRemove) do
-        for i, lValue in pairs(lValueList) do
-            table.insert(lRemove, lValue)
-        end
-    end
-    for lElement, lValue in pairs(lTagsToRemove) do
-        if not lTagHandling['remove'][lElement] then table.insert(lRemove, lElement) end
-        if lRecurseProprietary[lElement] then
-            for i, lProprietaryAddress in pairs(lRecurseProprietary[lElement]) do
-                table.insert(lRemove, lProprietaryAddress)
-            end
-        end
-        if lTagHandling['groupremovere'] and lRecurseGroupRemoveRe and lRecurseGroupRemoveRe[lElement] then
-            for i, lGroupReAddress in pairs(lRecurseGroupRemoveRe[lElement]) do
-                table.insert(lRemove, lGroupReAddress)
-            end
-        end
-    end
-
-    local lKeep = {}
-    for lElement, lValue in pairs(lTagHandling['keep']) do
-        if lTagsEncountered[lElement] then table.insert(lKeep, lElement) end
-    end
-    for lElement, lValue in pairs(lTagsToKeep) do
-        if not lTagHandling['keep'][lElement] then table.insert(lKeep, lElement) end
-    end
-
-    lIndex = #lKeep
-    for lTagKey, lTagVal in pairs(gTopLevelTagToKeep) do 
-        if not string.find(lTagKey,'Unknown') then
-            lIndex = lIndex + 1
-            lKeep[lIndex] = lTagKey
-        end
-    end
-    -- print('Replace/Remove/Keep')
-    -- print(DumpJson(lReplace))
-    -- print(DumpJson(lRemove))
-    -- print(DumpJson(lKeep))
-
-    -- Modify the study: It seems remove clashes with keep and I need to run them separate
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Starting the study modification call') end
-    local loStudyIDMod
-    local loSeriesIDMod
-    local lModifyPostData = {}
-    lModifyPostData['Remove'] = lRemove
-    local lFlagRemovePrivateTags = os.getenv('LUA_FLAG_REMOVE_PRIVATE_TAGS') == 'true'
-    if lFlagRemovePrivateTags and not lTagHandling['KeepSomePrivate'] then
-        lModifyPostData['RemovePrivateTags'] = lFlagRemovePrivateTags
-    end
-    lModifyPostData['Force'] = true
-    lModifyPostData['DicomVersion'] = '2008'
-    -- print('Modify Post')
-    -- print(DumpJson(lModifyPostData))
-    if lFlagByStudy then
-        local lSuccess, loStudyModMetaJson = pcall(RestApiPost, 
-                                                  '/studies/' .. aoLevelID .. '/modify', 
-                                                  DumpJson(lModifyPostData,true), false)
-        if not lSuccess then
-            PrintRecursive(lModifyPostData)
---             gSQLConn:rollback()
---             CloseSQL()
-            error('Could not complete modify statement')
-        end
-        local loStudyModMeta = ParseJson(loStudyModMetaJson)
-        loStudyIDMod = loStudyModMeta['ID']
-    else
-        local lSuccess, loSeriesModMetaJson = pcall(RestApiPost, 
-                                                    '/series/' .. aoLevelID .. '/modify', 
-                                                    DumpJson(lModifyPostData,true), false)
-        if not lSuccess then 
-            PrintRecursive(lModifyPostData)
---             gSQLConn:rollback()
---             CloseSQL()
-            error('Could no complete modify statement')
-        end
-        local loSeriesModMeta = ParseJson(loSeriesModMetaJson)
-        loSeriesIDMod = loSeriesModMeta['ID']
-        loSeriesModMeta = ParseJson(RestApiGet('/series/' .. loSeriesIDMod, false))
-        loStudyIDMod = loSeriesModMeta['ParentStudy']
-    end
-    -- print('StudyIDMod: ' .. loStudyIDMod)
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (3) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-
-    -- Anonymize the study
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Starting the study anonymization call') end
-    local loStudyIDAnon
-    local lAnonPostData = {}
-    if lReplace then
-        lAnonPostData['Replace'] = lReplace
-    end
-    lAnonPostData['Keep'] = lKeep
-    lAnonPostData['Force'] = true
-    lAnonPostData['DicomVersion'] = '2008'
-    -- print('AnonPostData')
-    -- print(DumpJson(lAnonPostData))
-    local loInstancesAnonMeta 
-    if lFlagByStudy then
-        local lSuccess, loStudyAnonMetaJson = pcall(RestApiPost, 
-                                                    '/studies/' .. loStudyIDMod .. '/anonymize', 
-                                                    DumpJson(lAnonPostData,true), false)
-        if not lSuccess then
-            PrintRecursive(lAnonPostData)
---             gSQLConn:rollback()
---             CloseSQL()
-            error('Problem calling anonymize')
-        end
-       
-        local loStudyAnonMeta = ParseJson(loStudyAnonMetaJson)
-        loStudyIDAnon = loStudyAnonMeta['ID']
-        loInstancesAnonMeta = ParseJson(RestApiGet('/studies/' .. loStudyIDAnon .. '/instances', false))
-    else
-        local lSuccess, loSeriesAnonMetaJson = pcall(RestApiPost,
-                                                    '/series/' .. loSeriesIDMod .. '/anonymize', 
-                                                     DumpJson(lAnonPostData,true), false)
-        if not lSuccess then 
-            PrintRecursive(lAnonPostData)
---             gSQLConn:rollback()
---             CloseSQL()
-            error('Problem calling anonymize')
-        end
-        local loSeriesAnonMeta = ParseJson(loSeriesAnonMetaJson)
-        local loSeriesIDAnon = loSeriesAnonMeta['ID']
-        loSeriesAnonMeta = ParseJson(RestApiGet('/series/' .. loSeriesIDAnon, false))
-        loStudyIDAnon = loSeriesAnonMeta['ParentStudy']
-        loInstancesAnonMeta = ParseJson(RestApiGet('/series/' .. loSeriesAnonMeta['ID'] .. '/instances', false))
-    end
-    -- print('InstancesAnonMeta')
-    -- print(DumpJson(loInstancesAnonMeta))
-    if gVerbose then print(string.rep(' ', gIndent) .. 'N instances anon: ', #loInstancesAnonMeta) end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (4) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-
-    local loStudyAnonMeta = ParseJson(RestApiGet('/studies/' .. loStudyIDAnon, false))
-    -- print('MetaStudyAnon')
-    -- print(DumpJson(loStudyAnonMeta))
-
-    if not adPatientIDAnon then
-        -- SavePatientIDsAnonToDB(loStudyAnonMeta,aSQLpid)
-        local lPostData = {}
-        lPostData['OrthancStudyID'] = loStudyAnonMeta['ID']
-        lPostData['SQLpid'] = aSQLpid
-        -- print('OrthancStudyID: ' .. loStudyAnonMeta['ID'])
-        -- print('SQLpid: ' .. aSQLpid)
-        local lStatus = ParseJson(RestApiPost('/save_patient_ids_anon_to_db_lua', DumpJson(lPostData), false))
-        if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
-    end
-    if not adStudyInstanceUIDAnon then
-        -- SaveStudyInstanceUIDAnonToDB(loStudyAnonMeta,aSQLsiuid)
-        local lPostData = {}
-        lPostData['OrthancStudyID'] = loStudyAnonMeta['ID']
-        lPostData['SQLsiuid'] = aSQLsiuid
-        -- print('OrthancStudyID: ' .. loStudyAnonMeta['ID'])
-        -- print('SQLsiuid: ' .. aSQLsiuid)
-        local lStatus = ParseJson(RestApiPost('/save_study_instance_uid_anon_to_db_lua', DumpJson(lPostData), false))
-        if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
-    end
-    local lFlagSavePatientNameAnon = os.getenv('LUA_FLAG_SAVE_PATIENTNAME_ANON') == 'true'
-    if lFlagSavePatientNameAnon then
-        -- SavePatientNameAnonToDB(ldPatientNameAnon, aSQLsiuid)
-        local lPostData = {}
-        lPostData['PatientNameAnon'] = ldPatientNameAnon
-        lPostData['SQLsiuid'] = aSQLsiuid
-        -- print('PatientNameAnon: ' .. ldPatientNameAnon)
-        -- print('SQLsiuid: ' .. aSQLsiuid)
-        local lStatus = ParseJson(RestApiPost('/save_patient_name_anon_to_db_lua', DumpJson(lPostData), false))
-        if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
-    end
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-    if lFlagSavePatientNameAnon then
-        return loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon
-    else
-        return loInstancesAnonMeta, loStudyIDAnon, nil
-    end
-
-end
-
+-- -- ======================================================
+-- function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall, 
+--                             aSQLpid,adPatientIDAnon,
+--                             aSQLsiuid, adStudyInstanceUIDAnon, aPatientIDModifier)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local lFlagByStudy = string.find(aLevel, 'Study')
+-- 
+--     -- Load tag keep/remove info
+--     local lTagHandling, lTagHandlingList
+--     -- lTagHandling, lTagHandlingList = BaseTagHandling()
+--     local lResults = ParseJson(RestApiGet('/base_tag_handling_lua', false))
+--     lTagHandling = lResults['TagHandling']
+--     lTagHandlingList = lResults['TagHandlingList']
+--  
+--     -- Capture all UID values for all instances and collect keep/remove data
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Capturing UID for all instances') end
+--     local lTagsEncountered = {}
+--     local lTagsToKeep = {}
+--     local lTagsToRemove = {}
+--     if aFlagFirstCall then
+--         gTopLevelTagToKeep = {}
+--         gKeptUID = {}
+--     end
+--     local loLevelInstancesMeta
+--     local lRecurseProprietary, lRecurseRemove, lRecurseGroupKeep, lRecurseGroupRemoveRe
+--     if lFlagByStudy then
+--         loLevelInstancesMeta = ParseJson(RestApiGet('/studies/' .. aoLevelID .. '/instances', false))
+--         lRecurseProprietary = ParseJson(RestApiGet('/studies/' .. aoLevelID .. '/odd_group_recursive_search', false))
+--         lRecurseRemove = ParseJson(RestApiPost('/studies/' .. aoLevelID .. '/group_element_recursive_search', DumpJson(lTagHandlingList['remove']), false))
+--         if lTagHandling['groupkeep'] then
+--             lRecurseGroupKeep = ParseJson(RestApiPost('/studies/' .. aoLevelID .. '/group_recursive_search', DumpJson(lTagHandlingList['groupkeep']), false))
+--         end
+--         if lTagHandling['groupremovere'] then
+--             lRecurseGroupRemoveRe = ParseJson(RestApiPost('/studies/' .. aoLevelID .. '/group_regexp_recursive_search', DumpJson(lTagHandlingList['groupremovere']), false))
+--         else
+--             lRecurseGroupRemoveRe = nil
+--         end
+--     else
+--         loLevelInstancesMeta = ParseJson(RestApiGet('/series/' .. aoLevelID .. '/instances', false))
+--         lRecurseProprietary = ParseJson(RestApiGet('/series/' .. aoLevelID .. '/odd_group_recursive_search', false))
+--         lRecurseRemove = ParseJson(RestApiPost('/series/' .. aoLevelID .. '/group_element_recursive_search', DumpJson(lTagHandlingList['remove']), false))
+--         if lTagHandling['groupkeep'] then
+--             lRecurseGroupKeep = ParseJson(RestApiPost('/series/' .. aoLevelID .. '/group_recursive_search', DumpJson(lTagHandlingList['groupkeep']), false))
+--         end
+--         if lTagHandling['groupremovere'] then
+--             lRecurseGroupRemoveRe = ParseJson(RestApiPost('/series/' .. aoLevelID .. '/group_regexp_recursive_search', DumpJson(lTagHandlingList['groupremovere']), false))
+--         else
+--             lRecurseGroupRemoveRe = nil
+--         end
+--     end
+--     -- print('lRecurse Groups')
+--     -- print(DumpJson(lRecurseProprietary))
+--     -- print(DumpJson(lRecurseRemove))
+--     -- if lRecurseGroupKeep then print(DumpJson(lRecurseGroupKeep)) end
+--     -- if lRecurseGroupRemoveRe then print(DumpJson(lRecurseGroupRemoveRe)) end
+--     
+--     local loInstanceID, lGroup, lElement, lField
+--     for i, loLevelInstanceMeta in pairs(loLevelInstancesMeta) do
+--         loInstanceID = loLevelInstanceMeta['ID']
+--         local loInstanceMeta = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
+--         -- First the UID mapping info
+--         -- RecursiveFindUIDToKeep(loInstanceMeta)
+--         local lResult = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/recursive_find_uid_to_keep_lua', false))
+--         if lResult['status'] and lResult['status'] > 0 then error(lResult['error_text']) end
+--         for kk,vv in pairs(lResult['TopLevelTagToKeep']) do gTopLevelTagToKeep[kk] = vv end
+--         for kk,vv in pairs(lResult['KeptUID']) do gKeptUID[kk] = vv end
+--         for lTagKey, lTagVal in pairs(loInstanceMeta) do
+--             _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
+--             lField = lGroup .. '-' .. lElement
+--             lTagsEncountered[lField] = true
+--         end
+--         if lTagHandling['groupkeep'] then
+--             for lTagKey, lTagVal in pairs(loInstanceMeta) do
+--                 _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
+--                 if lTagHandling['groupkeep'][lGroup] then
+--                     lField = lGroup .. '-' .. lElement
+--                     lTagsToKeep[lField] = true
+--                 end
+--             end
+--             for lField, lTagList in pairs(lRecurseGroupKeep) do
+--                 lTagsToKeep[lField] = true
+--             end
+--         end
+--         if lTagHandling['groupremovere'] then
+--             for lTagKey, lTagVal in pairs(loInstanceMeta) do
+--                 _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
+--                 for lGroupRE, lValue in pairs(lTagHandling['groupremovere']) do
+--                     if string.find(lGroup,lGroupRE) then
+--                         lField = lGroup .. '-' .. lElement
+--                         lTagsToRemove[lField] = true
+--                     end
+--                 end
+--             end
+--             if lRecurseGroupRemoveRe then
+--                 for lField, lValueList in pairs(lRecurseGroupRemoveRe) do
+--                     lTagsToRemove[lField] = true
+--                 end
+--             end
+--         end
+--     end -- loop over instances    
+--   
+--     -- Remove any private tags not already explicity kept
+--     if lTagHandling['KeepSomePrivate'] then
+--         for i, loLevelInstanceMeta in pairs(loLevelInstancesMeta) do
+--             loInstanceID = loLevelInstanceMeta['ID']
+--             local loInstanceMeta = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
+--             for lTagKey, lTagVal in pairs(loInstanceMeta) do
+--                 _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
+--                 if ((tonumber(lGroup,16) % 2) == 1) then
+--                     local lField = lGroup .. '-' .. lElement
+--                     if not (lTagHandling['keep'][lField] or lTagsToKeep[lField]) then
+--                         lTagsToRemove[lField] = true
+--                     end
+--                 end
+--             end
+--         end
+--         for lField, lProprietary in pairs(lRecurseProprietary) do 
+--             if not (lTagHandling['keep'][lField] or lTagsToKeep[lField]) then
+--                 lTagsToRemove[lField] = true
+--             end
+--         end
+--     else
+--         for lField, lProprietary in pairs(lRecurseProprietary) do 
+--             lTagsToRemove[lField] = true
+--         end
+--     end
+--     -- print('Pre scan results')
+--     -- print(DumpJson(gTopLevelTagToKeep))
+--     -- print(DumpJson(gKeptUID))
+--     -- print(DumpJson(lTagsEncountered))
+--     -- print(DumpJson(lTagsToKeep))
+--     -- print(DumpJson(lTagsToRemove))
+--  
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (1) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+-- 
+--     local lDataToPython = {}
+--     lDataToPython['SQLpid'] = aSQLpid
+--     if aPatientIDModifier then lDataToPython['PatientIDModifier'] = aPatientIDModifier end
+--     -- local lSQLInternalNumber = GetInternalNumber(aSQLpid, aPatientIDModifier)
+--     local lSQLInternalNumberResult = ParseJson(RestApiPost('/get_internal_number_lua', DumpJson(lDataToPython,true), false, {['x-remote-user']='lua-GetInternalNumberLua'}))
+--     local lSQLInternalNumber
+--     if lSQLInternalNumberResult['internal_number'] then
+--         lSQLInternalNumber = lSQLInternalNumberResult['internal_number']
+--     else
+-- --         gSQLConn:rollback()
+-- --         CloseSQL()
+--         error(lSQLInternalNumberResult['status']['error_text'])
+--     end
+--     -- local ldPatientNameAnon = ConstructPatientName(lSQLInternalNumber)
+--     local lDataToPython = {}
+--     lDataToPython['InternalNumber'] = lSQLInternalNumber
+--     if gPatientNameBase then lDataToPython['PatientNameBase'] = gPatientNameBase end
+--     if gPatientNameIDChar then lDataToPython['PatientNameIDChar'] = gPatientNameIDChar end
+--     local ldPatientNameAnon = RestApiPost('/construct_patient_name', DumpJson(lDataToPython,true), false)
+-- 
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (2) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+-- 
+--     -- Tags to be replaced
+--     local lReplace = {}
+--     lReplace['PatientName'] = ldPatientNameAnon
+--     if adPatientIDAnon then
+--         lReplace['PatientID'] = adPatientIDAnon
+--     end
+--     if adStudyInstanceUIDAnon then
+--         lReplace['StudyInstanceUID'] = adStudyInstanceUIDAnon
+--     end
+--     if lTagHandling['empty'] then
+--         for lField, lValue in pairs(lTagHandling['empty']) do
+--             lReplace[lField] = ''
+--         end
+--     end
+--     if lTagHandling['emptyseq'] then
+--         for lField, lValue in pairs(lTagHandling['emptyseq']) do
+--             lReplace[lField] = {}
+--         end
+--     end
+--     if lTagHandling['emptyx'] then
+--         for lField, lValue in pairs(lTagHandling['emptyx']) do
+--             lReplace[lField] = 'xxxxxx'
+--         end
+--     end
+-- 
+--     local lRemove = {}
+--     -- Top level tags
+--     -- for lElement, lValue in pairs(lTagHandling['remove']) do
+--     --     if lTagsEncountered[lElement] then table.insert(lRemove,lElement) end
+--     -- end
+--     -- The above is now accomplised by the python recursive routine.
+--     for lElement, lValueList in pairs(lRecurseRemove) do
+--         for i, lValue in pairs(lValueList) do
+--             table.insert(lRemove, lValue)
+--         end
+--     end
+--     for lElement, lValue in pairs(lTagsToRemove) do
+--         if not lTagHandling['remove'][lElement] then table.insert(lRemove, lElement) end
+--         if lRecurseProprietary[lElement] then
+--             for i, lProprietaryAddress in pairs(lRecurseProprietary[lElement]) do
+--                 table.insert(lRemove, lProprietaryAddress)
+--             end
+--         end
+--         if lTagHandling['groupremovere'] and lRecurseGroupRemoveRe and lRecurseGroupRemoveRe[lElement] then
+--             for i, lGroupReAddress in pairs(lRecurseGroupRemoveRe[lElement]) do
+--                 table.insert(lRemove, lGroupReAddress)
+--             end
+--         end
+--     end
+-- 
+--     local lKeep = {}
+--     for lElement, lValue in pairs(lTagHandling['keep']) do
+--         if lTagsEncountered[lElement] then table.insert(lKeep, lElement) end
+--     end
+--     for lElement, lValue in pairs(lTagsToKeep) do
+--         if not lTagHandling['keep'][lElement] then table.insert(lKeep, lElement) end
+--     end
+-- 
+--     lIndex = #lKeep
+--     for lTagKey, lTagVal in pairs(gTopLevelTagToKeep) do 
+--         if not string.find(lTagKey,'Unknown') then
+--             lIndex = lIndex + 1
+--             lKeep[lIndex] = lTagKey
+--         end
+--     end
+--     -- print('Replace/Remove/Keep')
+--     -- print(DumpJson(lReplace))
+--     -- print(DumpJson(lRemove))
+--     -- print(DumpJson(lKeep))
+-- 
+--     -- Modify the study: It seems remove clashes with keep and I need to run them separate
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Starting the study modification call') end
+--     local loStudyIDMod
+--     local loSeriesIDMod
+--     local lModifyPostData = {}
+--     lModifyPostData['Remove'] = lRemove
+--     local lFlagRemovePrivateTags = os.getenv('LUA_FLAG_REMOVE_PRIVATE_TAGS') == 'true'
+--     if lFlagRemovePrivateTags and not lTagHandling['KeepSomePrivate'] then
+--         lModifyPostData['RemovePrivateTags'] = lFlagRemovePrivateTags
+--     end
+--     lModifyPostData['Force'] = true
+--     lModifyPostData['DicomVersion'] = '2008'
+--     -- print('Modify Post')
+--     -- print(DumpJson(lModifyPostData))
+--     if lFlagByStudy then
+--         local lSuccess, loStudyModMetaJson = pcall(RestApiPost, 
+--                                                   '/studies/' .. aoLevelID .. '/modify', 
+--                                                   DumpJson(lModifyPostData,true), false)
+--         if not lSuccess then
+--             PrintRecursive(lModifyPostData)
+-- --             gSQLConn:rollback()
+-- --             CloseSQL()
+--             error('Could not complete modify statement')
+--         end
+--         local loStudyModMeta = ParseJson(loStudyModMetaJson)
+--         loStudyIDMod = loStudyModMeta['ID']
+--     else
+--         local lSuccess, loSeriesModMetaJson = pcall(RestApiPost, 
+--                                                     '/series/' .. aoLevelID .. '/modify', 
+--                                                     DumpJson(lModifyPostData,true), false)
+--         if not lSuccess then 
+--             PrintRecursive(lModifyPostData)
+-- --             gSQLConn:rollback()
+-- --             CloseSQL()
+--             error('Could no complete modify statement')
+--         end
+--         local loSeriesModMeta = ParseJson(loSeriesModMetaJson)
+--         loSeriesIDMod = loSeriesModMeta['ID']
+--         loSeriesModMeta = ParseJson(RestApiGet('/series/' .. loSeriesIDMod, false))
+--         loStudyIDMod = loSeriesModMeta['ParentStudy']
+--     end
+--     -- print('StudyIDMod: ' .. loStudyIDMod)
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (3) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+-- 
+--     -- Anonymize the study
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Starting the study anonymization call') end
+--     local loStudyIDAnon
+--     local lAnonPostData = {}
+--     if lReplace then
+--         lAnonPostData['Replace'] = lReplace
+--     end
+--     lAnonPostData['Keep'] = lKeep
+--     lAnonPostData['Force'] = true
+--     lAnonPostData['DicomVersion'] = '2008'
+--     -- print('AnonPostData')
+--     -- print(DumpJson(lAnonPostData))
+--     local loInstancesAnonMeta 
+--     if lFlagByStudy then
+--         local lSuccess, loStudyAnonMetaJson = pcall(RestApiPost, 
+--                                                     '/studies/' .. loStudyIDMod .. '/anonymize', 
+--                                                     DumpJson(lAnonPostData,true), false)
+--         if not lSuccess then
+--             PrintRecursive(lAnonPostData)
+-- --             gSQLConn:rollback()
+-- --             CloseSQL()
+--             error('Problem calling anonymize')
+--         end
+--        
+--         local loStudyAnonMeta = ParseJson(loStudyAnonMetaJson)
+--         loStudyIDAnon = loStudyAnonMeta['ID']
+--         loInstancesAnonMeta = ParseJson(RestApiGet('/studies/' .. loStudyIDAnon .. '/instances', false))
+--     else
+--         local lSuccess, loSeriesAnonMetaJson = pcall(RestApiPost,
+--                                                     '/series/' .. loSeriesIDMod .. '/anonymize', 
+--                                                      DumpJson(lAnonPostData,true), false)
+--         if not lSuccess then 
+--             PrintRecursive(lAnonPostData)
+-- --             gSQLConn:rollback()
+-- --             CloseSQL()
+--             error('Problem calling anonymize')
+--         end
+--         local loSeriesAnonMeta = ParseJson(loSeriesAnonMetaJson)
+--         local loSeriesIDAnon = loSeriesAnonMeta['ID']
+--         loSeriesAnonMeta = ParseJson(RestApiGet('/series/' .. loSeriesIDAnon, false))
+--         loStudyIDAnon = loSeriesAnonMeta['ParentStudy']
+--         loInstancesAnonMeta = ParseJson(RestApiGet('/series/' .. loSeriesAnonMeta['ID'] .. '/instances', false))
+--     end
+--     -- print('InstancesAnonMeta')
+--     -- print(DumpJson(loInstancesAnonMeta))
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'N instances anon: ', #loInstancesAnonMeta) end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (4) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+-- 
+--     local loStudyAnonMeta = ParseJson(RestApiGet('/studies/' .. loStudyIDAnon, false))
+--     -- print('MetaStudyAnon')
+--     -- print(DumpJson(loStudyAnonMeta))
+-- 
+--     if not adPatientIDAnon then
+--         -- SavePatientIDsAnonToDB(loStudyAnonMeta,aSQLpid)
+--         local lPostData = {}
+--         lPostData['OrthancStudyID'] = loStudyAnonMeta['ID']
+--         lPostData['SQLpid'] = aSQLpid
+--         -- print('OrthancStudyID: ' .. loStudyAnonMeta['ID'])
+--         -- print('SQLpid: ' .. aSQLpid)
+--         local lStatus = ParseJson(RestApiPost('/save_patient_ids_anon_to_db_lua', DumpJson(lPostData), false))
+--         if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
+--     end
+--     if not adStudyInstanceUIDAnon then
+--         -- SaveStudyInstanceUIDAnonToDB(loStudyAnonMeta,aSQLsiuid)
+--         local lPostData = {}
+--         lPostData['OrthancStudyID'] = loStudyAnonMeta['ID']
+--         lPostData['SQLsiuid'] = aSQLsiuid
+--         -- print('OrthancStudyID: ' .. loStudyAnonMeta['ID'])
+--         -- print('SQLsiuid: ' .. aSQLsiuid)
+--         local lStatus = ParseJson(RestApiPost('/save_study_instance_uid_anon_to_db_lua', DumpJson(lPostData), false))
+--         if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
+--     end
+--     local lFlagSavePatientNameAnon = os.getenv('LUA_FLAG_SAVE_PATIENTNAME_ANON') == 'true'
+--     if lFlagSavePatientNameAnon then
+--         -- SavePatientNameAnonToDB(ldPatientNameAnon, aSQLsiuid)
+--         local lPostData = {}
+--         lPostData['PatientNameAnon'] = ldPatientNameAnon
+--         lPostData['SQLsiuid'] = aSQLsiuid
+--         -- print('PatientNameAnon: ' .. ldPatientNameAnon)
+--         -- print('SQLsiuid: ' .. aSQLsiuid)
+--         local lStatus = ParseJson(RestApiPost('/save_patient_name_anon_to_db_lua', DumpJson(lPostData), false))
+--         if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
+--     end
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+--     if lFlagSavePatientNameAnon then
+--         return loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon
+--     else
+--         return loInstancesAnonMeta, loStudyIDAnon, nil
+--     end
+-- 
+-- end
+-- 
 -- -- ======================================================
 -- function MapUIDOldToNew(aoStudyIDNew, aFlagRemapSOPInstanceUID, aFlagRemapKeptUID)
 -- 
@@ -3680,39 +3680,43 @@ function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
             local lFlagFirstCall = true
             for i, loSeriesID in ipairs(loSeriesIDs) do 
                 local loInstancesAnonMetaTemp, loStudyIDAnonTemp , ldPatientNameAnonTemp
-                -- loInstancesAnonMetaTemp, loStudyIDAnonTemp, ldPatientNameAnonTemp = 
-                --    AnonymizeInstances('Series', loSeriesID, lFlagFirstCall, 
-                --                        lSQLpid[lPatientIDModifier],ldPatientIDAnon[lPatientIDModifier],
-                --                        lSQLsiuid[lPatientIDModifier], ldStudyInstanceUIDAnon[lPatientIDModifier], 
-                --                        lPatientIDModifier)
-                local lPostData = {}
-                if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
-                if gAddressList then lPostData['AddressList'] = gAddressList end
-                lPostData['Level'] = 'Series'
-                lPostData['LevelID'] =loSeriesID 
-                lPostData['FlagFirstCall'] = lFlagFirstCall
-                if gKeptUID then lPostData['KeptUID'] = gKeptUID end
-                if ldPatientIDAnon[lPatientIDModifier] then lPostData['PatientIDAnon'] = ldPatientIDAnon[lPatientIDModifier] end
-                if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
-                if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
-                if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
-                lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
-                lPostData['SQLsiuid'] = lSQLsiuid[lPatientIDModifier]
-                if ldStudyInstanceUIDAnon[lPatientIDModifier] then lPostData['StudyInstanceUIDAnon'] = ldStudyInstanceUIDAnon[lPatientIDModifier] end
-                if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
-                if gUIDMap then lPostData['UIDMap'] = gUIDMap end
-                local lResult = ParseJson(RestApiPost('/anonymize_instances_lua', DumpJson(lPostData,false)))
-                if lResult['status'] then error('Problem with anonymization ' .. lResult['error_text']) end
-                if lResult['AddressConstructor'] then gAddressConstructor  = lResult['AddressConstructor'] end
-                if lResult['AddressList'] then gAddressList  = lResult['AddressList'] end
-                loInstancesAnonMetaTemp = lResult['InstancesAnonMeta']
-                if lResult['KeptUID'] then gKeptUID  = lResult['KeptUID'] end
-                if lResult['PatientNameAnon'] then ldPatientNameAnonTemp = lResult['PatientNameAnon'] end
-                if lResult['PatientNameBase'] then gPatientNameBase  = lResult['PatientNameBase'] end
-                if lResult['PatientNameIDChar'] then gPatientNameIDChar  = lResult['PatientNameIDChar'] end
-                loStudyIDAnonTemp = lResult['StudyIDAnon']
-                if lResult['TopLevelTagToKeep'] then gTopLevelTagToKeep  = lResult['TopLevelTagToKeep'] end
-                if lResult['UIDMap'] then gUIDMap = lResult['UIDMap'] end
+                if false then
+                    -- If you set the above to true, be sure to uncomment the Lua routine
+                    loInstancesAnonMetaTemp, loStudyIDAnonTemp, ldPatientNameAnonTemp = 
+                       AnonymizeInstances('Series', loSeriesID, lFlagFirstCall, 
+                                           lSQLpid[lPatientIDModifier],ldPatientIDAnon[lPatientIDModifier],
+                                           lSQLsiuid[lPatientIDModifier], ldStudyInstanceUIDAnon[lPatientIDModifier], 
+                                           lPatientIDModifier)
+                else
+                    local lPostData = {}
+                    if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
+                    if gAddressList then lPostData['AddressList'] = gAddressList end
+                    lPostData['Level'] = 'Series'
+                    lPostData['LevelID'] =loSeriesID 
+                    lPostData['FlagFirstCall'] = lFlagFirstCall
+                    if gKeptUID then lPostData['KeptUID'] = gKeptUID end
+                    if ldPatientIDAnon[lPatientIDModifier] then lPostData['PatientIDAnon'] = ldPatientIDAnon[lPatientIDModifier] end
+                    if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+                    if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
+                    if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
+                    lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
+                    lPostData['SQLsiuid'] = lSQLsiuid[lPatientIDModifier]
+                    if ldStudyInstanceUIDAnon[lPatientIDModifier] then lPostData['StudyInstanceUIDAnon'] = ldStudyInstanceUIDAnon[lPatientIDModifier] end
+                    if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
+                    if gUIDMap then lPostData['UIDMap'] = gUIDMap end
+                    local lResult = ParseJson(RestApiPost('/anonymize_instances_lua', DumpJson(lPostData,false)))
+                    if lResult['status'] then error('Problem with anonymization ' .. lResult['error_text']) end
+                    if lResult['AddressConstructor'] then gAddressConstructor  = lResult['AddressConstructor'] end
+                    if lResult['AddressList'] then gAddressList  = lResult['AddressList'] end
+                    loInstancesAnonMetaTemp = lResult['InstancesAnonMeta']
+                    if lResult['KeptUID'] then gKeptUID  = lResult['KeptUID'] end
+                    if lResult['PatientNameAnon'] then ldPatientNameAnonTemp = lResult['PatientNameAnon'] end
+                    if lResult['PatientNameBase'] then gPatientNameBase  = lResult['PatientNameBase'] end
+                    if lResult['PatientNameIDChar'] then gPatientNameIDChar  = lResult['PatientNameIDChar'] end
+                    loStudyIDAnonTemp = lResult['StudyIDAnon']
+                    if lResult['TopLevelTagToKeep'] then gTopLevelTagToKeep  = lResult['TopLevelTagToKeep'] end
+                    if lResult['UIDMap'] then gUIDMap = lResult['UIDMap'] end
+                end
                 if ldPatientNameAnonTemp then ldPatientNameAnonDict[ldPatientNameAnonTemp] = true end
                 if lFlagFirstCall then
                     loInstancesAnonMeta = loInstancesAnonMetaTemp
@@ -4090,6 +4094,7 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
             local loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon
             local lFlagFirstCall = true
             if false then
+                -- If you set the above to true, be sure to uncomment the Lua routine
                 loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon = AnonymizeInstances('Study', aoStudyID, lFlagFirstCall, 
                                                                                            lSQLpid,ldPatientIDAnon,
                                                                                            lSQLsiuid,ldStudyInstanceUIDAnon, lPatientIDModifier)

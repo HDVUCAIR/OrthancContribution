@@ -32,29 +32,7 @@ os.umask(0o027)
 
 # ============================================================================
 # Modify the GUI
-# ----------------------------------------------------------------------------
-# Attempt to add logout button:  Work in progress.
-# ----------------------------------------------------------------------------
-#logout_button_js = "$('#lookup').live('pagebeforecreate', function() {" + \
-#                       " var b = $('<a>')" + \
-#                         " .attr('data-role', 'button')" + \
-#                         " .attr('href', '#')" + \
-#                         " .attr('data-icon', 'action')" + \
-#                         " .attr('data-theme', 'e')" + \
-#                         " .text('Logout');" + \
-#                       " b.insertAfter($('#content').parent());" + \
-#                       " b.click(function() {" + \
-#                         " var uuid='none'; " + \
-#                         " if ($.mobile.pageData) {" + \
-#                         "   uuid = $.mobile.pageData.uuid" + \
-#                         " };" + \
-#                         " window.open('https://go.utah.edu/cas/logout', '_self');" + \
-#                         "}" + \
-#                       ");" + \
-#                     "});"
-#orthanc.ExtendOrthancExplorer(logout_button_js)
-
-# ----------------------------------------------------------------------------
+# ============================================================================
 # Buttons on patient page
 # ----------------------------------------------------------------------------
 # Same as API patients/uid
