@@ -1,8 +1,8 @@
 -- ======================================================
-function trim(s)
-    return (s:gsub("^%s*(.-)%s*$", "%1"))
-end
-
+-- function trim(s)
+--     return (s:gsub("^%s*(.-)%s*$", "%1"))
+-- end
+--
 -- -- ======================================================
 -- function SplitToKeyList(aInputStr, aSep)
 --    if aSep == nil then
@@ -3537,397 +3537,397 @@ end
 -- 
 -- end
 -- 
--- ======================================================
-function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    -- Assume we've already pre-screened for modality
-
-    -- Get the Orthanc series ID associated with this study
-    local lPatientIDModifierBySeries = {}
-    local lSQLpidBySeries = {}
-    local ldPatientIDAnonBySeries = {}
-    local lSQLsiuidBySeries = {}
-    local ldStudyInstanceUIDAnonBySeries = {}
-    local lFlagNewPatientIDBySeries = {}
-    local lFlagNewStudyInstanceUIDBySeries = {}
-    for i, loSeriesID in pairs(aoStudyMeta['Series']) do
-
---         if gSQLOpen then
---             if gSQLConn then
---                 CloseSQL()
+-- -- ======================================================
+-- function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     -- Assume we've already pre-screened for modality
+-- 
+--     -- Get the Orthanc series ID associated with this study
+--     local lPatientIDModifierBySeries = {}
+--     local lSQLpidBySeries = {}
+--     local ldPatientIDAnonBySeries = {}
+--     local lSQLsiuidBySeries = {}
+--     local ldStudyInstanceUIDAnonBySeries = {}
+--     local lFlagNewPatientIDBySeries = {}
+--     local lFlagNewStudyInstanceUIDBySeries = {}
+--     for i, loSeriesID in pairs(aoStudyMeta['Series']) do
+-- 
+-- --         if gSQLOpen then
+-- --             if gSQLConn then
+-- --                 CloseSQL()
+-- --             end
+-- --         end
+-- --         gSQLOpen = false
+-- --         OpenSQL()
+-- 
+--         -- Get series meta
+--         local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
+-- 
+--         -- We modify the incoming patientIDs based on descriptions
+--         -- Currently, we modify by 2D vs non-2D
+--         local lPatientIDModifier = ''
+--         local lFlagSplit2DFromCViewTomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO') == 'true'
+--         if lFlagSplit2DFromCViewTomo then 
+--             -- lPatientIDModifier = Set2DOrCViewTomo(loSeriesMeta)
+--             lPatientIDModifier = RestApiGet('/series/' .. loSeriesID .. '/set_2d_or_cview_tomo_lua', false)
+--         end
+--         local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
+--         if lFlagEveryAccessionAPatient then lPatientIDModifier = '_' .. aoStudyMeta['MainDicomTags']['AccessionNumber'] end
+--         lPatientIDModifierBySeries[loSeriesID] = lPatientIDModifier
+-- 
+--         -- Check to see if this subject was previously anonymized
+--         -- StudyInstanceUID is only modified when anonymizing at the series level
+--         local lStudyInstanceUIDModifier = lPatientIDModifier
+--         local lSQLpid, ldPatientIDAnon, lSQLsiuid, ldStudyInstanceUIDAnon
+--         --local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(aoStudyMeta,lPatientIDModifier)
+--         local lPostData = {}
+--         lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+--         if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+--         local lResults
+--         lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
+--         if lResults['status'] and lResults['status'] > 0 then
+-- --             gSQLConn:rollback()
+-- --             CloseSQL()
+--             error(lResults['error_text'])
+--         end
+--         local lFlagNewPatientID = lResults['FlagPatientNewID']
+--         -- local lSQLpid = math.floor(lResults['SQLpid']+0.5)
+--         local lSQLpid = lResults['SQLpid']
+--         local ldPatientIDAnon = lResults['PatientIDAnon']
+--         -- local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(aoStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
+--         local lPostData = {}
+--         lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+--         lPostData['SQLpid'] = lSQLpid
+--         if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
+--         local lResults
+--         lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
+--         if lResults['status'] then error(lResults['error_text']) end
+--         local lFlagNewStudyInstanceUID = lResults['FlagNewStudyInstanceUID']
+--         local lSQLsiuid = lResults['SQLsiuid']
+--         local ldStudyInstanceUIDAnon = lResults['StudyInstanceUIDAnon']
+--         
+--         lFlagNewPatientIDBySeries[loSeriesID] = lFlagNewPatientID
+--         lSQLpidBySeries[loSeriesID] = lSQLpid
+--         ldPatientIDAnonBySeries[loSeriesID] = ldPatientIDAnon
+--         lFlagNewStudyInstanceUIDBySeries[loSeriesID] = lFlagNewStudyInstanceUID
+--         lSQLsiuidBySeries[loSeriesID] = lSQLsiuid
+--         ldStudyInstanceUIDAnonBySeries[loSeriesID] = ldStudyInstanceUIDAnon
+-- 
+-- --        CloseSQL()
+--         
+--     end -- First loop over series to get modifiers and series specific IDs
+-- 
+--     -- Compute unique set of identifiers
+--     local lPatientIDModifierUnique = {}
+--     local lFlagNewPatientID = {}
+--     local lFlagNewStudyInstanceUID = {}
+--     local lSQLpid = {}
+--     local ldPatientIDAnon = {}
+--     local lSQLsiuid = {}
+--     local ldStudyInstanceUIDAnon = {}
+--     for loSeriesID,lPatientIDModifier in pairs(lPatientIDModifierBySeries) do
+--         if not lPatientIDModifierUnique[lPatientIDModifier] then
+--             lPatientIDModifierUnique[lPatientIDModifier] = {loSeriesID}
+--             lFlagNewPatientID[lPatientIDModifier] = lFlagNewPatientIDBySeries[loSeriesID]
+--             lFlagNewStudyInstanceUID[lPatientIDModifier] = lFlagNewStudyInstanceUIDBySeries[loSeriesID]
+--             lSQLpid[lPatientIDModifier] = lSQLpidBySeries[loSeriesID]
+--             ldPatientIDAnon[lPatientIDModifier] = ldPatientIDAnonBySeries[loSeriesID]
+--             lSQLsiuid[lPatientIDModifier] = lSQLsiuidBySeries[loSeriesID]
+--             ldStudyInstanceUIDAnon[lPatientIDModifier] = ldStudyInstanceUIDAnonBySeries[loSeriesID]
+--         else
+--             table.insert(lPatientIDModifierUnique[lPatientIDModifier], loSeriesID)
+--             lFlagNewPatientID[lPatientIDModifier] = lFlagNewPatientID[lPatientIDModifier] or lFlagNewPatientIDBySeries[loSeriesID]
+--             lFlagNewStudyInstanceUID[lPatientIDModifier] = lFlagNewStudyInstanceUID[lPatientIDModifier] or lFlagNewStudyInstanceUIDBySeries[loSeriesID]
+--             if lSQLpid[lPatientIDModifier] ~= lSQLpidBySeries[loSeriesID] then
+--                 error("Mismatch in SQLpid assigned to series with same patient modifier")
+--             end
+--             if ldPatientIDAnon[lPatientIDModifier] ~= ldPatientIDAnonBySeries[loSeriesID] then
+--                 error("Mismatch in dPatientIDAnon assigned to series with same patient modifier")
+--             end
+--             if lSQLsiuid[lPatientIDModifier] ~= lSQLsiuidBySeries[loSeriesID] then
+--                 error("Mismatch in SQLsiuid assigned to series with same patient modifier")
+--             end
+--             if ldStudyInstanceUIDAnon[lPatientIDModifier] ~= ldStudyInstanceUIDAnonBySeries[loSeriesID] then
+--                 error("Mismatch in dStudyInstanceUIDAnon assigned to series with same patient modifier")
 --             end
 --         end
---         gSQLOpen = false
---         OpenSQL()
-
-        -- Get series meta
-        local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
-
-        -- We modify the incoming patientIDs based on descriptions
-        -- Currently, we modify by 2D vs non-2D
-        local lPatientIDModifier = ''
-        local lFlagSplit2DFromCViewTomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO') == 'true'
-        if lFlagSplit2DFromCViewTomo then 
-            -- lPatientIDModifier = Set2DOrCViewTomo(loSeriesMeta)
-            lPatientIDModifier = RestApiGet('/series/' .. loSeriesID .. '/set_2d_or_cview_tomo_lua', false)
-        end
-        local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
-        if lFlagEveryAccessionAPatient then lPatientIDModifier = '_' .. aoStudyMeta['MainDicomTags']['AccessionNumber'] end
-        lPatientIDModifierBySeries[loSeriesID] = lPatientIDModifier
-
-        -- Check to see if this subject was previously anonymized
-        -- StudyInstanceUID is only modified when anonymizing at the series level
-        local lStudyInstanceUIDModifier = lPatientIDModifier
-        local lSQLpid, ldPatientIDAnon, lSQLsiuid, ldStudyInstanceUIDAnon
-        --local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(aoStudyMeta,lPatientIDModifier)
-        local lPostData = {}
-        lPostData['OrthancStudyID'] = aoStudyMeta['ID']
-        if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
-        local lResults
-        lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
-        if lResults['status'] and lResults['status'] > 0 then
---             gSQLConn:rollback()
---             CloseSQL()
-            error(lResults['error_text'])
-        end
-        local lFlagNewPatientID = lResults['FlagPatientNewID']
-        -- local lSQLpid = math.floor(lResults['SQLpid']+0.5)
-        local lSQLpid = lResults['SQLpid']
-        local ldPatientIDAnon = lResults['PatientIDAnon']
-        -- local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(aoStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
-        local lPostData = {}
-        lPostData['OrthancStudyID'] = aoStudyMeta['ID']
-        lPostData['SQLpid'] = lSQLpid
-        if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
-        local lResults
-        lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
-        if lResults['status'] then error(lResults['error_text']) end
-        local lFlagNewStudyInstanceUID = lResults['FlagNewStudyInstanceUID']
-        local lSQLsiuid = lResults['SQLsiuid']
-        local ldStudyInstanceUIDAnon = lResults['StudyInstanceUIDAnon']
-        
-        lFlagNewPatientIDBySeries[loSeriesID] = lFlagNewPatientID
-        lSQLpidBySeries[loSeriesID] = lSQLpid
-        ldPatientIDAnonBySeries[loSeriesID] = ldPatientIDAnon
-        lFlagNewStudyInstanceUIDBySeries[loSeriesID] = lFlagNewStudyInstanceUID
-        lSQLsiuidBySeries[loSeriesID] = lSQLsiuid
-        ldStudyInstanceUIDAnonBySeries[loSeriesID] = ldStudyInstanceUIDAnon
-
---        CloseSQL()
-        
-    end -- First loop over series to get modifiers and series specific IDs
-
-    -- Compute unique set of identifiers
-    local lPatientIDModifierUnique = {}
-    local lFlagNewPatientID = {}
-    local lFlagNewStudyInstanceUID = {}
-    local lSQLpid = {}
-    local ldPatientIDAnon = {}
-    local lSQLsiuid = {}
-    local ldStudyInstanceUIDAnon = {}
-    for loSeriesID,lPatientIDModifier in pairs(lPatientIDModifierBySeries) do
-        if not lPatientIDModifierUnique[lPatientIDModifier] then
-            lPatientIDModifierUnique[lPatientIDModifier] = {loSeriesID}
-            lFlagNewPatientID[lPatientIDModifier] = lFlagNewPatientIDBySeries[loSeriesID]
-            lFlagNewStudyInstanceUID[lPatientIDModifier] = lFlagNewStudyInstanceUIDBySeries[loSeriesID]
-            lSQLpid[lPatientIDModifier] = lSQLpidBySeries[loSeriesID]
-            ldPatientIDAnon[lPatientIDModifier] = ldPatientIDAnonBySeries[loSeriesID]
-            lSQLsiuid[lPatientIDModifier] = lSQLsiuidBySeries[loSeriesID]
-            ldStudyInstanceUIDAnon[lPatientIDModifier] = ldStudyInstanceUIDAnonBySeries[loSeriesID]
-        else
-            table.insert(lPatientIDModifierUnique[lPatientIDModifier], loSeriesID)
-            lFlagNewPatientID[lPatientIDModifier] = lFlagNewPatientID[lPatientIDModifier] or lFlagNewPatientIDBySeries[loSeriesID]
-            lFlagNewStudyInstanceUID[lPatientIDModifier] = lFlagNewStudyInstanceUID[lPatientIDModifier] or lFlagNewStudyInstanceUIDBySeries[loSeriesID]
-            if lSQLpid[lPatientIDModifier] ~= lSQLpidBySeries[loSeriesID] then
-                error("Mismatch in SQLpid assigned to series with same patient modifier")
-            end
-            if ldPatientIDAnon[lPatientIDModifier] ~= ldPatientIDAnonBySeries[loSeriesID] then
-                error("Mismatch in dPatientIDAnon assigned to series with same patient modifier")
-            end
-            if lSQLsiuid[lPatientIDModifier] ~= lSQLsiuidBySeries[loSeriesID] then
-                error("Mismatch in SQLsiuid assigned to series with same patient modifier")
-            end
-            if ldStudyInstanceUIDAnon[lPatientIDModifier] ~= ldStudyInstanceUIDAnonBySeries[loSeriesID] then
-                error("Mismatch in dStudyInstanceUIDAnon assigned to series with same patient modifier")
-            end
-        end
-    end
-
-    -- Now loop over sets of series by their modifier
-    local lFlagImagesSent = false
-    for lPatientIDModifier, loSeriesIDs in pairs(lPatientIDModifierUnique) do
-
---         if gSQLOpen then
---             if gSQLConn then
---                 CloseSQL()
+--     end
+-- 
+--     -- Now loop over sets of series by their modifier
+--     local lFlagImagesSent = false
+--     for lPatientIDModifier, loSeriesIDs in pairs(lPatientIDModifierUnique) do
+-- 
+-- --         if gSQLOpen then
+-- --             if gSQLConn then
+-- --                 CloseSQL()
+-- --             end
+-- --         end
+-- --         gSQLOpen = false
+-- --         OpenSQL()
+-- 
+--         -- We're not going to bother anonymizing unless either a new patient or study
+--         local lFlagNonOriginalDetected = false
+--         local lFlagForceAnon = false or gFlagForceAnon
+--         local ldPatientNameAnonDict = {}
+--         if lFlagForceAnon or (lFlagNewPatientID[lPatientIDModifier] or lFlagNewStudyInstanceUID[lPatientIDModifier]) then
+-- 
+--             -- First pass anonymization
+--             local loInstancesAnonMeta, loStudyIDAnon
+--             local lFlagFirstCall = true
+--             for i, loSeriesID in ipairs(loSeriesIDs) do 
+--                 local loInstancesAnonMetaTemp, loStudyIDAnonTemp , ldPatientNameAnonTemp
+--                 if false then
+--                     -- If you set the above to true, be sure to uncomment the Lua routine
+--                     loInstancesAnonMetaTemp, loStudyIDAnonTemp, ldPatientNameAnonTemp = 
+--                        AnonymizeInstances('Series', loSeriesID, lFlagFirstCall, 
+--                                            lSQLpid[lPatientIDModifier],ldPatientIDAnon[lPatientIDModifier],
+--                                            lSQLsiuid[lPatientIDModifier], ldStudyInstanceUIDAnon[lPatientIDModifier], 
+--                                            lPatientIDModifier)
+--                 else
+--                     local lPostData = {}
+--                     if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
+--                     if gAddressList then lPostData['AddressList'] = gAddressList end
+--                     lPostData['Level'] = 'Series'
+--                     lPostData['LevelID'] =loSeriesID 
+--                     lPostData['FlagFirstCall'] = lFlagFirstCall
+--                     if gKeptUID then lPostData['KeptUID'] = gKeptUID end
+--                     if ldPatientIDAnon[lPatientIDModifier] then lPostData['PatientIDAnon'] = ldPatientIDAnon[lPatientIDModifier] end
+--                     if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+--                     if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
+--                     if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
+--                     lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
+--                     lPostData['SQLsiuid'] = lSQLsiuid[lPatientIDModifier]
+--                     if ldStudyInstanceUIDAnon[lPatientIDModifier] then lPostData['StudyInstanceUIDAnon'] = ldStudyInstanceUIDAnon[lPatientIDModifier] end
+--                     if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
+--                     if gUIDMap then lPostData['UIDMap'] = gUIDMap end
+--                     local lResult = ParseJson(RestApiPost('/anonymize_instances_lua', DumpJson(lPostData,false)))
+--                     if lResult['status'] then error('Problem with anonymization ' .. lResult['error_text']) end
+--                     if lResult['AddressConstructor'] then gAddressConstructor  = lResult['AddressConstructor'] end
+--                     if lResult['AddressList'] then gAddressList  = lResult['AddressList'] end
+--                     loInstancesAnonMetaTemp = lResult['InstancesAnonMeta']
+--                     if lResult['KeptUID'] then gKeptUID  = lResult['KeptUID'] end
+--                     if lResult['PatientNameAnon'] then ldPatientNameAnonTemp = lResult['PatientNameAnon'] end
+--                     if lResult['PatientNameBase'] then gPatientNameBase  = lResult['PatientNameBase'] end
+--                     if lResult['PatientNameIDChar'] then gPatientNameIDChar  = lResult['PatientNameIDChar'] end
+--                     loStudyIDAnonTemp = lResult['StudyIDAnon']
+--                     if lResult['TopLevelTagToKeep'] then gTopLevelTagToKeep  = lResult['TopLevelTagToKeep'] end
+--                     if lResult['UIDMap'] then gUIDMap = lResult['UIDMap'] end
+--                 end
+--                 if ldPatientNameAnonTemp then ldPatientNameAnonDict[ldPatientNameAnonTemp] = true end
+--                 if lFlagFirstCall then
+--                     loInstancesAnonMeta = loInstancesAnonMetaTemp
+--                     loStudyIDAnon = loStudyIDAnonTemp
+--                     -- We call "Save" again just to read in the newly saved IDs (they were saved inside the anonymize routine)
+--                     local lStudyInstanceUIDModifier = lPatientIDModifier
+--                     local lSQLpidTemp, ldPatientIDAnonTemp, lSQLsiuidTemp, ldStudyInstanceUIDAnonTemp
+--                     -- local lFlagNewPatientIDTemp, lSQLpidTemp, ldPatientIDAnonTemp = SavePatientIDsToDB(aoStudyMeta,lPatientIDModifier)
+--                     local lPostData = {}
+--                     lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+--                     if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+--                     local lResults
+--                     lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
+--                     if lResults['status'] and  lResults['status'] > 0 then
+-- --                         gSQLConn:rollback()
+-- --                         CloseSQL()
+--                         error(lResults['error_text'])
+--                     end
+--                     local lFlagNewPatientIDTemp = lResults['FlagPatientNewID']
+--                     local lSQLpidTemp = lResults['SQLpid']
+--                     local ldPatientIDAnonTemp = lResults['PatientIDAnon']
+--                     if lSQLpid[lPatientIDModifier] ~= lSQLpidTemp then
+--                         error('Unexpected mismatch when reading SQLpid')
+--                     end
+--                     if not ldPatientIDAnon[lPatientIDModifier] then
+--                         ldPatientIDAnon[lPatientIDModifier] = ldPatientIDAnonTemp
+--                     else
+--                         if lFlagNewPatientIDTemp or (ldPatientIDAnon[lPatientIDModifier] ~= ldPatientIDAnonTemp) then
+--                             error('Unexpected mismatch when reading dPatientIDAnon')
+--                         end
+--                     end
+--                     -- local lFlagNewStudyInstanceUIDTemp, lSQLsiuidTemp, ldStudyInstanceUIDAnonTemp = SaveStudyInstanceUIDToDB(aoStudyMeta,lSQLpidTemp,lStudyInstanceUIDModifier)
+--                     local lPostData = {}
+--                     lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+--                     lPostData['SQLpid'] = lSQLpidTemp
+--                     if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
+--                     local lResults
+--                     lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
+--                     if lResults['status'] then error(lResults['error_text']) end
+--                     local lFlagNewStudyInstanceUIDTemp = lResults['FlagNewStudyInstanceUID']
+--                     local lSQLsiuidTemp = lResults['SQLsiuid']
+--                     local ldStudyInstanceUIDAnonTemp = lResults['StudyInstanceUIDAnon']
+--                     if lSQLsiuid[lPatientIDModifier] ~= lSQLsiuidTemp then
+--                         error('Unexpected mismatch when reading SQLsiuid')
+--                     end
+--                     if not ldStudyInstanceUIDAnon[lPatientIDModifier] then
+--                         ldStudyInstanceUIDAnon[lPatientIDModifier] = ldStudyInstanceUIDAnonTemp
+--                     else
+--                         if lFlagNewStudyInstanceUIDTemp or (ldStudyInstanceUIDAnon[lPatientIDModifier] ~= ldStudyInstanceUIDAnonTemp) then
+--                             error('Unexpected mismatch when reading dStudyInstanceUIDAnon')
+--                         end
+--                     end
+--                 else
+--                     -- Add instances to list of instances already anonymized
+--                     for j=1,#loInstancesAnonMetaTemp do
+--                         loInstancesAnonMeta[#loInstancesAnonMeta+1] = loInstancesAnonMetaTemp[j]
+--                     end
+--                     -- StudyIDAnon should not have changed
+--                     if loStudyIDAnon ~= loStudyIDAnonTemp then
+--                         error("Unexpected change in IDAnon for same modifier")
+--                     end
+--                 end
+--                 lFlagFirstCall = false
+--             end -- loop over series belonging to the current modifier
+-- 
+--             -- Set up old-->new UID map
+--             local lFlagRemapSOPInstanceUID = true
+--             local lFlagRemapKeptUID = true
+--             -- gUIDMap, gUIDType = MapUIDOldToNew(loStudyIDAnon,lFlagRemapSOPInstanceUID,lFlagRemapKeptUID)
+--             local lPostData = {}
+--             lPostData['StudyIDNew'] = loStudyIDAnon
+--             lPostData['FlagRemapSOPInstanceUID'] = lFlagRemapSOPInstanceUID
+--             lPostData['FlagRemapKeptUID'] = lFlagRemapKeptUID
+--             lPostData['KeptUID'] = gKeptUID
+--             local lResults = ParseJson(RestApiPost('/map_uid_old_to_new_lua', DumpJson(lPostData), false))
+--             gUIDMap = lResults['UIDMap']
+--             gUIDType = lResults['UIDType']
+-- 
+--             -- Set up replacements for AccessionNumber and StudyID
+--             local lReplaceRoot = {}
+--             lReplaceRoot['AccessionNumber'] = string.sub(loStudyIDAnon,1,8) .. string.sub(loStudyIDAnon,10,17)
+--             lReplaceRoot['StudyID'] = string.sub(loStudyIDAnon,19,26) .. string.sub(loStudyIDAnon,28,35)
+--     
+--             -- Check for existing lShiftEpoch
+--             -- local lShiftEpoch = LoadShiftEpochFromDB(lSQLpid[lPatientIDModifier])
+--             local lPostData = {}
+--             lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
+--             local lStatus = ParseJson(RestApiPost('/load_shift_epoch_from_db_lua', DumpJson(lPostData), false))
+--             if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
+--             local lShiftEpoch = lStatus['ShiftEpoch']
+-- 
+--             -- ------------------------------------------------
+--             -- Compute lShiftEpoch
+--             local lSaveShiftEpoch = false
+--             if not lShiftEpoch then 
+--                 -- Compute lShiftEpoch (used to shift earliest date to Jan 01 same year)
+--                 -- lShiftEpoch = ComputeShiftEpochFromEarliestDate(loInstancesAnonMeta)
+--                 -- Compute random shift up to one year
+--                 math.randomseed(os.time())
+--                 lShiftEpoch = math.floor(math.floor(math.random() * 365.0) * 24.0 * 3600.0)
+--                 lSaveShiftEpoch = true
+--             end
+-- 
+--             -- For some cases, we keep the dates, so lShiftEpoch=0
+--             local lFlagKeepOriginalDates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES') == 'true'
+--             if lFlagKeepOriginalDates then
+--                 local currentTime = os.time
+--                 lShiftEpoch = 0
+--             end
+-- 
+--             if lSaveShiftEpoch then
+--                 -- SaveShiftEpochToDB(lShiftEpoch,lSQLpid[lPatientIDModifier])
+--                 local lPostData = {}
+--                 lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
+--                 lPostData['ShiftEpoch'] = lShiftEpoch
+--                 local lStatus = ParseJson(RestApiPost('/save_shift_epoch_to_db_lua', DumpJson(lPostData), false))
+--                 if lStatus['status'] and lStatus['status'] > 0 then
+--                     error('Problem saving ShiftEpoch to DB')
+--                 end
+--             end
+-- 
+--             -- ------------------------------------------------
+--             -- Second pass anonymization creates files modified by lShiftEpoch
+--             -- Deletes First pass anonymized files following lShiftEpoch modification
+--             local lPostData = {}
+--             lPostData['InstancesMeta'] = loInstancesAnonMeta
+--             lPostData['ShiftEpoch'] = lShiftEpoch
+--             lPostData['ReplaceRoot'] = lReplaceRoot
+--             lPostData['UIDMap'] = gUIDMap
+--             lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep
+--             lPostData['AddressList'] = gAddressList
+--             lPostData['KeptUID'] = gKeptUID
+--             -- local loInstanceIDNew = ShiftDateTimePatAgeOfInstances(loInstancesAnonMeta, lShiftEpoch, lReplaceRoot)
+--             local lResults = ParseJson(RestApiPost('/shift_date_time_patage_of_instances_lua', DumpJson(lPostData), false))
+--             if lResults['status'] ~= 0 then
+--                 error('Problem calling python shift date time patage')
+--             end
+--             loInstanceIDNew = lResults['InstanceIDNew']
+-- 
+--             -- Delete the original instance
+--             for i, loInstanceAnonMeta in pairs(loInstancesAnonMeta) do
+--                 loInstanceID = (loInstanceAnonMeta['ID'])
+--                 RestApiDelete('/instances/' .. loInstanceID, false)
+--                 --Delete(loInstanceID)
+--             end -- loop over loInstancesAnonMeta
+--     
+--             -- Send to receiving modality
+--             local lPostData = {}
+--             lPostData['orthanc_instance_ids'] = {}
+--             for i, loInstanceID in pairs(loInstanceIDNew) do
+--                 table.insert(lPostData['orthanc_instance_ids'], loInstanceID)
+--             end
+--             local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
+--             if not lResults then
+--                error('Problem calling send_instances_to_remote_filter_lua')
+--             end 
+--             -- for i, loInstanceID in pairs(loInstanceIDNew) do
+--             for loInstanceID, lFlagSendToRemote in pairs(lResults) do
+--                 -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
+--                 if lFlagSendToRemote then
+--                     local dumby=3
+--                     if not lFlagForceAnon then
+--                         -- RestApiPost('/modalities/' .. os.getenv('LUA_ANON_ORTHANC') .. '/store', loInstanceID, false)
+--                         lFlagImagesSent = true
+--                     end
+--                 else
+--                     RestApiDelete('/instances/' .. loInstanceID, false)
+--                     lFlagNonOriginalDetected = true
+--                 end
+--             end
+-- 
+--         else -- existing patient/study combo
+-- 
+--            if gVerbose then print(string.rep(' ',gIndent) .. 'Skipping re-anon of existing patient/study') end
+-- 
+--         end -- endif new patient or new study
+-- 
+--         if lFlagNonOriginalDetected then
+--             if gVerbose then print('Some non-original images were not sent') end
+--         end
+-- 
+-- --        CloseSQL()
+--         
+--     end -- loop over sets of Orthanc series with the same modifier
+-- 
+--     if lFlagImagesSent and gVerbose then
+--         print(string.rep(' ',gIndent) .. 'Images sent to remote modalities') 
+--     end
+--     
+--     -- UpdateLookupHTML()
+--     if gVerbose then print(string.rep(' ',gIndent) .. 'Updating lookup table') end
+--     RestApiGet('/update_lookup_table_html_lua', false)
+--     local ldPatientNameAnon = '.'
+--     if next(ldPatientNameAnonDict) then
+--         ldPatientNameAnon = ':'
+--         for ldPatientNameAnonTemp, _ in pairs(ldPatientNameAnonDict) do
+--             if ldPatientNameAnon == ':' then
+--                 ldPatientNameAnon = ldPatientNameAnon .. ' ' .. ldPatientNameAnonTemp
+--             else
+--                 ldPatientNameAnon = ldPatientNameAnon .. ', ' .. ldPatientNameAnonTemp
 --             end
 --         end
---         gSQLOpen = false
---         OpenSQL()
-
-        -- We're not going to bother anonymizing unless either a new patient or study
-        local lFlagNonOriginalDetected = false
-        local lFlagForceAnon = false or gFlagForceAnon
-        local ldPatientNameAnonDict = {}
-        if lFlagForceAnon or (lFlagNewPatientID[lPatientIDModifier] or lFlagNewStudyInstanceUID[lPatientIDModifier]) then
-
-            -- First pass anonymization
-            local loInstancesAnonMeta, loStudyIDAnon
-            local lFlagFirstCall = true
-            for i, loSeriesID in ipairs(loSeriesIDs) do 
-                local loInstancesAnonMetaTemp, loStudyIDAnonTemp , ldPatientNameAnonTemp
-                if false then
-                    -- If you set the above to true, be sure to uncomment the Lua routine
-                    loInstancesAnonMetaTemp, loStudyIDAnonTemp, ldPatientNameAnonTemp = 
-                       AnonymizeInstances('Series', loSeriesID, lFlagFirstCall, 
-                                           lSQLpid[lPatientIDModifier],ldPatientIDAnon[lPatientIDModifier],
-                                           lSQLsiuid[lPatientIDModifier], ldStudyInstanceUIDAnon[lPatientIDModifier], 
-                                           lPatientIDModifier)
-                else
-                    local lPostData = {}
-                    if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
-                    if gAddressList then lPostData['AddressList'] = gAddressList end
-                    lPostData['Level'] = 'Series'
-                    lPostData['LevelID'] =loSeriesID 
-                    lPostData['FlagFirstCall'] = lFlagFirstCall
-                    if gKeptUID then lPostData['KeptUID'] = gKeptUID end
-                    if ldPatientIDAnon[lPatientIDModifier] then lPostData['PatientIDAnon'] = ldPatientIDAnon[lPatientIDModifier] end
-                    if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
-                    if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
-                    if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
-                    lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
-                    lPostData['SQLsiuid'] = lSQLsiuid[lPatientIDModifier]
-                    if ldStudyInstanceUIDAnon[lPatientIDModifier] then lPostData['StudyInstanceUIDAnon'] = ldStudyInstanceUIDAnon[lPatientIDModifier] end
-                    if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
-                    if gUIDMap then lPostData['UIDMap'] = gUIDMap end
-                    local lResult = ParseJson(RestApiPost('/anonymize_instances_lua', DumpJson(lPostData,false)))
-                    if lResult['status'] then error('Problem with anonymization ' .. lResult['error_text']) end
-                    if lResult['AddressConstructor'] then gAddressConstructor  = lResult['AddressConstructor'] end
-                    if lResult['AddressList'] then gAddressList  = lResult['AddressList'] end
-                    loInstancesAnonMetaTemp = lResult['InstancesAnonMeta']
-                    if lResult['KeptUID'] then gKeptUID  = lResult['KeptUID'] end
-                    if lResult['PatientNameAnon'] then ldPatientNameAnonTemp = lResult['PatientNameAnon'] end
-                    if lResult['PatientNameBase'] then gPatientNameBase  = lResult['PatientNameBase'] end
-                    if lResult['PatientNameIDChar'] then gPatientNameIDChar  = lResult['PatientNameIDChar'] end
-                    loStudyIDAnonTemp = lResult['StudyIDAnon']
-                    if lResult['TopLevelTagToKeep'] then gTopLevelTagToKeep  = lResult['TopLevelTagToKeep'] end
-                    if lResult['UIDMap'] then gUIDMap = lResult['UIDMap'] end
-                end
-                if ldPatientNameAnonTemp then ldPatientNameAnonDict[ldPatientNameAnonTemp] = true end
-                if lFlagFirstCall then
-                    loInstancesAnonMeta = loInstancesAnonMetaTemp
-                    loStudyIDAnon = loStudyIDAnonTemp
-                    -- We call "Save" again just to read in the newly saved IDs (they were saved inside the anonymize routine)
-                    local lStudyInstanceUIDModifier = lPatientIDModifier
-                    local lSQLpidTemp, ldPatientIDAnonTemp, lSQLsiuidTemp, ldStudyInstanceUIDAnonTemp
-                    -- local lFlagNewPatientIDTemp, lSQLpidTemp, ldPatientIDAnonTemp = SavePatientIDsToDB(aoStudyMeta,lPatientIDModifier)
-                    local lPostData = {}
-                    lPostData['OrthancStudyID'] = aoStudyMeta['ID']
-                    if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
-                    local lResults
-                    lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
-                    if lResults['status'] and  lResults['status'] > 0 then
---                         gSQLConn:rollback()
---                         CloseSQL()
-                        error(lResults['error_text'])
-                    end
-                    local lFlagNewPatientIDTemp = lResults['FlagPatientNewID']
-                    local lSQLpidTemp = lResults['SQLpid']
-                    local ldPatientIDAnonTemp = lResults['PatientIDAnon']
-                    if lSQLpid[lPatientIDModifier] ~= lSQLpidTemp then
-                        error('Unexpected mismatch when reading SQLpid')
-                    end
-                    if not ldPatientIDAnon[lPatientIDModifier] then
-                        ldPatientIDAnon[lPatientIDModifier] = ldPatientIDAnonTemp
-                    else
-                        if lFlagNewPatientIDTemp or (ldPatientIDAnon[lPatientIDModifier] ~= ldPatientIDAnonTemp) then
-                            error('Unexpected mismatch when reading dPatientIDAnon')
-                        end
-                    end
-                    -- local lFlagNewStudyInstanceUIDTemp, lSQLsiuidTemp, ldStudyInstanceUIDAnonTemp = SaveStudyInstanceUIDToDB(aoStudyMeta,lSQLpidTemp,lStudyInstanceUIDModifier)
-                    local lPostData = {}
-                    lPostData['OrthancStudyID'] = aoStudyMeta['ID']
-                    lPostData['SQLpid'] = lSQLpidTemp
-                    if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
-                    local lResults
-                    lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
-                    if lResults['status'] then error(lResults['error_text']) end
-                    local lFlagNewStudyInstanceUIDTemp = lResults['FlagNewStudyInstanceUID']
-                    local lSQLsiuidTemp = lResults['SQLsiuid']
-                    local ldStudyInstanceUIDAnonTemp = lResults['StudyInstanceUIDAnon']
-                    if lSQLsiuid[lPatientIDModifier] ~= lSQLsiuidTemp then
-                        error('Unexpected mismatch when reading SQLsiuid')
-                    end
-                    if not ldStudyInstanceUIDAnon[lPatientIDModifier] then
-                        ldStudyInstanceUIDAnon[lPatientIDModifier] = ldStudyInstanceUIDAnonTemp
-                    else
-                        if lFlagNewStudyInstanceUIDTemp or (ldStudyInstanceUIDAnon[lPatientIDModifier] ~= ldStudyInstanceUIDAnonTemp) then
-                            error('Unexpected mismatch when reading dStudyInstanceUIDAnon')
-                        end
-                    end
-                else
-                    -- Add instances to list of instances already anonymized
-                    for j=1,#loInstancesAnonMetaTemp do
-                        loInstancesAnonMeta[#loInstancesAnonMeta+1] = loInstancesAnonMetaTemp[j]
-                    end
-                    -- StudyIDAnon should not have changed
-                    if loStudyIDAnon ~= loStudyIDAnonTemp then
-                        error("Unexpected change in IDAnon for same modifier")
-                    end
-                end
-                lFlagFirstCall = false
-            end -- loop over series belonging to the current modifier
-
-            -- Set up old-->new UID map
-            local lFlagRemapSOPInstanceUID = true
-            local lFlagRemapKeptUID = true
-            -- gUIDMap, gUIDType = MapUIDOldToNew(loStudyIDAnon,lFlagRemapSOPInstanceUID,lFlagRemapKeptUID)
-            local lPostData = {}
-            lPostData['StudyIDNew'] = loStudyIDAnon
-            lPostData['FlagRemapSOPInstanceUID'] = lFlagRemapSOPInstanceUID
-            lPostData['FlagRemapKeptUID'] = lFlagRemapKeptUID
-            lPostData['KeptUID'] = gKeptUID
-            local lResults = ParseJson(RestApiPost('/map_uid_old_to_new_lua', DumpJson(lPostData), false))
-            gUIDMap = lResults['UIDMap']
-            gUIDType = lResults['UIDType']
-
-            -- Set up replacements for AccessionNumber and StudyID
-            local lReplaceRoot = {}
-            lReplaceRoot['AccessionNumber'] = string.sub(loStudyIDAnon,1,8) .. string.sub(loStudyIDAnon,10,17)
-            lReplaceRoot['StudyID'] = string.sub(loStudyIDAnon,19,26) .. string.sub(loStudyIDAnon,28,35)
-    
-            -- Check for existing lShiftEpoch
-            -- local lShiftEpoch = LoadShiftEpochFromDB(lSQLpid[lPatientIDModifier])
-            local lPostData = {}
-            lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
-            local lStatus = ParseJson(RestApiPost('/load_shift_epoch_from_db_lua', DumpJson(lPostData), false))
-            if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
-            local lShiftEpoch = lStatus['ShiftEpoch']
-
-            -- ------------------------------------------------
-            -- Compute lShiftEpoch
-            local lSaveShiftEpoch = false
-            if not lShiftEpoch then 
-                -- Compute lShiftEpoch (used to shift earliest date to Jan 01 same year)
-                -- lShiftEpoch = ComputeShiftEpochFromEarliestDate(loInstancesAnonMeta)
-                -- Compute random shift up to one year
-                math.randomseed(os.time())
-                lShiftEpoch = math.floor(math.floor(math.random() * 365.0) * 24.0 * 3600.0)
-                lSaveShiftEpoch = true
-            end
-
-            -- For some cases, we keep the dates, so lShiftEpoch=0
-            local lFlagKeepOriginalDates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES') == 'true'
-            if lFlagKeepOriginalDates then
-                local currentTime = os.time
-                lShiftEpoch = 0
-            end
-
-            if lSaveShiftEpoch then
-                -- SaveShiftEpochToDB(lShiftEpoch,lSQLpid[lPatientIDModifier])
-                local lPostData = {}
-                lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
-                lPostData['ShiftEpoch'] = lShiftEpoch
-                local lStatus = ParseJson(RestApiPost('/save_shift_epoch_to_db_lua', DumpJson(lPostData), false))
-                if lStatus['status'] and lStatus['status'] > 0 then
-                    error('Problem saving ShiftEpoch to DB')
-                end
-            end
-
-            -- ------------------------------------------------
-            -- Second pass anonymization creates files modified by lShiftEpoch
-            -- Deletes First pass anonymized files following lShiftEpoch modification
-            local lPostData = {}
-            lPostData['InstancesMeta'] = loInstancesAnonMeta
-            lPostData['ShiftEpoch'] = lShiftEpoch
-            lPostData['ReplaceRoot'] = lReplaceRoot
-            lPostData['UIDMap'] = gUIDMap
-            lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep
-            lPostData['AddressList'] = gAddressList
-            lPostData['KeptUID'] = gKeptUID
-            -- local loInstanceIDNew = ShiftDateTimePatAgeOfInstances(loInstancesAnonMeta, lShiftEpoch, lReplaceRoot)
-            local lResults = ParseJson(RestApiPost('/shift_date_time_patage_of_instances_lua', DumpJson(lPostData), false))
-            if lResults['status'] ~= 0 then
-                error('Problem calling python shift date time patage')
-            end
-            loInstanceIDNew = lResults['InstanceIDNew']
-
-            -- Delete the original instance
-            for i, loInstanceAnonMeta in pairs(loInstancesAnonMeta) do
-                loInstanceID = (loInstanceAnonMeta['ID'])
-                RestApiDelete('/instances/' .. loInstanceID, false)
-                --Delete(loInstanceID)
-            end -- loop over loInstancesAnonMeta
-    
-            -- Send to receiving modality
-            local lPostData = {}
-            lPostData['orthanc_instance_ids'] = {}
-            for i, loInstanceID in pairs(loInstanceIDNew) do
-                table.insert(lPostData['orthanc_instance_ids'], loInstanceID)
-            end
-            local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
-            if not lResults then
-               error('Problem calling send_instances_to_remote_filter_lua')
-            end 
-            -- for i, loInstanceID in pairs(loInstanceIDNew) do
-            for loInstanceID, lFlagSendToRemote in pairs(lResults) do
-                -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
-                if lFlagSendToRemote then
-                    local dumby=3
-                    if not lFlagForceAnon then
-                        -- RestApiPost('/modalities/' .. os.getenv('LUA_ANON_ORTHANC') .. '/store', loInstanceID, false)
-                        lFlagImagesSent = true
-                    end
-                else
-                    RestApiDelete('/instances/' .. loInstanceID, false)
-                    lFlagNonOriginalDetected = true
-                end
-            end
-
-        else -- existing patient/study combo
-
-           if gVerbose then print(string.rep(' ',gIndent) .. 'Skipping re-anon of existing patient/study') end
-
-        end -- endif new patient or new study
-
-        if lFlagNonOriginalDetected then
-            if gVerbose then print('Some non-original images were not sent') end
-        end
-
---        CloseSQL()
-        
-    end -- loop over sets of Orthanc series with the same modifier
-
-    if lFlagImagesSent and gVerbose then
-        print(string.rep(' ',gIndent) .. 'Images sent to remote modalities') 
-    end
-    
-    -- UpdateLookupHTML()
-    if gVerbose then print(string.rep(' ',gIndent) .. 'Updating lookup table') end
-    RestApiGet('/update_lookup_table_html_lua', false)
-    local ldPatientNameAnon = '.'
-    if next(ldPatientNameAnonDict) then
-        ldPatientNameAnon = ':'
-        for ldPatientNameAnonTemp, _ in pairs(ldPatientNameAnonDict) do
-            if ldPatientNameAnon == ':' then
-                ldPatientNameAnon = ldPatientNameAnon .. ' ' .. ldPatientNameAnonTemp
-            else
-                ldPatientNameAnon = ldPatientNameAnon .. ', ' .. ldPatientNameAnonTemp
-            end
-        end
-    end
-    SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete ' .. ldPatientNameAnon)
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-
-end
-
+--     end
+--     SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete ' .. ldPatientNameAnon)
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+-- 
+-- end
+-- 
 -- ======================================================
 function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
 
@@ -4029,8 +4029,23 @@ function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
                 lFlagComplete = ParseJson(RestApiPost('/check_split_2d_from_cview_tomo_lua', DumpJson(aoStudyID), false))
                 if not lFlagComplete then return end
             end
-            AnonymizeStudyBySeries(aoStudyID, loStudyMeta)
-            gIndent = gIndent - 3
+            local lPostData = {}
+            lPostData['StudyID'] = aoStudyID
+            if loStudyMeta then lPostData['StudyMeta'] = loStudyMeta end
+            if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
+            if gAddressList then lPostData['AddressList'] = gAddressList end
+            if gFlagForceAnon then lPostData['FlagForceAnon'] = gFlagForceAnon end
+            if gKeptUID then lPostData['KeptUID'] = gKeptUID end
+            if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
+            if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
+            if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
+            if gUIDMap then lPostData['UIDMap'] = gUIDMap end
+            local lStatus = ParseJson(RestApiPost('/anonymize_study_by_series_lua', DumpJson(lPostData), false))
+            if lStatus['status'] ~= 0 then
+                error(lStatus['error_text'])
+            end
+            -- AnonymizeStudyBySeries(aoStudyID, loStudyMeta)
+            if gIndent > 0 then gIndent = gIndent - 3 end
             if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
             if gIndent > 0 then gIndent = gIndent - 3 end
             return
