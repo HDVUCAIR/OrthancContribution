@@ -906,6 +906,8 @@ def base_tag_handling():
     table_from_ctp['0008-9209'] = {'en' : False, 'op' : '',        'name' : 'AcquisitionContrast',                          'comment' : ''}
     table_from_ctp['0008-9215'] = {'en' : False, 'op' : '',        'name' : 'DerivationCodeSeq',                            'comment' : ''}
     table_from_ctp['0008-9237'] = {'en' : False, 'op' : '',        'name' : 'RefGrayscalePresentationStateSeq',             'comment' : ''}
+    if flag_keep_siemens_mr:
+        table_from_ctp['0009'] = { 'en' : True,  'op' : 'groupkeep', 'name' : 'SiemensCSAHeader',                           'comment' : 'Siemens protocol stuff.  Does capture study date internally'}
     table_from_ctp['0010-0021'] = {'en' : True,  'op' : 'remove',  'name' : 'IssuerOfPatientID',                            'comment' : ''}
     table_from_ctp['0010-0030'] = {'en' : True,  'op' : 'keep',    'name' : 'PatientBirthDate',                             'comment' : 'We keep this when shifting dates, otherwise remove'}
     table_from_ctp['0010-0032'] = {'en' : True,  'op' : 'remove',  'name' : 'PatientBirthTime',                             'comment' : ''}
@@ -1464,6 +1466,9 @@ def base_tag_handling():
     table_from_ctp['0020-9222'] = {'en' : False, 'op' : '',        'name' : 'DimensionSeq',                                 'comment' : ''}
     table_from_ctp['0020-9228'] = {'en' : False, 'op' : '',        'name' : 'ConcatenationFrameOffsetNumber',               'comment' : ''}
     table_from_ctp['0020-9238'] = {'en' : False, 'op' : '',        'name' : 'FunctionalGroupPrivateCreator',                'comment' : ''}
+    if flag_keep_siemens_mr:
+        table_from_ctp['0021'] = { 'en' : True,  'op' : 'groupkeep', 'name' : 'SiemensCSAHeader',                           'comment' : 'Siemens protocol stuff.  Does capture study date internally'}
+        table_from_ctp['0027'] = { 'en' : True,  'op' : 'groupkeep', 'name' : 'SiemensCSAHeader',                           'comment' : 'Siemens protocol stuff.  Does capture study date internally'}
     table_from_ctp['0028-0002'] = {'en' : False, 'op' : '',        'name' : 'SamplesPerPixel',                              'comment' : ''}
     table_from_ctp['0028-0004'] = {'en' : False, 'op' : '',        'name' : 'PhotometricInterpretation',                    'comment' : ''}
     table_from_ctp['0028-0006'] = {'en' : False, 'op' : '',        'name' : 'PlanarConfiguration',                          'comment' : ''}
@@ -1785,6 +1790,8 @@ def base_tag_handling():
     table_from_ctp['0060-3000'] = {'en' : True,  'op' : 'remove',  'name' : 'OverlayData',                                  'comment' : ''}
     table_from_ctp['0060-4000'] = {'en' : True,  'op' : 'remove',  'name' : 'OverlayComments',                              'comment' : ''}
     table_from_ctp['0070-031a'] = {'en' : True,  'op' : 'remove',  'name' : 'FiducialUID',                                  'comment' : ''}
+    if flag_keep_siemens_mr:
+        table_from_ctp['0071'] = { 'en' : True,  'op' : 'groupkeep', 'name' : 'SiemensCSAHeader',                           'comment' : 'Siemens protocol stuff.  Does capture study date internally'}
     table_from_ctp['0088-0140'] = {'en' : True,  'op' : 'remove',  'name' : 'StorageMediaFilesetUID',                       'comment' : ''}
     table_from_ctp['0088-0200'] = {'en' : True,  'op' : 'remove',  'name' : 'IconImageSequence',                            'comment' : ''}
     table_from_ctp['0088-0906'] = {'en' : True,  'op' : 'remove',  'name' : 'TopicSubject',                                 'comment' : ''}
@@ -1816,6 +1823,8 @@ def base_tag_handling():
     table_from_ctp['60..']      = {'en' : True,  'op' : 'groupremovere', 'name' : 'Overlays',                               'comment' : 'Overlays might have burned in PHI.  Regex permitted in group spec.'}
     if flag_hologic:
         table_from_ctp['7e01'] = { 'en' : True,  'op' : 'groupkeep', 'name' : 'HologicHeader',                            'comment' : 'Siemens/Hologic protocol stuff.  Does capture study date internally'}
+    if flag_keep_siemens_mr:
+        table_from_ctp['7fdf'] = { 'en' : True,  'op' : 'groupkeep', 'name' : 'SiemensCSAHeader',                           'comment' : 'Siemens protocol stuff.  Does capture study date internally'}
     table_from_ctp['fffa-fffa'] = {'en' : True,  'op' : 'remove',  'name' : 'DigitalSignaturesSeq',                         'comment' : ''}
     table_from_ctp['fffc-fffc'] = {'en' : True,  'op' : 'remove',  'name' : 'DataSetTrailingPadding',                       'comment' : ''}
 
@@ -1965,7 +1974,8 @@ def confirm_or_create_lookup_table_sql(pg_connection=None, pg_cursor=None):
             global_var['log_indent_level'] -= 3
         return {'status':1, 'error_text':'confirm_or_create_lookup_table: Problem querying for patientid table'}
 
-    if pg_cursor.rowcount != 1:
+    row = pg_cursor.fetchone()
+    if row is not None and int(row[0]) == 0:
         status = create_lookup_table_sql(pg_connection=pg_connection, 
                                          pg_cursor = pg_cursor)
         if status['status'] != 0:
@@ -2127,6 +2137,7 @@ def create_lookup_table_sql(pg_connection=None, pg_cursor=None):
         pg_cursor.close()
         pg_connection.close()
 
+    return {'status' : 0}
 # =======================================================
 def email_message(subject, message_body, subtype='plain', alternates=None, cc=None):
     """
@@ -2528,6 +2539,8 @@ def find_pacs_in_lookup_table_from_patient_id(lookup_table, patient_id):
     """Search the lookup table dict for patient matching patient_id"""
 # ----------------------------------------------------------------------------
 
+    found = False
+    i_row_match = None
     for i_row_temp, patient_id_list in lookup_table['PatientID'].items():
         i_row_match = i_row_temp
         if isinstance(patient_id_list, list):
@@ -2544,6 +2557,8 @@ def find_pacs_in_lookup_table_from_siuid(lookup_table, study_instance_uid):
     """Search the lookup table dict for study matching study_instance_uid"""
 # ----------------------------------------------------------------------------
 
+    found = False
+    i_row_match = None
     for i_row_temp, study_instance_uid_list in lookup_table['StudyInstanceUID'].items():
         i_row_match = i_row_temp
         if isinstance(study_instance_uid_list, list):
@@ -2748,21 +2763,22 @@ def load_lookup_table(file_lookup, make_backup=False):
 # ----------------------------------------------------------------------------
 
     global global_var
+    lookup_table = {}
     if python_verbose_logwarning:
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
 
     if not os.path.exists(file_lookup):
-        return {'status': 0}, None
+        return {'status': 0}, lookup_table
 
     if not global_var['flag']['beautiful_soup']:
-        return {'status':1, 'error_text':'load_lookup_table: No Beautiful soup'}, None
+        return {'status':1, 'error_text':'load_lookup_table: No Beautiful soup'}, lookup_table
 
     try:
         with open(file_lookup, 'r') as lun:
             lookup_text = lun.read()
     except: 
-        return {'status':2, 'error_text':'load_lookup_table: Problem reading lookup'}, None
+        return {'status':2, 'error_text':'load_lookup_table: Problem reading lookup'}, lookup_table
 
     # Make backup
     if make_backup:
@@ -2775,7 +2791,7 @@ def load_lookup_table(file_lookup, make_backup=False):
     try:
         head = soup.find('head')
     except: 
-        return {'status':3, 'error_text':'load_lookup_table: No head found'}, None
+        return {'status':3, 'error_text':'load_lookup_table: No head found'}, lookup_table
 
     try:
         table = soup.find('table')
@@ -2789,7 +2805,6 @@ def load_lookup_table(file_lookup, make_backup=False):
         orthanc.LogWarning('No table rows found, exiting')
         sys.exit(2)
     
-    lookup_table = {}
     table_headers = []
     for table_header in rows[0].find_all('th'):
         table_headers += [table_header.get_text().strip()]
@@ -4631,7 +4646,7 @@ def update_lookup_html():
                     #time0 = time.time()
                     pacs_data_local = None
                     lookup_match = False
-                    if lookup_table is not None:
+                    if len(lookup_table) > 0:
                         lookup_match, pacs_data_local  = find_pacs_in_lookup_table(lookup_table,study_instance_uid,type_match='siuid')
                         if pacs_data_local is None:
                             #orthanc.LogWarning(study_instance_uid)
@@ -4751,7 +4766,7 @@ def update_lookup_html():
                                 lun.write('<td>' + pacs_data_local['0008,0020']['Value'] + '</td>\n')
                             else:
                                 if (not lookup_match) or \
-                                  ((lookup_table is not None) and \
+                                  ((len(lookup_table) > 0) and \
                                    ('AnonDate' not in pacs_data_local) and \
                                    (('0008,0020' in pacs_data_local) and (pacs_data_local['0008,0020']['Value'] != 'NotInPACS'))):
                                     new_date_string = shift_date_time_string(shift_epoch,pacs_data_local['0008,0020']['Value'])

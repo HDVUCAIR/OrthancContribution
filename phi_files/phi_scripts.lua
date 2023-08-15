@@ -1281,6 +1281,9 @@ function BaseTagHandling ()
     lTableFromCTP['0008-9209'] = {en = false, op = '',        name = 'AcquisitionContrast',                          comment = ''}
     lTableFromCTP['0008-9215'] = {en = false, op = '',        name = 'DerivationCodeSeq',                            comment = ''}
     lTableFromCTP['0008-9237'] = {en = false, op = '',        name = 'RefGrayscalePresentationStateSeq',             comment = ''}
+    if lFlagKeepSiemensMR then
+        lTableFromCTP['0009'] = { en = true,  op = 'groupkeep', name = 'SiemensMRHeader',                            comment = 'Siemens protocol stuff.  Does capture study date internally'}
+    end
     lTableFromCTP['0010-0021'] = {en = true,  op = 'remove',  name = 'IssuerOfPatientID',                            comment = ''}
     lTableFromCTP['0010-0030'] = {en = true,  op = 'keep',    name = 'PatientBirthDate',                             comment = 'We keep this when shifting dates, otherwise remove'}
     lTableFromCTP['0010-0032'] = {en = true,  op = 'remove',  name = 'PatientBirthTime',                             comment = ''}
@@ -1840,6 +1843,10 @@ function BaseTagHandling ()
     lTableFromCTP['0020-9222'] = {en = false, op = '',        name = 'DimensionSeq',                                 comment = ''}
     lTableFromCTP['0020-9228'] = {en = false, op = '',        name = 'ConcatenationFrameOffsetNumber',               comment = ''}
     lTableFromCTP['0020-9238'] = {en = false, op = '',        name = 'FunctionalGroupPrivateCreator',                comment = ''}
+    if lFlagKeepSiemensMR then
+        lTableFromCTP['0021'] = { en = true,  op = 'groupkeep', name = 'SiemensMRHeader',                            comment = 'Siemens protocol stuff.  Does capture study date internally'}
+        lTableFromCTP['0027'] = { en = true,  op = 'groupkeep', name = 'SiemensMRHeader',                            comment = 'Siemens protocol stuff.  Does capture study date internally'}
+    end
     lTableFromCTP['0028-0002'] = {en = false, op = '',        name = 'SamplesPerPixel',                              comment = ''}
     lTableFromCTP['0028-0004'] = {en = false, op = '',        name = 'PhotometricInterpretation',                    comment = ''}
     lTableFromCTP['0028-0006'] = {en = false, op = '',        name = 'PlanarConfiguration',                          comment = ''}
@@ -2163,6 +2170,9 @@ function BaseTagHandling ()
     lTableFromCTP['0060-3000'] = {en = true,  op = 'remove',  name = 'OverlayData',                                  comment = ''}
     lTableFromCTP['0060-4000'] = {en = true,  op = 'remove',  name = 'OverlayComments',                              comment = ''}
     lTableFromCTP['0070-031a'] = {en = true,  op = 'remove',  name = 'FiducialUID',                                  comment = ''}
+    if lFlagKeepSiemensMR then
+        lTableFromCTP['0071'] = { en = true,  op = 'groupkeep', name = 'SiemensMRHeader',                            comment = 'Siemens protocol stuff.  Does capture study date internally'}
+    end
     lTableFromCTP['0088-0140'] = {en = true,  op = 'remove',  name = 'StorageMediaFilesetUID',                       comment = ''}
     lTableFromCTP['0088-0200'] = {en = true,  op = 'remove',  name = 'IconImageSequence',                            comment = ''}
     lTableFromCTP['0088-0906'] = {en = true,  op = 'remove',  name = 'TopicSubject',                                 comment = ''}
@@ -2194,6 +2204,9 @@ function BaseTagHandling ()
     lTableFromCTP['60..']      = {en = true,  op = 'groupremovere', name = 'Overlays',                               comment = 'Overlays might have burned in PHI.  Regex permitted in group spec.'}
     if lFlagHologic then
         lTableFromCTP['7e01'] = { en = true,  op = 'groupkeep', name = 'HologicHeader',                            comment = 'Siemens/Hologic protocol stuff.  Does capture study date internally'}
+    end
+    if lFlagKeepSiemensMR then
+        lTableFromCTP['7fdf'] = { en = true,  op = 'groupkeep', name = 'SiemensMRHeader',                            comment = 'Siemens protocol stuff.  Does capture study date internally'}
     end
     lTableFromCTP['fffa-fffa'] = {en = true,  op = 'remove',  name = 'DigitalSignaturesSeq',                         comment = ''}
     lTableFromCTP['fffc-fffc'] = {en = true,  op = 'remove',  name = 'DataSetTrailingPadding',                       comment = ''}
