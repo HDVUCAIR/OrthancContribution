@@ -1,22 +1,24 @@
-import orthanc
 import json
+import orthanc
 import os
-import smtplib
 import re
+import smtplib
+import time
 from email.message import EmailMessage
 from email.headerregistry import Address
 
-# Global variables
-python_verbose_logwarning = os.getenv('PYTHON_VERBOSE_LOGWARNING', default='false') == 'true' or \
-                            os.getenv('ORTHANC__PYTHON_VERBOSE', default='false') == 'true'
 global_var = {'flag' : {}, 'regexp': {}}
 
 # Regular expressions
 global_var['regexp']['address'] = re.compile('([^<]+)<([^@]+)@([^>]+)>.*')
 
+# Global variables
+python_verbose_logwarning = os.getenv('PYTHON_VERBOSE_LOGWARNING', default='false') == 'true' or \
+                            os.getenv('ORTHANC__PYTHON_VERBOSE', default='false') == 'true'
+global_var['orthanc_configuration'] = json.loads(orthanc.GetConfiguration())
+global_var['website'] = global_var['orthanc_configuration']['Name']
 global_var['fqdn'] = os.getenv('HOST_FQDN', default='Unknown.Host')
 global_var['log_indent_level'] = 0
-global_var['website'] = os.getenv('ORTHANC__NAME', default='UnknownOrthanc')
 
 # ============================================================================
 # Modify the GUI
@@ -167,16 +169,29 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
                      "first last <first.last@some.org>"
     """
 # -------------------------------------------------------
+
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
  
     if alternates is None:
         if 'PYTHON_MAIL_TO' not in os.environ or \
            'PYTHON_MAIL_ORIGIN' not in os.environ or \
            'PYTHON_MAIL_SERVER' not in os.environ:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return{'status':1, 'error_text': 'Environmental variables for python mail not declared'}
         recipients = os.getenv('PYTHON_MAIL_TO').split(',')
     else:
         if 'PYTHON_MAIL_ORIGIN' not in os.environ or \
            'PYTHON_MAIL_SERVER' not in os.environ:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return{'status':2, 'error_text': 'Environmental variables for python mail not declared'}
         recipients = alternates
 
@@ -198,6 +213,9 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
                 addresses += [Address(address_res.group(1),address_res.group(2),address_res.group(3))]
         
     if len(addresses) == 0:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':3, 'error_text':'email_message: No addresses to send to'}
     else:
         addresses = tuple(addresses)
@@ -212,9 +230,16 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
     try:
         s = smtplib.SMTP(smtp_server)
     except:
-        return {'status':3, 'error_text':'email_message: Is the smtp down?'}
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+        return {'status':4, 'error_text':'email_message: Is the smtp down?'}
     s.send_message(msg)
     s.quit()
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return {'status':0}
 
@@ -223,10 +248,17 @@ def email_study_report(orthanc_study_id):
     """Generate email of study statistics"""
 # -------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     response_system = orthanc.RestApiGet('/system')
     meta_system = json.loads(response_system)
     aet = meta_system['DicomAet']
- 
+
     response_study = orthanc.RestApiGet('/studies/%s' % orthanc_study_id)
     meta_study = json.loads(response_study)
     if 'StudyDescription' in meta_study['MainDicomTags'] and len(meta_study['MainDicomTags']['StudyDescription'].strip()) > 0:
@@ -296,6 +328,11 @@ def email_study_report(orthanc_study_id):
         message_body += [line_of_text]
 
     message_body += [' '*2 + '</body>', '</html>']
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return email_message('PHI Study Report from %s' % aet, '\n'.join( message_body), subtype='html')
 
 # ============================================================================
@@ -318,8 +355,9 @@ def user_permitted(uri, remote_user):
     """ Check remote user against list of permitted users """
 # -------------------------------------------------------
 
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Checking whether remote user (%s) is permitted to \n%s' % (remote_user,uri))
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Checking whether remote user (%s) is permitted to act on %s' % (remote_user,uri))
     permissions = os.getenv('PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER')
     if permissions is None:
         if python_verbose_logwarning:
@@ -348,7 +386,7 @@ def EmailStudyReport(output, uri, **request):
         orthanc_study_id = request['groups'][0]
         status = email_study_report(orthanc_study_id)
         if status['status'] != 0:
-            output.AnswerBuffer(status['error_text'], 'text/plain')
+            output.AnswerBuffer('Problem generating email report: %s' % status['error_text'], 'text/plain')
         else:
             output.AnswerBuffer('Email sent.', 'text/plain')
     else:
@@ -380,6 +418,9 @@ def EmailSubjectMessage(output, uri, **request):
 def IncomingFilter(uri, **request):
     """Set up rights based actions"""
 # ----------------------------------------------------------------------------
+
+    global global_var
+    global_var['log_indent_level'] = 0
 
     headers_str = ''
     for key,value in request['headers'].items():
@@ -434,12 +475,14 @@ def OnChange(change_type, level, resource_id):
     if change_type == orthanc.ChangeType.STABLE_STUDY:
 
         # Email updates
-        if os.getenv('PYTHON_MAIL_AUTO') == 'true':
+        if os.getenv('PYTHON_MAIL_AUTO', default='false') == 'true':
             status = email_study_report(resource_id)
             if status['status'] != 0:
-                orthanc.LogWarning(status['error_text'])
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(status['error_text'])
             else:
-                orthanc.LogWarning("Sent onstable study report")
+                if python_verbose_logwarning:
+                    orthanc.LogWarning("Sent onstable study report")
 
 # ============================================================================
 def ToggleLuaVerbose(output, uri, **request):

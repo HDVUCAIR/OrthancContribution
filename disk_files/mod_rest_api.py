@@ -1,12 +1,13 @@
-import orthanc
-import json
 import datetime
-import os
-import stat
-import pydicom
 import io
-import smtplib
+import json
+import orthanc
+import os
+import pydicom
 import re
+import smtplib
+import stat
+import time
 from email.message import EmailMessage
 from email.headerregistry import Address
 
@@ -216,16 +217,29 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
                      "first last <first.last@some.org>"
     """
 # -------------------------------------------------------
+
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
  
     if alternates is None:
         if 'PYTHON_MAIL_TO' not in os.environ or \
            'PYTHON_MAIL_ORIGIN' not in os.environ or \
            'PYTHON_MAIL_SERVER' not in os.environ:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return{'status':1, 'error_text': 'Environmental variables for python mail not declared'}
         recipients = os.getenv('PYTHON_MAIL_TO').split(',')
     else:
         if 'PYTHON_MAIL_ORIGIN' not in os.environ or \
            'PYTHON_MAIL_SERVER' not in os.environ:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return{'status':2, 'error_text': 'Environmental variables for python mail not declared'}
         recipients = alternates
 
@@ -247,6 +261,9 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
                 addresses += [Address(address_res.group(1),address_res.group(2),address_res.group(3))]
         
     if len(addresses) == 0:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':3, 'error_text':'email_message: No addresses to send to'}
     else:
         addresses = tuple(addresses)
@@ -261,9 +278,16 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
     try:
         s = smtplib.SMTP(smtp_server)
     except:
-        return {'status':3, 'error_text':'email_message: Is the smtp down?'}
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+        return {'status':4, 'error_text':'email_message: Is the smtp down?'}
     s.send_message(msg)
     s.quit()
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return {'status':0}
 
@@ -272,10 +296,17 @@ def email_study_report(orthanc_study_id):
     """Generate email of study statistics"""
 # -------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     response_system = orthanc.RestApiGet('/system')
     meta_system = json.loads(response_system)
     aet = meta_system['DicomAet']
- 
+
     response_study = orthanc.RestApiGet('/studies/%s' % orthanc_study_id)
     meta_study = json.loads(response_study)
     if 'StudyDescription' in meta_study['MainDicomTags'] and len(meta_study['MainDicomTags']['StudyDescription'].strip()) > 0:
@@ -345,6 +376,11 @@ def email_study_report(orthanc_study_id):
         message_body += [line_of_text]
 
     message_body += [' '*2 + '</body>', '</html>']
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return email_message('PHI Study Report from %s' % aet, '\n'.join( message_body), subtype='html')
 
 # ============================================================================
@@ -371,11 +407,19 @@ def series_to_disk(orthanc_series_id, study_data=None, flag_write_dicom=global_v
     """
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     try:
         response_series = orthanc.RestApiGet('/series/%s' % orthanc_series_id)
     except ValueError as e:
         if python_verbose_logwarning:
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem querying series: %s' % orthanc_series_id)
+            global_var['log_indent_level'] -= 3
         return {'status' : 1, 'error_text' : 'Problem querying series'}
     except orthanc.OrthancException as e:
         if python_verbose_logwarning:
@@ -384,6 +428,8 @@ def series_to_disk(orthanc_series_id, study_data=None, flag_write_dicom=global_v
         if e.args[0] == orthanc.ErrorCode.UNKNOWN_RESOURCE:
             if python_verbose_logwarning:
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Unknown resource')
+        if python_verbose_logwarning:
+            global_var['log_indent_level'] -= 3
         return {'status' : 2, 'error_text' : 'Unknown resource'}
     meta_series = json.loads(response_series)
 
@@ -391,6 +437,8 @@ def series_to_disk(orthanc_series_id, study_data=None, flag_write_dicom=global_v
     if study_data is None:
         status, study_data = useful_study_data(meta_series['ParentStudy'])
         if status['status'] != 0:
+            if python_verbose_logwarning:
+                global_var['log_indent_level'] -= 3
             return {'status' : status['status']+100, 'error_text' : status['error_text']}
         if 'Modality' in meta_series['MainDicomTags']:
             study_data['modality'] = meta_series['MainDicomTags']['Modality'].strip()
@@ -433,6 +481,7 @@ def series_to_disk(orthanc_series_id, study_data=None, flag_write_dicom=global_v
     except:
         if python_verbose_logwarning:
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem creating directories')
+            global_var['log_indent_level'] -= 3
         return {'status' : 4, 'error_text' : 'Problem creating directories'}
 
     # Dump the instances to disk
@@ -457,6 +506,8 @@ def series_to_disk(orthanc_series_id, study_data=None, flag_write_dicom=global_v
                 dicom_struct = pydicom.dcmread(io.BytesIO(file_blob))
                 dicom_struct.save_as(file_dicom)
 
+    if python_verbose_logwarning:
+        global_var['log_indent_level'] -= 3
     return {'status' : 0, 'error_text' : ''}
 
 # ============================================================================
@@ -469,6 +520,13 @@ def study_to_disk(orthanc_study_id, flag_write_dicom=global_var['flag']['write_d
     """
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     if flag_write_dicom:
         if python_verbose_logwarning:
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Triggered anon:\n   Directories will be created.\n   DICOM will be written.')
@@ -479,6 +537,8 @@ def study_to_disk(orthanc_study_id, flag_write_dicom=global_var['flag']['write_d
     # Extract data used in directory names
     status, study_data, meta_study = useful_study_data(orthanc_study_id, return_meta=True)
     if status['status'] != 0:
+        if python_verbose_logwarning:
+            global_var['log_indent_level'] -= 3
         return {'status' : status['status']+100, 'error_text' : status['error_text']}
 
     # Determine dominent modality
@@ -508,7 +568,11 @@ def study_to_disk(orthanc_study_id, flag_write_dicom=global_var['flag']['write_d
         if status['status'] != 0:
             if python_verbose_logwarning:
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem dumping series to disk')
+                global_var['log_indent_level'] -= 3
             return {'status' : status['status']+1000, 'error_text' : 'Problem dumping to disk %s' % status['error_text']}
+
+    if python_verbose_logwarning:
+        global_var['log_indent_level'] -= 3
 
     return {'status' : 0, 'error_text' : ''}
 
@@ -522,11 +586,19 @@ def useful_study_data(orthanc_study_id, return_meta=False):
     """
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     try:
         response_study = orthanc.RestApiGet('/studies/%s' % orthanc_study_id)
     except:
         if python_verbose_logwarning:
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem querying study: %s' % orthanc_study_id)
+            global_var['log_indent_level'] -= 3
         return {'status' : 1, 'error_text': 'Problem getting study meta'}, {}
 
     meta_study = json.loads(response_study)
@@ -535,12 +607,14 @@ def useful_study_data(orthanc_study_id, return_meta=False):
         if value not in meta_study['MainDicomTags']:
             if python_verbose_logwarning:
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'No %s found in meta data, skipping' % value)
+                global_var['log_indent_level'] -= 3
             return {'status' : 1, 'error_text': 'Missing %s in meta data' % value}, {}
         study_data[value] = meta_study['MainDicomTags'][value]
     for value in ['PatientName', 'PatientID']:
         if value not in meta_study['PatientMainDicomTags']:
             if python_verbose_logwarning:
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'No %s foudn in meta data, skipping' % value)
+                global_var['log_indent_level'] -= 3
             return {'status' : 1, 'error_text': 'Missing %s in meta data' % value}, {}
         study_data[value] = meta_study['PatientMainDicomTags'][value]
     for value in ['StudyDescription', 'AccessionNumber']:
@@ -556,6 +630,9 @@ def useful_study_data(orthanc_study_id, return_meta=False):
     study_data['internal_number_lo'] = (study_data['internal_number'] // 50) * 50
     study_data['internal_number_hi'] = study_data['internal_number_lo'] + 49
 
+    if python_verbose_logwarning:
+        global_var['log_indent_level'] -= 3
+
     if return_meta:
         return {'status' : 0, 'error_text': ''}, study_data, meta_study
     else:
@@ -566,15 +643,23 @@ def user_permitted(uri, remote_user):
     """ Check remote user against list of permitted users """
 # -------------------------------------------------------
 
+    global global_var
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Checking whether remote user (%s) is permitted to \n%s' % (remote_user,uri))
-    permissions = global_var['privileged']['user']
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Checking whether remote user (%s) is permitted to act on %s' % (remote_user,uri))
+    permissions = os.getenv('PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER')
     if permissions is None:
         if python_verbose_logwarning:
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Rejecting anon due to missing permissions')
+            global_var['log_indent_level'] -= 3
         return False
     allowed_to_trigger = []
-    for permitted in permissions.split(','):
+    for permitted in permissions.split('.'):
         if permitted.strip() not in allowed_to_trigger:
             allowed_to_trigger += [permitted.strip()]
     if python_verbose_logwarning:
@@ -582,9 +667,11 @@ def user_permitted(uri, remote_user):
     if remote_user not in allowed_to_trigger:
         if python_verbose_logwarning:
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Operation not permitted to user: %s %s' % (uri, remote_user))
+            global_var['log_indent_level'] -= 3
         return False
     if python_verbose_logwarning:
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Remote user is permitted (%s)' % remote_user)
+        global_var['log_indent_level'] -= 3
 
     return True
 
@@ -628,6 +715,9 @@ def EmailSubjectMessage(output, uri, **request):
 def IncomingFilter(uri, **request):
     """Set up rights based actions"""
 # ----------------------------------------------------------------------------
+
+    global global_var
+    global_var['log_indent_level'] = 0
 
     headers_str = ''
     for key,value in request['headers'].items():
@@ -677,6 +767,13 @@ def ManualSendToDisk(output, uri, **request):
     """
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     if request['method'] == 'GET':
 
         orthanc_id = request['groups'][1]
@@ -694,6 +791,7 @@ def ManualSendToDisk(output, uri, **request):
         if status_email['status'] != 0:
             if python_verbose_logwarning:
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem sending email prior to send to disk')
+                global_var['log_indent_level'] -= 3
             output.AnswerBuffer('Problem sending email prior to send to disk\n%s' % status_email['error_text'], 'text/plain')
             return
         status = {'status' : 1, 'error_text' : 'Invalid send to disk option'}
@@ -706,18 +804,23 @@ def ManualSendToDisk(output, uri, **request):
             status_email = email_message('Failed to send to disk', '<a href="https://%s/%s/app/explorer.html#study?uuid=%s">Study</a> failed to send to disk for %s from %s: %s' % (global_var['fqdn'], global_var['website'], orthanc_id, remote_user, remote_ip, status['error_text']), subtype='html')
             output.LogWarning('Failed to send to disk')
             output.AnswerBuffer('Failed to send to disk', 'text/plain')
+            if python_verbose_logwarning:
+                global_var['log_indent_level'] -= 3
             return
         status_email = email_message('Completed send to disk', '<a href="https://%s/%s/app/explorer.html#study?uuid=%s">Study</a> send to disk completed for %s from %s' % (global_var['fqdn'], global_var['website'], orthanc_id, remote_user, remote_ip), subtype='html')
         if status_email['status'] != 0:
             if python_verbose_logwarning:
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem sending email after to send to disk')
+                global_var['log_indent_level'] -= 3
             output.AnswerBuffer('Problem sending email after send to disk', 'text/plain')
             return
         output.AnswerBuffer('Successfully wrote study to disk', 'text/plain')
         if python_verbose_logwarning:
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Send to disk complete for %s' % orthanc_id)
+            global_var['log_indent_level'] -= 3
 
     else:
+        global_var['log_indent_level'] -= 3
         output.SendMethodNotAllowed('GET')
 
 # ============================================================================

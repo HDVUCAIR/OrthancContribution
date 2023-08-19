@@ -1,16 +1,16 @@
-import orthanc
-import inspect
-import numbers
-import random
-import json
-import re
 import copy
-import pprint
 import datetime
+import inspect
+import json
+import numbers
+import orthanc
 import os
+import pprint
+import random
+import re
 import smtplib
-import time
 import threading
+import time
 from email.message import EmailMessage
 from email.headerregistry import Address
 
