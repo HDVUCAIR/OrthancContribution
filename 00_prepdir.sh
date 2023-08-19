@@ -30,7 +30,7 @@ if test -d "$ANON_HOST_DATA_DIR_POSTGRE"; then
 else
    echo "Creating $ANON_HOST_DATA_DIR_POSTGRE"
    mkdir -p $ANON_HOST_DATA_DIR_POSTGRE
-   chown -R 999:999 $ANON_HOST_DATA_DIR_POSTGRE
+   chown -R $POSTGRES_UID:$POSTGRES_GID $ANON_HOST_DATA_DIR_POSTGRE
    chmod -R o-rwx $ANON_HOST_DATA_DIR_POSTGRE
 fi
 chown $ORTHANC_UID:$ORTHANC_GID ./anon_files/mod_rest_api.py
@@ -61,7 +61,7 @@ else
    mkdir -p $PHI_HOST_DATA_DIR_POSTGRE/main
    mkdir -p $PHI_HOST_DATA_DIR_POSTGRE/backup
    /bin/cp -pf phi_files/backup_philookup.sh $PHI_HOST_DATA_DIR_POSTGRE/backup
-   chown -R 999:999 $PHI_HOST_DATA_DIR_POSTGRE
+   chown -R $POSTGRES_UID:$POSTGRES_GID $PHI_HOST_DATA_DIR_POSTGRE
    chmod -R o-rwx $PHI_HOST_DATA_DIR_POSTGRE
 fi
 
@@ -91,8 +91,9 @@ fi
 chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/mod_rest_api.py
 chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/phi_scripts.lua
 chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/orthanc.secret.json.template
-chown 999:999 ./phi_files/postgresql-create-orthanc-user.sh
-chown 999:999 ./phi_files/postgres.cron
+chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/postgresql-create-orthanc-user.sh
+chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/postgres.cron
+chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/pg.*template
 
 # ------------------------------------------------------
 # Preparation of DISK disk
@@ -119,7 +120,7 @@ if test -d "$DISK_HOST_DATA_DIR_POSTGRE"; then
 else
    echo "Creating $DISK_HOST_DATA_DIR_POSTGRE"
    mkdir -p $DISK_HOST_DATA_DIR_POSTGRE/main
-   chown -R 999:999 $DISK_HOST_DATA_DIR_POSTGRE
+   chown -R $POSTGRES_UID:$POSTGRES_GID $DISK_HOST_DATA_DIR_POSTGRE
    chmod -R o-rwx $DISK_HOST_DATA_DIR_POSTGRE
 fi
 
@@ -129,5 +130,5 @@ fi
 chown $ORTHANC_UID:$ORTHANC_GID ./shared_files/make_certs_orthanc.sh
 chmod ug+rx ./shared_files/make_certs_orthanc.sh
 chown $ORTHANC_UID:$ORTHANC_GID ./disk_files/mod_rest_api.py
-chown 999:999 ./disk_files/postgresql-create-orthanc-user.sh
+chown $POSTGRES_UID:$POSTGRES_GID ./disk_files/postgresql-create-orthanc-user.sh
 

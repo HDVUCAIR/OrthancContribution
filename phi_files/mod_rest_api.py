@@ -187,13 +187,12 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
 # ----------------------------------------------------------------------------
 
     global global_var
-
-    frame = inspect.currentframe()
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
-    time_0 = time.time()
     flag_anon_at_study_level = anon_at_level.find('Study') >= 0
 
     # Load tag keep/remove info
@@ -201,7 +200,8 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
  
     # Capture all UID values for all instances and collect keep/remove data
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * (global_var['log_indent_level'] + 3) + 'Capturing UID for all instances')
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Capturing UID for all instances')
+        global_var['log_indent_level'] += 3
     tags_encountered = {}
     tags_to_keep = {}
     tags_to_remove = {}
@@ -239,17 +239,20 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
     # Study the tags to determine keep/remove/replace
     i_instance = 0
     n_instance = len(meta_instances)
-    m_instance = n_instance // 10
+    m_instance = max(n_instance // 10,5)
     for meta_instance in meta_instances:
         i_instance += 1
         if python_verbose_logwarning and (i_instance % m_instance == 0):
-            orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 
                                'Scanning instances %d of %d' % (i_instance, n_instance))
         orthanc_instance_id = meta_instance['ID']
         tags_instance = json.loads(orthanc.RestApiGet('/instances/%s/tags' % orthanc_instance_id))
         try:
             level_out, kept_uid, top_level_tag_to_keep, parent_key = recursive_find_uid_to_keep(tags_instance)
         except:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status' : 1, 'error_text' : 'Problem recursing instance tags'}, None, None, None
         for kk, vv in top_level_tag_to_keep.items():
             global_var['top_level_tag_to_keep'][kk] = vv
@@ -304,19 +307,23 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
     # orthanc.LogWarning(json.dumps(tags_to_remove))
     
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Time so far (1) in %s: %d' % (frame.f_code.co_name, time.time()-time_0)) 
+        global_var['log_indent_level'] -= 3
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time so far (1) in %s: %d' % (frame.f_code.co_name, time.time()-time_0)) 
 
     # Find the internal number if it exists
     status, internal_number = get_internal_number(int(sql_pid), patient_id_modifier)
     if status['status'] != 0:
         orthanc.LogWarning(status['error_text'])
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status' : 2, 'error_text' : json.dumps(status)}, None, None, None
 
     # Construct the patient name
     patient_name_anon = construct_patient_name(internal_number)
 
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Time so far (2) in %s: %d ' % (frame.f_code.co_name, time.time()-time_0)) 
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time so far (2) in %s: %d ' % (frame.f_code.co_name, time.time()-time_0)) 
 
     # Tags to be replaced
     tag_replace = {}
@@ -374,7 +381,7 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
 
     # Modify the study: It seems remove clashes with keep and I need to run them separate
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * (global_var['log_indent_level'] + 3) + 'Starting the study modification call')
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Starting the study modification call')
     modify_post_data = {}
     modify_post_data['Remove'] = tag_remove
     flag_remove_private_tags = os.getenv('LUA_FLAG_REMOVE_PRIVATE_TAGS', default='true') == 'true'
@@ -389,6 +396,9 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
             meta_study_mod = json.loads(orthanc.RestApiPost('/studies/%s/modify' % orthanc_level_id,
                                         json.dumps(modify_post_data)))
         except:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status' : 3, 'error_text' : json.dumps(modify_post_data,indent=3)}, None, None, None
         orthanc_study_id_mod = meta_study_mod['ID']
     else:
@@ -396,17 +406,20 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
             meta_series_mod = json.loads(orthanc.RestApiPost('/series/%s/modify' % orthanc_level_id,
                                          json.dumps(modify_post_data)))
         except:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status' : 4, 'error_text' : json.dumps(modify_post_data,indent=3)}, None, None, None
         orthanc_series_id_mod = meta_series_mod['ID']
         meta_series_mod_full = json.loads(orthanc.RestApiGet('/series/%s' % orthanc_series_id_mod))
         orthanc_study_id_mod = meta_series_mod_full['ParentStudy']
     # orthanc.LogWarning('StudyIDMOd: %s' % orthanc_study_id_mod)
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Time so far (3) in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time so far (3) in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
 
     # Anonymize the study
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * (global_var['log_indent_level'] + 3) + 'Starting the study anonymization call')
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Starting the study anonymization call')
     post_data_anon = {}
     if len(tag_replace) > 0:
         post_data_anon['Replace'] = tag_replace
@@ -420,6 +433,9 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
             response_study_anon = orthanc.RestApiPost('/studies/%s/anonymize' % orthanc_study_id_mod, 
                                                       json.dumps(post_data_anon))
         except:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status': 5, 'error_text' : 'Problem calling anonymize study'}, None, None, None
         meta_study_anon = json.loads(response_study_anon)
         orthanc_study_id_anon = meta_study_anon['ID']
@@ -429,6 +445,9 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
             response_series_anon = orthanc.RestApiPost('/series/%s/anonymize' % orthanc_series_id_mod, 
                                                        json.dumps(post_data_anon))
         except:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status': 6, 'error_text' : 'Problem calling anonymize series'}, None, None, None
         meta_series_anon = json.loads(response_series_anon)
         orthanc_series_id_anon = meta_series_anon['ID']
@@ -438,9 +457,8 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
     # orthanc.LogWarning('InstancesAnonMeta')
     # orthanc.LogWarning(json.dumps(meta_instances_anon))
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'N instances anon: %d' % len(meta_instances_anon))
-    if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Time so far (4) in %s: %d' % (frame.f_code.co_name, time.time()-time_0)) 
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'N instances anon: %d' % len(meta_instances_anon))
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time so far (4) in %s: %d' % (frame.f_code.co_name, time.time()-time_0)) 
 
     meta_study_anon = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_anon))
     # orthanc.LogWarning('MetaStudyAnon')
@@ -450,12 +468,18 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
         # orthanc.LogWarning('SQLpid: %d' % sql_pid)
         status = save_patient_ids_anon_to_db(sql_pid, orthanc_study_id=meta_study_anon['ID'])
         if status['status'] > 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status, None, None, None
     if study_instance_uid_anon is None:
         # orthanc.LogWarning('OrthancStudyID: %s' % meta_study_anon['ID'])
         # orthanc.LogWarning('SQLsiuid: %d' % sql_siuid)
         status = save_study_instance_uid_anon_to_db(meta_study_anon['ID'], sql_siuid)
         if status['status'] > 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status, None, None, None
     flag_save_patient_name_anon = os.getenv('LUA_FLAG_SAVE_PATIENTNAME_ANON',default='true') == 'true'
     if flag_save_patient_name_anon:
@@ -463,8 +487,14 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
         # orthanc.LogWarning('SQLsiuid: %d' % sql_siuid)
         status = save_patient_name_anon_to_db(patient_name_anon, sql_siuid)
         if status['status'] > 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status, None, None, None
 
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
     if flag_save_patient_name_anon:
         return {'status' : 0}, meta_instances_anon, orthanc_study_id_anon, patient_name_anon
     else:
@@ -476,7 +506,9 @@ def anonymize_study(orthanc_study_id):
 # ----------------------------------------------------------------------------
 
     global global_var
+    global_var['log_indent_level'] = 0
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
         global_var['log_indent_level'] += 3
@@ -484,21 +516,28 @@ def anonymize_study(orthanc_study_id):
     meta_system = json.loads(response_system)
     aet = meta_system['DicomAet']
 
-    response_post = orthanc.RestApiPost('/tools/execute-script', 'gIndent=0')
-    response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=true')
+    #response_post = orthanc.RestApiPost('/tools/execute-script', 'gIndent=0')
+    #response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=true')
+    global_var['flag_force_anon'] = True
     response_study = orthanc.RestApiGet('/studies/%s' % orthanc_study_id)
     meta_study = json.loads(response_study)
     if ('ModifiedFrom' not in meta_study) and ('AnonymizedFrom' not in meta_study):
         if python_verbose_logwarning:
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Non-anonymized study stable.  Initiating auto anon')
         email_message('%s Triggered Anonymization' % aet, 'Manual anonymization triggered.  Look for an update upon completion.')
-        response_post = orthanc.RestApiPost('/tools/execute-script', 'OnStableStudyMain(\'%s\', nil, nil)' % orthanc_study_id)
+        #response_post = orthanc.RestApiPost('/tools/execute-script', 'OnStableStudyMain(\'%s\', nil, nil)' % orthanc_study_id)
+        status = on_stable_study_main(orthanc_study_id)
+        if status['status'] != 0:
+            orthanc.LogWarning('Auto anon failed: %s' % status['error_text'])
     else:
         email_message('%s Triggered Anonymization' % aet, 'Manual anonymization triggered on anonymized data.  Skipping further anonymization.')
         if python_verbose_logwarning:
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Already anonymized data.  Skipping reanon')
-    response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=false')
+    #response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=false')
+    global_var['flag_force_anon'] = False
+
     if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
         global_var['log_indent_level'] -= 3
 
 # ============================================================================
@@ -508,12 +547,11 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
 
     global global_var
 
-    frame = inspect.currentframe()
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
-
-    time_0 = time.time()
+        global_var['log_indent_level'] += 3
 
     if meta_study is None:
         meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
@@ -549,14 +587,20 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
         status, flag_new_patient_id, sql_pid, patient_id_anon = save_patient_ids_to_db(orthanc_study_id=meta_study['ID'],
                                                                                        patient_id_modifier=patient_id_modifier)
         if status['status'] != 0:
-            orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Error saving patient ids: %s' % status['error_text'])
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Error saving patient ids: %s' % status['error_text'])
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status
 
         status, flag_new_study_instance_uid, sql_siuid, study_instance_uid = \
             save_study_instance_uid_to_db(orthanc_study_id, sql_pid, study_instance_uid_modifier=study_instance_uid_modifier)
 
         if status['status'] != 0:
-            orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Error saving study iuid: %s' % status['error_text'])
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Error saving study iuid: %s' % status['error_text'])
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status
         
         flag_new_patient_id_by_series[orthanc_series_id] = flag_new_patient_id
@@ -588,15 +632,27 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
             flag_new_patient_id[patient_id_modifier] = flag_new_patient_id[patient_id_modifier] or flag_new_patient_id_by_series[orthanc_series_id]
             flag_new_study_instance_uid[patient_id_modifier] = flag_new_study_instance_uid[patient_id_modifier] or flag_new_study_instance_uid_by_series[orthanc_series_id]
             if sql_pid[patient_id_modifier] != sql_pid_by_series[orthanc_series_id]:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
                 return {'status' : 1, 'error_text' : 'Mismatch in SQLpid assigned to series with same patient modifier'}
 
             if patient_id_anon[patient_id_modifier] != patient_id_anon_by_series[orthanc_series_id]:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
                 return {'status' : 1, 'error_text' : 'Mismatch in dPatientIDAnon assigned to series with same patient modifier'}
 
             if sql_siuid[patient_id_modifier] != sql_siuid_by_series[orthanc_series_id]:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
                 return {'status' : 1, 'error_text' : 'Mismatch in SQLsiuid assigned to series with same patient modifier'}
 
             if study_instance_uid[patient_id_modifier] != study_instance_uid_anon_by_series[orthanc_series_id]:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
                 return {'status' : 1, 'error_text' : 'Mismatch in dStudyInstanceUIDAnon assigned to series with same patient modifier'}
 
     # Now loop over sets of series by their modifier
@@ -605,7 +661,7 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
 
         # We're not going to bother anonymizing unless either a new patient or study
         flag_non_original_detected = False
-        flag_force_anon = False or gFlagForceAnon
+        flag_force_anon = False or global_var['flag_force_anon']
         patient_name_anon_dict = {}
         if flag_force_anon or (flag_new_patient_id[patient_id_modifier] or flag_new_study_instance_uid[patient_id_modifier]):
 
@@ -619,6 +675,9 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                                         sql_siuid[patient_id_modifier], study_instance_uid[patient_id_modifier],
                                         patient_id_modifier)
                 if status['status'] != 0:
+                    if python_verbose_logwarning:
+                        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                        global_var['log_indent_level'] -= 3
                     return status
 
                 if patient_name_anon_temp is not None:
@@ -633,32 +692,50 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                     status, flag_new_patient_id_temp, sql_pid_temp, patient_id_anon_temp = save_patient_ids_to_db(orthanc_study_id=meta_study['ID'],
                                                                                                                   patient_id_modifier=patient_id_modifier)
                     if status['status'] != 0:
-                        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Error saving patient ids: %s' % status['error_text'])
+                        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Error saving patient ids: %s' % status['error_text'])
+                        if python_verbose_logwarning:
+                            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                            global_var['log_indent_level'] -= 3
                         return status
 
                     if sql_pid[patient_id_modifier] != sql_pid_temp:
+                        if python_verbose_logwarning:
+                            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                            global_var['log_indent_level'] -= 3
                         return {'status' : 1, 'error_text' : 'Unexpected mismatch when reading SQLpid'}
 
                     if patient_id_modifier not in patient_id_anon:
                         patient_id_anon[patient_id_modifier] = patient_id_anon_temp
                     else:
                         if flag_new_patient_id_temp or (patient_id_anon[patient_id_modifier] != patient_id_anon_temp):
+                            if python_verbose_logwarning:
+                                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                                global_var['log_indent_level'] -= 3
                             return {'status' : 1, 'error_text' : 'Unexpected mismatch when reading dPatientIDAnon'}
 
                     status, flag_new_study_instance_uid_temp, sql_siuid_temp, study_instance_uid_temp = \
                         save_study_instance_uid_to_db(meta_study['ID'], sql_pid_temp, study_instance_uid_modifier=study_instance_uid_modifier)
             
                     if status['status'] != 0:
-                        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Error saving study iuid: %s' % status['error_text'])
+                        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Error saving study iuid: %s' % status['error_text'])
+                        if python_verbose_logwarning:
+                            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                            global_var['log_indent_level'] -= 3
                         return status
 
                     if sql_siuid[patient_id_modifier] != sql_siuid_temp:
+                        if python_verbose_logwarning:
+                            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                            global_var['log_indent_level'] -= 3
                         return {'status' : 1, 'error_text' : 'Unexpected mismatch when reading SQLsiuid'}
 
                     if patient_id_modifier not in study_instance_uid:
                         study_instance_uid[patient_id_modifier] = study_instance_uid_temp
                     else:
                         if flag_new_study_instance_uid_temp or (study_instance_uid[patient_id_modifier] != study_instance_uid_temp):
+                            if python_verbose_logwarning:
+                                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                                global_var['log_indent_level'] -= 3
                             return {'status' : 1, 'error_text' : 'Unexpected mismatch when reading dStudyInstanceUIDAnon'}
 
                 else:
@@ -667,6 +744,9 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
 
                     # StudyIDAnon should not have changed
                     if orthanc_study_id_anon != orthanc_study_id_anon_temp:
+                        if python_verbose_logwarning:
+                            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                            global_var['log_indent_level'] -= 3
                         return {'status' : 1, 'error_text' : 'Unexpected change in IDAnon for same modifier'}
 
                 flag_first_call = False
@@ -684,6 +764,9 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
             # Check for existing shift_epoch
             status, shift_epoch = load_shift_epoch_from_db(sql_pid[patient_id_modifier])
             if status['status'] != 0:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
                 return status
             
             # ------------------------------------------------
@@ -703,6 +786,9 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
             if flag_save_shift_epoch:
                 status = save_shift_epoch_to_db(sql_pid[patient_id_modifier], shift_epoch)
                 if status['status'] != 0:
+                    if python_verbose_logwarning:
+                        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                        global_var['log_indent_level'] -= 3
                     return status
 
             # ------------------------------------------------
@@ -710,6 +796,9 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
             # Deletes First pass anonymized files following shift_epoch modification
             status, orthanc_instance_ids_new = shift_date_time_patage_of_instances(meta_instances_anon, shift_epoch, replace_root)
             if status['status'] != 0:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
                 return status
 
             # Delete the original instance
@@ -720,6 +809,9 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
             # Send to receiving modality
             flag_by_instance = filter_what_instances_to_keep(orthanc_instance_ids=orthanc_instance_ids_new)
             if flag_by_instance is None:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
                 return {'status' : 1, 'error_text' : 'Problem calling send_instances_to_remote_filter'}
             for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
                 if flag_send_to_remote:
@@ -733,18 +825,18 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
         else: # existing patient/study combo
 
            if python_verbose_logwarning:
-               orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Skipping re-anon of existing patient/study')
+               orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Skipping re-anon of existing patient/study')
 
         if flag_non_original_detected:
             if python_verbose_logwarning:
                 orthanc.LogWarning('Some non-original images were not sent')
 
     if flag_images_sent and python_verbose_logwarning:
-        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Images sent to remote modalities') 
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Images sent to remote modalities') 
 
     # UpdateLookupHTML()
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Updating lookup table')
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Updating lookup table')
     orthanc.RestApiGet('/update_lookup_table_html_lua')
     patient_name_anon = '.'
     if len(patient_name_anon_dict) > 0:
@@ -756,11 +848,11 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                 patient_name_anon = '%s, %s' % (patient_name_anon, patient_name_anon_temp)
 
     status = auto_email('%s Anon Complete' % os.getenv('ORTHANC__NAME'), 'Anonymization complete %s' % patient_name_anon)
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
     if status['status'] != 0:
         return status
-
-    if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0)) 
 
     return {'status' : 0}
 
@@ -778,6 +870,13 @@ def auto_email(subject, message):
 # ============================================================================
 def base_tag_handling():
 # ----------------------------------------------------------------------------
+
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     flag_keep_siemens_mr = os.getenv('LUA_FLAG_KEEP_SIEMENS_MR_TAGS',default='false') == 'true'
     flag_hologic = os.getenv('LUA_COLLECT_HOLOGIC',default='false') == 'true'
@@ -1860,6 +1959,10 @@ def base_tag_handling():
             tag_handling_list['groupremovere'] += [key_address]
 
     tag_handling['KeepSomePrivate'] = found_private_groups or found_private_address
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
    
     return tag_handling, tag_handling_list
 
@@ -1868,9 +1971,12 @@ def check_split_2d_from_cview_tomo(orthanc_study_id):
     """ In the tomologic study, we separated 2D series from Tomo derived series"""
 # ----------------------------------------------------------------------------
 
+    global global_var
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     meta_series_data = json.loads(orthanc.RestApiGet('/studies/%s/series' % orthanc_study_id))
 
@@ -1905,8 +2011,13 @@ def check_split_2d_from_cview_tomo(orthanc_study_id):
         if python_verbose_logwarning:
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Incomplete number of either 2D or C-View')
             orthanc.LogWarning(json.dumps(counts, indent=3), 'application/json')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return False
     else:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return True
 
 # ============================================================================
@@ -1916,8 +2027,10 @@ def check_xref_modality():
 
     global global_var
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
     flag_xref_modality=False
     xref_modality=None
     if 'LUA_XREF_MODALITY' in os.environ:
@@ -1926,6 +2039,10 @@ def check_xref_modality():
                 flag_xref_modality = True
                 xref_modality = modality
                 break
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return flag_xref_modality, xref_modality
 
@@ -1936,6 +2053,7 @@ def confirm_or_create_lookup_table_sql(pg_connection=None, pg_cursor=None):
 
     global global_var
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
         global_var['log_indent_level'] += 3
@@ -1951,11 +2069,13 @@ def confirm_or_create_lookup_table_sql(pg_connection=None, pg_cursor=None):
             if pg_connection is not None:
                 pg_connection.close()
             if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
             return status
     else:
         if pg_connection is None or pg_cursor is None:
             if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
             return {'status':1, 'error_text': 'confirm_or_create_lookup_table: Must provide both con and cur'}
 
@@ -1971,6 +2091,7 @@ def confirm_or_create_lookup_table_sql(pg_connection=None, pg_cursor=None):
             pg_cursor.close()
             pg_connection.close()
         if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
             global_var['log_indent_level'] -= 3
         return {'status':1, 'error_text':'confirm_or_create_lookup_table: Problem querying for patientid table'}
 
@@ -1984,6 +2105,7 @@ def confirm_or_create_lookup_table_sql(pg_connection=None, pg_cursor=None):
                 pg_cursor.close()
                 pg_connection.close()
             if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
             return status
 
@@ -1991,9 +2113,11 @@ def confirm_or_create_lookup_table_sql(pg_connection=None, pg_cursor=None):
     if flag_local_db:
         pg_cursor.close()
         pg_connection.close()
+
     if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
         global_var['log_indent_level'] -= 3
-        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Leaving confirm_or_create_lookup_table_sql')
+
     return {'status': 0}
         
 # ============================================================================
@@ -2003,8 +2127,10 @@ def connect_to_database():
 
     global global_var
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     # Get the login parameters
     if 'PostgreSQL' in global_var['orthanc_configuration']:
@@ -2016,6 +2142,9 @@ def connect_to_database():
         if 'ORTHANC__POSTGRESQL__USERNAME' not in os.environ or \
             'ORTHANC__POSTGRESQL__PASSWORD' not in os.environ or \
             'ORTHANC__POSTGRESQL__HOST' not in os.environ:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status': 3, 
                     'error_text': 'Environmental variables for postgres not declared'}
         pg_username = os.environ['ORTHANC__POSTGRESQL__USERNAME']
@@ -2031,6 +2160,9 @@ def connect_to_database():
                                          user=pg_username,
                                          password=pg_password)
     except:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':error_status, 
                 'error_text':'connect_to_database: Problem connecting to database'}, None, None
 
@@ -2041,8 +2173,15 @@ def connect_to_database():
     except:
         if pg_connection is not None:
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':error_status, 
                 'error_text':'connect_to_database: Something went wrong with cursor creation'}, None, None
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return {'status':0}, pg_connection, pg_cursor
 
@@ -2052,12 +2191,23 @@ def construct_patient_name(internal_number,
                            patient_name_id_char=global_var['patient_name_id_char']):
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     if patient_name_base_local is None:
         patient_name_base_local = get_patient_name_base()
 
     local_patient_name_id_char = patient_name_id_char
 
     patient_name = '%s^%s%06d^^^' % (patient_name_base_local, local_patient_name_id_char, internal_number)
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return patient_name
               
@@ -2068,8 +2218,10 @@ def create_lookup_table_sql(pg_connection=None, pg_cursor=None):
 
     global global_var
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     # Connect to the database
     flag_local_db = False
@@ -2079,9 +2231,15 @@ def create_lookup_table_sql(pg_connection=None, pg_cursor=None):
         if status['status'] != 0:
             if pg_connection is not None:
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status
     else:
         if pg_connection is None or pg_cursor is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status':1, 'error_text': 'create_lookup_table_sql: Must provide both con and cur'}
     
     table_names = ['patientid', 'patientid_anon', 
@@ -2129,6 +2287,9 @@ def create_lookup_table_sql(pg_connection=None, pg_cursor=None):
             if flag_local_db:
                 pg_cursor.close()
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status': code, 'error_text': 'create_lookup_table_sql: Problem creating table %s' % table_name}
         code += 1
 
@@ -2137,7 +2298,12 @@ def create_lookup_table_sql(pg_connection=None, pg_cursor=None):
         pg_cursor.close()
         pg_connection.close()
 
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return {'status' : 0}
+
 # =======================================================
 def email_message(subject, message_body, subtype='plain', alternates=None, cc=None):
     """
@@ -2156,18 +2322,26 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
 
     global global_var
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
  
     if alternates is None:
         if 'PYTHON_MAIL_TO' not in os.environ or \
            'PYTHON_MAIL_ORIGIN' not in os.environ or \
            'PYTHON_MAIL_SERVER' not in os.environ:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return{'status':1, 'error_text': 'Environmental variables for python mail not declared'}
         recipients = os.getenv('PYTHON_MAIL_TO').split(',')
     else:
         if 'PYTHON_MAIL_ORIGIN' not in os.environ or \
            'PYTHON_MAIL_SERVER' not in os.environ:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return{'status':2, 'error_text': 'Environmental variables for python mail not declared'}
         recipients = alternates
 
@@ -2189,6 +2363,9 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
                 addresses += [Address(address_res.group(1),address_res.group(2),address_res.group(3))]
         
     if len(addresses) == 0:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':3, 'error_text':'email_message: No addresses to send to'}
     else:
         addresses = tuple(addresses)
@@ -2203,9 +2380,16 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
     try:
         s = smtplib.SMTP(smtp_server)
     except:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':4, 'error_text':'email_message: Is the smtp down?'}
     s.send_message(msg)
     s.quit()
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return {'status':0}
 
@@ -2216,8 +2400,10 @@ def email_study_report(orthanc_study_id):
 
     global global_var
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     response_system = orthanc.RestApiGet('/system')
     meta_system = json.loads(response_system)
@@ -2300,11 +2486,23 @@ def email_study_report(orthanc_study_id):
         message_body += [line_of_text]
 
     message_body += [' '*2 + '</body>', '</html>']
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return email_message('PHI Study Report from %s' % aet, '\n'.join( message_body), subtype='html')
 
 # ============================================================================
 def filter_and_delete_instances(orthanc_study_id):
 # ----------------------------------------------------------------------------
+
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     counts = {    'series': { 'start' : 0, 'end' : 0, 'deleted' : 0 },
               'instances' : { 'start' : 0, 'end' : 0, 'deteled' : 0 }}
@@ -2337,11 +2535,22 @@ def filter_and_delete_instances(orthanc_study_id):
         flag_deleted[type_str] = counts[type_str]['start'] > counts[type_str]['end']
         counts[type_str]['deleted'] = counts[type_str]['start'] - counts[type_str]['end']
 
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return counts, flag_deleted
 
 # ============================================================================
 def filter_and_delete_series_by_modality(orthanc_study_id):
 # ----------------------------------------------------------------------------
+
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] -= 3
 
     counts = { 'start' : 0, 'end' : 0, 'deleted' : 0 }
     flag_deleted = False
@@ -2374,11 +2583,22 @@ def filter_and_delete_series_by_modality(orthanc_study_id):
                 counts['end'] -= 1
                 counts['deleted'] += 1 
 
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return counts, flag_deleted
 
 # =======================================================
 def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=None, orthanc_instance_ids=None):
 # -------------------------------------------------------
+
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     instances_to_check = {}
     flag_by_instance = {}
@@ -2453,6 +2673,10 @@ def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=Non
            flag_by_instance[orthanc_instance_id] = flag_dynacad or (flag_original_primary and flag_non_report)
         else:
            flag_by_instance[orthanc_instance_id] = flag_dynacad or (flag_primary and flag_non_report)
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     if len(flag_by_instance) == 0:
         return None
@@ -2577,6 +2801,13 @@ def get_internal_number(sql_pid, patient_id_modifier,
                         pg_connection=None, pg_cursor=None):
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     # Connect to the database
     flag_local_db = False
     if pg_connection is None and pg_cursor is None:
@@ -2585,9 +2816,17 @@ def get_internal_number(sql_pid, patient_id_modifier,
         if status['status'] != 0:
             if pg_connection is not None:
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+
             return status, None
     else:
         if pg_connection is None or pg_cursor is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+
             return {'status':1, 'error_text': 'get_internal_number: Must provide both con and cur'}, None
 
     sql_query = "SELECT value FROM internalnumber WHERE pid=%s" 
@@ -2598,6 +2837,10 @@ def get_internal_number(sql_pid, patient_id_modifier,
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+
         return {'status':1, 'error_text':'get_internal_number: Problem querying for patientid table'}, None
 
     if pg_cursor.rowcount > 0:
@@ -2606,6 +2849,10 @@ def get_internal_number(sql_pid, patient_id_modifier,
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+
         return {'status': 0}, internal_number
     else:
 
@@ -2643,6 +2890,10 @@ def get_internal_number(sql_pid, patient_id_modifier,
                 if flag_local_db:
                     pg_cursor.close()
                     pg_connection.close()
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
+
                 return {'status': 4, 'error_text': 'get_internal_number: Internal number overrun'}, None
 
             sql_query = "SELECT count(*) FROM internalnumber WHERE value=%s"
@@ -2653,6 +2904,9 @@ def get_internal_number(sql_pid, patient_id_modifier,
                 if flag_local_db:
                     pg_cursor.close()
                     pg_connection.close()
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
                 return {'status':2, 'error_text':'get_internal_number: querying new internal number'}, None
             row = pg_cursor.fetchone()
             if row is not None and int(row[0]) == 0:
@@ -2668,12 +2922,19 @@ def get_internal_number(sql_pid, patient_id_modifier,
             if flag_local_db:
                 pg_cursor.close()
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status': 3, 'error_text': 'get_internal_number: Problem saving the internal number'}, None
         pg_connection.commit()
 
     if flag_local_db:
         pg_cursor.close()
         pg_connection.close()
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return {'status': 0}, internal_number
  
@@ -2683,7 +2944,17 @@ def get_patient_ids(orthanc_study_id=None,
                     patient_id_modifier=''):
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     if orthanc_study_id is None and meta_study is None:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status' : 1, 'error_text': 'Insufficient inputs to get_patient_ids'}, None
     elif meta_study is None:
         meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
@@ -2730,6 +3001,10 @@ def get_patient_ids(orthanc_study_id=None,
                 patient_ids[patient_ids_count] = patient_id_temp
                 patient_ids_dict[patient_id_temp] = True
 
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return {'status' : 0}, patient_ids
 
 # ============================================================================
@@ -2737,9 +3012,20 @@ def get_patient_name_base():
 # ----------------------------------------------------------------------------
 
     global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     if global_var['patient_name_base'] is None:
         meta_system = json.loads(orthanc.RestApiGet('/system'))
         global_var['patient_name_base'] = meta_system['Name']
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return global_var['patient_name_base']
 
 # ============================================================================
@@ -2765,19 +3051,30 @@ def load_lookup_table(file_lookup, make_backup=False):
     global global_var
     lookup_table = {}
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     if not os.path.exists(file_lookup):
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status': 0}, lookup_table
 
     if not global_var['flag']['beautiful_soup']:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':1, 'error_text':'load_lookup_table: No Beautiful soup'}, lookup_table
 
     try:
         with open(file_lookup, 'r') as lun:
             lookup_text = lun.read()
     except: 
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':2, 'error_text':'load_lookup_table: Problem reading lookup'}, lookup_table
 
     # Make backup
@@ -2791,6 +3088,9 @@ def load_lookup_table(file_lookup, make_backup=False):
     try:
         head = soup.find('head')
     except: 
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':3, 'error_text':'load_lookup_table: No head found'}, lookup_table
 
     try:
@@ -2838,6 +3138,10 @@ def load_lookup_table(file_lookup, make_backup=False):
 
         i_row += 1
 
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return {'status':0}, lookup_table
 
 # ============================================================================
@@ -2847,8 +3151,10 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
 
     global global_var
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     # Connect to the database
     flag_local_db = False
@@ -2858,9 +3164,15 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
         if status['status'] != 0:
             if pg_connection is not None:
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status, None, None, None
     else:
         if pg_connection is None or pg_cursor is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status':1, 'error_text': 'load_phi_to_anon_map: Must provide both con and cur'}, None, None, None
 
     # Confirm our lookup tables
@@ -2870,6 +3182,9 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return status, None, None, None
        
     # Setup
@@ -2888,6 +3203,9 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return{'status': 1, 'error_text': 'load_phi_to_anon_map: Something went wrong querying for siuid2patientname_anon'}, None, None, None
 
     flag_siuid_to_anon = pg_cursor.rowcount > 0
@@ -2901,6 +3219,9 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status': error_status,
                 'error_text':'load_phi_to_anon_map: Something went wrong with the patientid parent_pid query'}, None, None, None
     row = pg_cursor.fetchone()
@@ -2924,6 +3245,9 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':error_status, 'error_text':'load_phi_to_anon_map: Problem querying parent_pid'}, None, None, None
     row = pg_cursor.fetchone()
     while row is not None:
@@ -2944,6 +3268,9 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':error_status, 'error_text':'load_phi_to_anon_map: Problem querying patientid_anon'}, None, None, None
     row = pg_cursor.fetchone()
     while row is not None:
@@ -2962,6 +3289,9 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':error_status, 'error_text':'load_phi_to_anon_map: Problem querying shiftepoch'}, None, None, None
     row = pg_cursor.fetchone()
     while row is not None:
@@ -2980,6 +3310,9 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':error_status, 'error_text':'load_phi_to_anon_map: Problem querying internalnumber'}, None, None, None
     row = pg_cursor.fetchone()
     while row is not None:
@@ -3001,6 +3334,9 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':error_status, 'error_text':'load_phi_to_anon_map: Problem querying study info'}, None, None, None
     row = pg_cursor.fetchone()
     while row is not None:
@@ -3024,6 +3360,9 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
             if flag_local_db:
                 pg_cursor.close()
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status':error_status, 'error_text':'load_phi_to_anon_map: Problem querying study info'}, None, None, None
         row = pg_cursor.fetchone()
         while row is not None:
@@ -3041,12 +3380,23 @@ def load_phi_to_anon_map(pg_connection=None, pg_cursor = None):
         pg_cursor.close()
         pg_connection.close()
 
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return {'status': 0}, patient_map, patient_reverse_map, flag_siuid_to_anon
 
 # ============================================================================
 def load_shift_epoch_from_db(sql_pid, pg_connection=None, pg_cursor = None):
     """Query the postgres database for phi to anon maps"""
 # ----------------------------------------------------------------------------
+
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     # Connect to the database
     flag_local_db = False
@@ -3056,9 +3406,15 @@ def load_shift_epoch_from_db(sql_pid, pg_connection=None, pg_cursor = None):
         if status['status'] != 0:
             if pg_connection is not None:
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status, None
     else:
         if pg_connection is None or pg_cursor is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status':1, 'error_text': 'load_shift_epoch_from_db: Must provide both con and cur'}, None
 
     # Confirm our lookup tables
@@ -3068,6 +3424,9 @@ def load_shift_epoch_from_db(sql_pid, pg_connection=None, pg_cursor = None):
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return status, None
 
     # Execute query
@@ -3079,6 +3438,9 @@ def load_shift_epoch_from_db(sql_pid, pg_connection=None, pg_cursor = None):
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':1, 'error_text':'load_shift_epoch_from_db: Problem querying for shiftepoch table'}, None
 
     if pg_cursor.rowcount > 0:
@@ -3091,15 +3453,22 @@ def load_shift_epoch_from_db(sql_pid, pg_connection=None, pg_cursor = None):
         pg_cursor.close()
         pg_connection.close()
 
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return {'status': 0}, shift_epoch
  
 # ============================================================================
 def map_uid_old_to_new(orthanc_study_id_new, flag_remap_sop_instance_uid=True, flag_remap_kept_uid = True):
 # ----------------------------------------------------------------------------
 
+    global global_var
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
 
     uid_map = {}
     uid_type = {}
@@ -3193,6 +3562,10 @@ def map_uid_old_to_new(orthanc_study_id_new, flag_remap_sop_instance_uid=True, f
                     uid_map[kept_uid_val] = study_instance_uid_new
                     uid_type[kept_uid_val] = kept_uid_type['Name']
 
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return uid_map, uid_type
 
 # ============================================================================
@@ -3203,6 +3576,7 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
     global global_var
     python_verbose_local = False
     if python_verbose_logwarning and python_verbose_local:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
         global_var['log_indent_level'] += 3
@@ -3216,11 +3590,13 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
             if pg_connection is not None:
                 pg_connection.close()
             if python_verbose_logwarning and python_verbose_local:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
             return status, None
     else:
         if pg_connection is None or pg_cursor is None:
             if python_verbose_logwarning and python_verbose_local:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
             return {'status':1, 'error_text': 'on_orthanc:Must provide both con and cur'}, None
 
@@ -3233,6 +3609,7 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
             pg_cursor.close()
             pg_connection.close()
         if python_verbose_logwarning and python_verbose_local:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
             global_var['log_indent_level'] -= 3
         return status, None
 
@@ -3279,6 +3656,7 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
                 pg_cursor.close()
                 pg_connection.close()
             if python_verbose_logwarning and python_verbose_local:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
             return {'status': 2, 'error_text' : 'on_orthanc:Problem querying pid'}, None
         if python_verbose_logwarning and python_verbose_local:
@@ -3321,9 +3699,274 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
         pg_connection.close()
 
     if python_verbose_logwarning and python_verbose_local:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
         global_var['log_indent_level'] -= 3
-        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Leaving on_orthanc')
+
     return {'status': 0}, now_on_orthanc
+
+# ============================================================================
+def on_stable_study_main(orthanc_study_id_incoming):
+    """
+    PURPOSE:  Main function for processing the anonymization.
+    """
+# ----------------------------------------------------------------------------
+
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Anonymizing %s' % orthanc_study_id_incoming)
+    if python_verbose_logwarning and global_var['flag_force_anon']:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Forcing anonymization')
+    meta_system = json.loads(orthanc.RestApiGet('/system'))
+    meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_incoming))
+
+    if 'PatientName' in meta_study['PatientMainDicomTags'] and \
+        (meta_study['PatientMainDicomTags']['PatientName'].find(meta_system['Name']) >= 0 or 
+         (global_var['patient_name_base'] is not None and meta_study['PatientMainDicomTags']['PatientName'].find(global_var['patient_name_base']) >= 0)): 
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (name match)')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+        return {'status': 0}
+
+    flag_images_sent = False
+    if 'ModifiedFrom' in meta_study or 'AnonymizedFrom' in meta_study:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (name match)')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+        return {'status': 0}
+
+    # Check that previously anonymized studies are not on Orthanc
+    if not global_var['flag_force_anon']:
+        for orthanc_study_id_other in json.loads(orthanc.RestApiGet('/studies')):
+            meta_study_other = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_other))
+            if ('AnonymziedFrom' in meta_study_other and meta_study_other['AnonymizedFrom'] == orthanc_study_id_incoming) or \
+               ('ModifiedFrom' in meta_study_other and meta_study_other['ModifiedFrom'] == orthanc_study_id_incoming):
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Already anonymized')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
+                return {'status' : 0}
+
+    #  Filter by original/primary and other status
+    flag_prescreen_send_to_remote = os.getenv('LUA_FLAG_PRESCREEN_ORIGINAL_PRIMARY', default='true') == 'true'
+    if flag_prescreen_send_to_remote:
+        counts, flag_deleted = filter_and_delete_instances(orthanc_study_id_incoming)   
+        n_series_start = counts['series']['start']
+        n_series_deleted = counts['series']['deleted']
+        if flag_deleted:
+            meta_study = None
+            for orthanc_study_id_other in json.loads(orthanc.RestApiGet('/studies')):
+                if orthanc_study_id_other == orthanc_study_id_incoming:
+                    meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_incoming))
+        if meta_study is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'All series deleted by prefilter. Aborting anonymization.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return {'status' : 0}
+
+    # Filter by modality
+    flag_prescreen_by_modality = os.getenv('LUA_FLAG_PRESCREEN_BY_MODALITY', default='true') == 'true'
+    if flag_prescreen_by_modality:
+        # flag_deleted, n_series_start, n_series_deleted = PreScreenSeriesByModality(orthanc_study_id_incoming) 
+        counts, flag_deleted = filter_and_delete_series_by_modality(orthanc_study_id_incoming)
+        flag_deleted = lResults['FlagDeleted']
+        n_series_start = counts['start']
+        n_series_deleted = counts['deleted']
+        if flag_deleted:
+            meta_study = None
+            for orthanc_study_id_other in pairs(json.loads(orthanc.RestApiGet('/studies'))):
+                if (orthanc_study_id_other == orthanc_study_id_incoming):
+                    meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_incoming))
+        if meta_study is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'All series deleted by modality. Aborting anonymization.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return {'status' : 0}
+
+    flag_anonymize_by_series = os.getenv('LUA_FLAG_ANON_BY_SERIES', default='false') == 'true'
+    if flag_anonymize_by_series:
+        flag_split_2d_from_cview_tomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO', default='false') == 'true'
+        if flag_split_2d_from_cview_tomo:
+            flag_complete = check_split_2d_from_cview_tomo(orthanc_study_id_incoming)
+            if not flag_complete:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Incomplete set of 2d or tomo. Aborting.')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
+                return {'status' : 0}
+
+        status = anonymize_study_by_series(orthanc_study_id_incoming, meta_study=meta_study)
+        if status['status'] != 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem anonymizing by series. Aborting.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return status
+        
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+        return {'status' : 0}
+
+    # We modify the incoming patientIDs based on descriptions
+    # If "screen" appears in the description, the modifier is 's' else 'd' for diagnostic
+    # This has the effect of generating possibly to anonymous subjects for each incoming subject
+    # Comment out the call to the routine if you want normal use of PatientIDs
+    patient_id_modifier = ''
+    flag_split_screen_from_diagnostic = os.getenv('LUA_FLAG_SPLIT_SCREEN_DIAG', default='true') == 'true'
+    if flag_split_screen_from_diagnostic:
+        patient_id_modifier = set_screen_or_diagnostic(orthanc_study_id_incoming)
+    flag_every_accession_a_patient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
+    if flag_every_accession_a_patient:
+        patient_id_modifier = '_%s' % str(meta_study['MainDicomTags']['AccessionNumber']) if 'AccessionNumber' in meta_study['MainDicomTags'] else 'other'
+
+    # Check to see if this subject was previously anonymized
+    # StudyInstanceUID is only modified when anonymizing at the series level
+    study_instance_uid_modifier = ''
+    status, flag_new_patient_id, sql_pid, patient_id_anon = \
+        save_patient_ids_to_db(orthanc_study_id=orthanc_study_id_incoming, patient_id_modifier=patient_id_modifier)
+    if status['status'] != 0:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem saving patient ids to db. Aborting.')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+        return status
+    status, flag_new_study_instance_uid, sql_siuid, study_instance_uid_anon = \
+        save_study_instance_uid_to_db(orthanc_study_id_incoming, sql_pid, study_instance_uid_modifier=study_instance_uid_modifier)
+    if status['status'] != 0:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem saving study uid to db. Aborting.')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+        return status
+
+    # We're not going to bother anonymizing unless either a new patient or study
+    flag_non_original_detected = False
+    flag_force_anon = False or global_var['flag_force_anon']
+    if flag_force_anon or (flag_new_patient_id or flag_new_study_instance_uid):
+
+        # First pass anonymization
+        flag_first_call = True
+        status, meta_instances_anon, orthanc_study_id_anon, patient_name_anon = \
+            anonymize_instances('Study', orthanc_study_id_incoming, flag_first_call,
+                                sql_pid, patient_id_anon, sql_siuid, study_instance_uid_anon,
+                                patient_id_modifier)
+        if status['status'] != 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem anonymizing instances. Aborting.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return status
+
+        # Set up old-->new UID map
+        flag_remap_sop_instance_uid = True
+        flag_remap_kept_uid = True
+        uid_map, uid_type = map_uid_old_to_new(orthanc_study_id_anon, flag_remap_sop_instance_uid, flag_remap_kept_uid)
+        global_var['uid_map'] = uid_map
+
+        # Set up replacements for AccessionNumber and StudyID
+        replace_root = {}
+        replace_root['AccessionNumber'] = orthanc_study_id_anon[0:8] + orthanc_study_id_anon[9:17]
+        replace_root['StudyID'] = orthanc_study_id_anon[18:26] + orthanc_study_id_anon[27:35]
+    
+        # Check for existing lShiftEpoch
+        status, shift_epoch = load_shift_epoch_from_db(sql_pid)
+        if status['status'] != 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem loading shift epoch. Aborting.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return status
+        
+        # Compute lShiftEpoch
+        flag_keep_original_dates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES', default='false') == 'true'
+        if shift_epoch is None:
+            # Compute random shift up to one year
+            random.seed()
+            shift_epoch = random.randint(0,365*24*3600)
+            flag_save_shift_epoch = True
+            status = save_shift_epoch_to_db(sql_pid, shift_epoch)
+            if status['status'] != 0:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem saving shift epoch. Aborting.')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
+                return status
+
+        # For some cases, we keep the dates, so shift_epoch=0
+        if flag_keep_original_dates:
+            shift_epoch = 0
+
+        # Second pass anonymization creates files modified by shift_epoch
+        # Deletes First pass anonymized files following shift_epoch modification
+        status, orthanc_instances_id_new = shift_date_time_patage_of_instances(meta_instances_anon, shift_epoch, replace_root)
+        if status['status'] != 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem shifting times. Aborting.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return status
+    
+        # Delete the original instance
+        for meta_instance_anon in meta_instances_anon:
+            orthanc_instance_id = meta_instance_anon['ID']
+            orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
+    
+        # Send to receiving modality
+        flag_by_instance = filter_what_instances_to_keep(orthanc_instance_ids=orthanc_instances_id_new)
+        
+        # for i, loInstanceID in pairs(orthanc_instances_id_new):
+        for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
+            if flag_send_to_remote:
+                if not flag_force_anon:
+                    # orthanc.RestApiPost('/modalities/%s/store' % os.getenv('LUA_ANON_ORTHANC'), orthanc_instance_id)
+                    flag_images_sent = True
+            else:
+                orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
+                flag_non_original_detected = True
+
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Updating lookup table')
+
+        status = update_lookup_html()
+        if status['status'] != 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem updating lookup table.')
+
+        if patient_name_anon is not None:
+            status = auto_email(os.getenv('ORTHANC__NAME') + ' Anon Complete', 'Anonymization complete:' + patient_name_anon)
+        else:
+            status = auto_email(os.getenv('ORTHANC__NAME') + ' Anon Complete', 'Anonymization complete.')
+        if status['status'] != 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem sending emails..')
+
+    else: # existing patient/study combo
+
+       if python_verbose_logwarning:
+           orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Skipping re-anon of existing patient/study')
+
+    if flag_non_original_detected:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Some non-original images were not sent')
+
+    if flag_images_sent and python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Images sent to remote modalities') 
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
+    return {'status' : 0}
 
 # ============================================================================
 def recursive_find_uid_to_keep(parent, level_in=global_var['max_recurse_depth'], kept_uid={}, top_level_tag_to_keep = {}, parent_key=None):
@@ -3525,8 +4168,18 @@ def save_patient_ids_anon_to_db(sql_pid, orthanc_study_id=None,
     """
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     # Get the Study info
     if orthanc_study_id is None and meta_study is None:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status' : 1, 'error_text': 'Insufficient inputs to get_patient_ids'}
     elif meta_study is None:
         meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
@@ -3542,9 +4195,15 @@ def save_patient_ids_anon_to_db(sql_pid, orthanc_study_id=None,
                 pg_cursor.close()
             if pg_connection is not None:
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status
     else:
         if pg_connection is None or pg_cursor is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status':2, 'error_text': 'save_patient_ids_anon_to_db: Must provide both con and cur'}
 
     # Confirm lookup table sql
@@ -3554,6 +4213,9 @@ def save_patient_ids_anon_to_db(sql_pid, orthanc_study_id=None,
             pg_cursor.close()
         if pg_connection is not None:
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return status
 
     # Insert into database
@@ -3565,12 +4227,19 @@ def save_patient_ids_anon_to_db(sql_pid, orthanc_study_id=None,
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':1, 'error_text':'save_patient_id_anon problem inserting'}
 
     pg_connection.commit()
     if flag_local_db:
         pg_cursor.close()
         pg_connection.close()
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return {'status': 0}
 
@@ -3597,8 +4266,18 @@ def save_patient_ids_to_db(orthanc_study_id=None,
     """
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     # Get the Study info
     if orthanc_study_id is None and meta_study is None:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status' : 1, 'error_text': 'Insufficient inputs to get_patient_ids'}, None, None, None
     elif meta_study is None:
         meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
@@ -3613,9 +4292,15 @@ def save_patient_ids_to_db(orthanc_study_id=None,
                 pg_cursor.close()
             if pg_connection is not None:
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status, None, None, None
     else:
         if pg_connection is None or pg_cursor is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status':2, 'error_text': 'save_patient_ids_to_db: Must provide both con and cur'}, None, None, None
 
     # Confirm lookup table sql
@@ -3625,6 +4310,9 @@ def save_patient_ids_to_db(orthanc_study_id=None,
             pg_cursor.close()
         if pg_connection is not None:
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return status, None, None, None
 
     # Gather initial patient ids
@@ -3636,6 +4324,9 @@ def save_patient_ids_to_db(orthanc_study_id=None,
             pg_cursor.close()
         if pg_connection is not None:
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return status, None, None, None
     patient_ids['dicom'] = patient_ids_local
 
@@ -3654,6 +4345,9 @@ def save_patient_ids_to_db(orthanc_study_id=None,
             if flag_local_db:
                 pg_cursor.close()
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status': 3, 'error_text' : 'save_patient_ids_to_db:Problem querying pid, parent_pid'}, None, None, None
         patient_ids['map'][patient_id_local] = {}
         row = pg_cursor.fetchone()
@@ -3684,11 +4378,16 @@ def save_patient_ids_to_db(orthanc_study_id=None,
             error_text = 'Non unique pid: %s' % ','.join(list(check.values())) if len(sql_pid_unique) > 1 else 'Missing pid'
             if python_verbose_logwarning:
                 orthanc.LogWarning(error_text)
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             if pg_cursor is not None:
                 pg_cursor.close()
             if pg_connection is not None:
                 pg_connection.close()
             status = {'status' : 2, 'error_text' : error_text}
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status, None, None, None
 
     # Handle any new PatientIDs that match a previous one
@@ -3706,6 +4405,9 @@ def save_patient_ids_to_db(orthanc_study_id=None,
                     if flag_local_db:
                         pg_cursor.close()
                         pg_connection.close()
+                    if python_verbose_logwarning:
+                        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                        global_var['log_indent_level'] -= 3
                     return {'status': 4, 'error_text': 'Problem inserting secondary patient id'}, None, None, None
                 patient_ids['map'][patient_id_local][1] = sql_pid_unique[1]
                 if len(patient_ids['map'][patient_id_local]) > 1:
@@ -3729,6 +4431,9 @@ def save_patient_ids_to_db(orthanc_study_id=None,
                     if flag_local_db:
                         pg_cursor.close()
                         pg_connection.close()
+                    if python_verbose_logwarning:
+                        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                        global_var['log_indent_level'] -= 3
                     return {'status': 5, 'error_text': 'Problem inserting secondary patient id'}, None, None, None
             else:
                 sql_statement = "INSERT INTO patientid (value) VALUES(%s)"
@@ -3739,6 +4444,9 @@ def save_patient_ids_to_db(orthanc_study_id=None,
                     if flag_local_db:
                         pg_cursor.close()
                         pg_connection.close()
+                    if python_verbose_logwarning:
+                        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                        global_var['log_indent_level'] -= 3
                     return {'status': 6, 'error_text': 'Problem inserting secondary patient id'}, None, None, None
                 sql_query = "SELECT pid FROM patientid WHERE value=%s"
                 try:
@@ -3748,6 +4456,9 @@ def save_patient_ids_to_db(orthanc_study_id=None,
                     if flag_local_db:
                         pg_cursor.close()
                         pg_connection.close()
+                    if python_verbose_logwarning:
+                        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                        global_var['log_indent_level'] -= 3
                     return {'status': 7, 'error_text': 'Problem inserting secondary patient id'}, None, None, None
                 row = pg_cursor.fetchone()
                 patient_ids['map'][patient_id_local][1] = row[0]
@@ -3765,6 +4476,9 @@ def save_patient_ids_to_db(orthanc_study_id=None,
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status': 8, 'error_text': 'Problem selecting from patientid_anon'}, None, None, None
     row = pg_cursor.fetchone()
     patient_id_anon = row[0] if row is not None else None
@@ -3773,6 +4487,10 @@ def save_patient_ids_to_db(orthanc_study_id=None,
     if flag_local_db:
         pg_cursor.close()
         pg_connection.close()
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return {'status': 0}, flag_new_patient_id, sql_pid_unique[1], patient_id_anon
 
@@ -3793,6 +4511,13 @@ def save_patient_name_anon_to_db(patient_name_anon, sql_siuid,
     """
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     # Connect if necessary
     flag_local_db = False
     if pg_connection is None and pg_cursor is None:
@@ -3803,9 +4528,15 @@ def save_patient_name_anon_to_db(patient_name_anon, sql_siuid,
                 pg_cursor.close()
             if pg_connection is not None:
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status
     else:
         if pg_connection is None or pg_cursor is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status':1, 'error_text': 'save_patient_name_anon_to_db: Must provide both con and cur'}
 
     # Confirm lookup table sql
@@ -3815,6 +4546,9 @@ def save_patient_name_anon_to_db(patient_name_anon, sql_siuid,
             pg_cursor.close()
         if pg_connection is not None:
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return status
 
     # Check for the table
@@ -3828,6 +4562,8 @@ def save_patient_name_anon_to_db(patient_name_anon, sql_siuid,
             pg_connection.close()
         if python_verbose_logwarning:
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Tried to insert patientname anon into nonexistent siuid2patientname_anon')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status' : 0, 'error_text' : 'siuid2patientname_anon does not exist'}
 
     # Insert into database
@@ -3840,12 +4576,19 @@ def save_patient_name_anon_to_db(patient_name_anon, sql_siuid,
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':2, 'error_text':'save_patient_name_anon problem inserting'}
 
     pg_connection.commit()
     if flag_local_db:
         pg_cursor.close()
         pg_connection.close()
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return {'status': 0}
 
@@ -3857,6 +4600,13 @@ def save_shift_epoch_to_db(sql_pid, shift_epoch,
     """
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     # Connect if necessary
     flag_local_db = False
     if pg_connection is None and pg_cursor is None:
@@ -3867,9 +4617,15 @@ def save_shift_epoch_to_db(sql_pid, shift_epoch,
                 pg_cursor.close()
             if pg_connection is not None:
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status
     else:
         if pg_connection is None or pg_cursor is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status':1, 'error_text': 'shave_shift_epoch_to_db: Must provide both con and cur'}
 
     # Insert 
@@ -3881,12 +4637,19 @@ def save_shift_epoch_to_db(sql_pid, shift_epoch,
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':1, 'error_text':'save_shift_epoch_to_db problem inserting'}
 
     pg_connection.commit()
     if flag_local_db:
         pg_cursor.close()
         pg_connection.close()
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return {'status': 0}
 
@@ -3907,6 +4670,13 @@ def save_study_instance_uid_anon_to_db(orthanc_study_id, sql_siuid,
     """
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     # Pull the study data
     meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
     study_instance_uid_anon = meta_study['MainDicomTags']['StudyInstanceUID']
@@ -3921,9 +4691,15 @@ def save_study_instance_uid_anon_to_db(orthanc_study_id, sql_siuid,
                 pg_cursor.close()
             if pg_connection is not None:
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status, None, None, None
     else:
         if pg_connection is None or pg_cursor is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status':1, 'error_text': 'save_siuid_anon: Must provide both con and cur'}, None, None, None
 
     # Insert 
@@ -3935,12 +4711,19 @@ def save_study_instance_uid_anon_to_db(orthanc_study_id, sql_siuid,
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status':1, 'error_text':'save_siuid_anon problem inserting'}
 
     pg_connection.commit()
     if flag_local_db:
         pg_cursor.close()
         pg_connection.close()
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return {'status': 0}
 
@@ -3966,6 +4749,13 @@ def save_study_instance_uid_to_db(orthanc_study_id, sql_pid, study_instance_uid_
     """
 # ----------------------------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     # Pull the study data
     meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
     study_instance_uid = meta_study['MainDicomTags']['StudyInstanceUID']
@@ -3982,9 +4772,15 @@ def save_study_instance_uid_to_db(orthanc_study_id, sql_pid, study_instance_uid_
                 pg_cursor.close()
             if pg_connection is not None:
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return status, None, None, None
     else:
         if pg_connection is None or pg_cursor is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status':1, 'error_text': 'save_siuid: Must provide both con and cur'}, None, None, None
 
     # Check to see if in database
@@ -3995,6 +4791,9 @@ def save_study_instance_uid_to_db(orthanc_study_id, sql_pid, study_instance_uid_
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status': 2, 'error_text' : 'save_study_instance_uid_to_db:Problem querying siuid'}, None, None, None
     row = pg_cursor.fetchone()
     n_rows = 0
@@ -4006,6 +4805,9 @@ def save_study_instance_uid_to_db(orthanc_study_id, sql_pid, study_instance_uid_
             if flag_local_db:
                 pg_cursor.close()
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status': 3, 'error_text' : 'Mismatching PID associated with siuid'}, None, None, None
         n_rows += 1
         row = pg_cursor.fetchone()
@@ -4013,6 +4815,9 @@ def save_study_instance_uid_to_db(orthanc_study_id, sql_pid, study_instance_uid_
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return {'status' : 4, 'error_text': 'More than one match in db for siuid'}, None, None, None
 
     # Check for anonymized studies
@@ -4026,6 +4831,9 @@ def save_study_instance_uid_to_db(orthanc_study_id, sql_pid, study_instance_uid_
             if flag_local_db:
                 pg_cursor.close()
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status': 5, 'error_text' : 'save_study_instance_uid_to_db:Problem querying anon siuid'}, None, None, None
         row = pg_cursor.fetchone()
         n_rows = 0
@@ -4037,6 +4845,9 @@ def save_study_instance_uid_to_db(orthanc_study_id, sql_pid, study_instance_uid_
             if flag_local_db:
                 pg_cursor.close()
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status' : 6, 'error_text': 'More than one anon siuid per phi siuid'}, None, None, None
     else:
         sql_statement = "INSERT INTO studyinstanceuid (value,pid) VALUES(%s,%s)"
@@ -4046,6 +4857,9 @@ def save_study_instance_uid_to_db(orthanc_study_id, sql_pid, study_instance_uid_
             if flag_local_db:
                 pg_cursor.close()
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status': 7, 'error_text' : 'Problem inserting new siuid'}, None, None, None
         sql_query = "SELECT siuid FROM studyinstanceuid WHERE value=%s"
         try:
@@ -4054,6 +4868,9 @@ def save_study_instance_uid_to_db(orthanc_study_id, sql_pid, study_instance_uid_
             if flag_local_db:
                 pg_cursor.close()
                 pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
             return {'status': 8, 'error_text' : 'Problem querying new siuid'}, None, None, None
         row = pg_cursor.fetchone()
         sql_siuid = row[0]
@@ -4062,6 +4879,10 @@ def save_study_instance_uid_to_db(orthanc_study_id, sql_pid, study_instance_uid_
     if flag_local_db:
         pg_cursor.close()
         pg_connection.close()
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return {'status': 0}, flag_new_study_instance_uid, sql_siuid, study_instance_uid_anon
 
@@ -4161,6 +4982,7 @@ def scan_study_for_group_element(orthanc_study_id, trigger_map={}, type_match='g
                      locations where key trigger was found
     """
 # ----------------------------------------------------------------------------
+
     response_study = orthanc.RestApiGet('/studies/%s' % orthanc_study_id)
     orthanc_series_ids = json.loads(response_study)['Series']
     
@@ -4204,6 +5026,13 @@ def set_screen_or_diagnostic(orthanc_study_id):
     """Used only in very specific Winkler/Hologic studies"""
 # -------------------------------------------------------
 
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
     flag_screening = False
     meta_instances = json.loads(orthanc.RestApiGet('/studies/%s/instances' % orthanc_study_id))
     dicom_field_bases = ['Study', 'Series', 'PerformedProcedureStep', 'RequestedProcedure']
@@ -4232,17 +5061,26 @@ def set_screen_or_diagnostic(orthanc_study_id):
         patient_id_modifier = 's'
     else:
         patient_id_modifier = 'd'
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return patient_id_modifier
            
 # ============================================================================
 def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_root):
 # ----------------------------------------------------------------------------
-    type_dict = type({})
-    type_list = type([])
 
+    global global_var
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
+    type_dict = type({})
+    type_list = type([])
 
     dicom_field_bases = [ 'Study', 'Series', 'Acquisition', 
                           'Content', 'InstanceCreation',
@@ -4260,12 +5098,13 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
     flag_by_instance = filter_what_instances_to_keep(orthanc_instance_ids=orthanc_instance_ids)
 
     i = 0
+    m_instance = max(len(flag_by_instance) // 10, 5)
     for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
 
         # Show progress
         i = i + 1
-        if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Progress %d of %d' % (i,n_instances))
+        if python_verbose_logwarning and i % m_instance == 0:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Progress %d of %d' % (i,n_instances))
 
         # Assemble the base replacment dict
         replace_dict = {}
@@ -4278,7 +5117,7 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
         else:
             dicom_tags = {}
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Shift date will skip non orig/prim /instances/%s/simplified-tags' % orthanc_instance_id)
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Shift date will skip non orig/prim /instances/%s/simplified-tags' % orthanc_instance_id)
 
         # Loop through separate date/time tags looking for fields to update
         for dicom_field_base in dicom_field_bases:
@@ -4291,7 +5130,7 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
                     replace_dict[time_field] = time_string_new
                 else:
                     if python_verbose_logwarning:
-                        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'No matching time for date: %s, %s'  % (date_field, time_field))
+                        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'No matching time for date: %s, %s'  % (date_field, time_field))
 
         # Loop through combo date/time tags looking for fields to update
         for date_time_field in date_time_fields:
@@ -4360,6 +5199,8 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
             except:
                 if python_verbose_logwarning:
                     orthanc.LogWarning(' ' * global_var['log_indent_level'] + json.dumps(post_data,indent=3))
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
                 return {'status' : 1, 'error_text' : 'Unable to adjust dates'}, None
 
             # Upload the modified_dicom_blob (need to confirm this for python post
@@ -4368,12 +5209,18 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
             except:
                 if python_verbose_logwarning:
                     orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem uploading new image blob')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
                 return {'status' : 2, 'error_text' : 'Problem uploading new image blob'}, None
             orthanc_instance_id_new = json.loads(meta_instance_modified)['ID']
 
             # Store new ID
             orthanc_instance_ids_new += [orthanc_instance_id_new]
     
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
     return {'status': 0}, orthanc_instance_ids_new
 
 # =======================================================
@@ -4443,6 +5290,7 @@ def update_lookup_html():
 
     global global_var
     if python_verbose_logwarning:
+        time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
         global_var['log_indent_level'] += 3
@@ -4454,6 +5302,9 @@ def update_lookup_html():
     if status['status'] != 0:
         if python_verbose_logwarning:
             orthanc.LogWarning(status['error_text'])
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return status
     
     # Map what's on Orthanc now
@@ -4461,6 +5312,9 @@ def update_lookup_html():
     if status['status'] != 0:
         if python_verbose_logwarning:
             orthanc.LogWarning(status['error_text'])
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return status
 
     # Check for the main modality that could be queried
@@ -4470,6 +5324,9 @@ def update_lookup_html():
     file_lookup = '/media/html/lookup/master/lookuptable.html'
     answer, lookup_table = load_lookup_table(file_lookup, make_backup=True)
     if answer['status'] != 0:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
         return answer
 
     # Prepare to output the new
@@ -4830,7 +5687,8 @@ def update_lookup_html():
         lun.write('</html>\n')
 
     if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'update_lookup_table complete')
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
     return {'status': 0}
 
@@ -5306,8 +6164,10 @@ def OnChange(change_type, level, resource_id):
     if change_type == orthanc.ChangeType.STABLE_STUDY:
 
         # Auto anonymization
-        response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=false')
-        response_post = orthanc.RestApiPost('/tools/execute-script', 'gIndent=0')
+        #response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=false')
+        #response_post = orthanc.RestApiPost('/tools/execute-script', 'gIndent=0')
+        global_var['flag_force_anon'] = False
+        global_var['log_indent_level'] = 0
         flag_anonymize_upon_stable = os.getenv('LUA_FLAG_AUTO_ANON_WHEN_STABLE', default='false') == 'true'
         if flag_anonymize_upon_stable:
             response_study = orthanc.RestApiGet('/studies/%s' % resource_id)
@@ -5315,7 +6175,10 @@ def OnChange(change_type, level, resource_id):
             if ('ModifiedFrom' not in meta_study) and ('AnonymizedFrom' not in meta_study):
                 if python_verbose_logwarning:
                     orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Non-anonymized study stable.  Initiating auto anon')
-                response_post = orthanc.RestApiPost('/tools/execute-script', 'OnStableStudyMain(\'%s\', nil, nil)' % resource_id)
+                #response_post = orthanc.RestApiPost('/tools/execute-script', 'OnStableStudyMain(\'%s\', nil, nil)' % resource_id)
+                status = on_stable_study_main(resource_id)
+                if status['status'] != 0:
+                    orthanc.LogWarning('Auto anon failed: %s' % status['error_text'])
 
         # Email updates
         if os.getenv('PYTHON_MAIL_AUTO', default='false') == 'true':
@@ -5351,7 +6214,14 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
     """Setup data for javascript anonymizer."""
 # ----------------------------------------------------------------------------
 
+    global global_var
     if request['method'] == 'GET':
+
+        if python_verbose_logwarning:
+            time_0 = time.time()
+            frame = inspect.currentframe()
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+            global_var['log_indent_level'] += 3
 
         answer = {'status': 0}
 
@@ -5549,6 +6419,10 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
         output.AnswerBuffer(json.dumps(data_for_anonymize_gui, indent = 3), 'application/json')
     else:
         output.SendMethodNotAllowed('GET')
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
 # ============================================================================
 def PreScreenSendToRemoteLua(output, uri, **request):
@@ -5982,7 +6856,22 @@ def TogglePythonMailAuto(output, uri, **request):
         else:
             output.AnswerBuffer('Previous PYTHON_MAIL_AUTO: %s\nCurrent PYTHON_MAIL_AUTO: %s\nYou will NOT receive email updates until this setting is reversed.' % (python_mail_auto_prev, python_mail_auto), 'text/plain')
 
- # ============================================================================
+# ============================================================================
+def TogglePythonVerbose(output, uri, **request):
+    """ Api to toggle state of verbose log warnings from python """
+# ----------------------------------------------------------------------------
+
+    global python_verbose_logwarning
+    if user_permitted(uri, get_remote_user(request['headers'])):
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'python_verbose_logwarning was ON, turning OFF...')
+            output.AnswerBuffer('python_verbose_logwarning was ON, now OFF', 'text/plain')
+        else:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'python_verbose_logwarning was OFF, turning ON...')
+            output.AnswerBuffer('python_verbose_logwarning was OFF, now ON', 'text/plain')
+        python_verbose_logwarning = not python_verbose_logwarning 
+
+# ============================================================================
 def UpdateLookupTable(output, uri, **request):
     """ API to trigger update_lookup_table """
 # ----------------------------------------------------------------------------
@@ -6049,6 +6938,7 @@ orthanc.RegisterRestCallback('/shift_date_time_patage_of_instances_lua', ShiftDa
 orthanc.RegisterRestCallback('/toggle_lua_flag_assume_original_primary', ToggleLuaFlagAssumeOriginalPrimary)
 orthanc.RegisterRestCallback('/toggle_lua_verbose', ToggleLuaVerbose)
 orthanc.RegisterRestCallback('/toggle_python_mail_auto', TogglePythonMailAuto)
+orthanc.RegisterRestCallback('/toggle_python_verbose', TogglePythonVerbose)
 orthanc.RegisterRestCallback('/update_lookup_table', UpdateLookupTable)
 orthanc.RegisterRestCallback('/update_lookup_table_html_lua', UpdateLookupTableHTMLLua)
 

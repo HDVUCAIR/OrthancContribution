@@ -201,7 +201,7 @@ services:
 
   phi_orthanc_index:
     image: postgres:9.4
-    user: "999:999"
+    user: "$POSTGRES_UID:$POSTGRES_GID"
     environment:
       PGDATA: "/var/lib/postgresql/data/pgdata"
       PG_USER: "${COMMON_BASENAME}_phi_orthanc"
@@ -399,7 +399,7 @@ services:
 
   anon_orthanc_index:
     image: postgres:9.4
-    user: "999:999"
+    user: "$POSTGRES_UID:$POSTGRES_GID"
     environment:
       PGDATA: "/var/lib/postgresql/data/pgdata"
       PG_USER: "${COMMON_BASENAME}_anon_orthanc"
@@ -582,7 +582,7 @@ services:
 
   disk_orthanc_index:
     image: postgres:9.4
-    user: "999:999"
+    user: "$POSTGRES_UID:$POSTGRES_GID"
     environment:
       PGDATA: "/var/lib/postgresql/data/pgdata"
       PG_USER: "${COMMON_BASENAME}_disk_orthanc"

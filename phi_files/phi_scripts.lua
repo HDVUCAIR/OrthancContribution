@@ -3941,397 +3941,397 @@ end
 -- 
 -- end
 -- 
--- ======================================================
-function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Anonymizing ' .. aoStudyID) end
-    if gVerbose and gFlagForceAnon then print(string.rep(' ', gIndent) .. 'Forcing anonymization') end
-    local lTime0 = os.time()
-    local loSystemMeta = ParseJson(RestApiGet('/system', false))
-    local loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
-    if (not loStudyMeta) then
-        if gVerbose then print('No meta in response') end
-        return
-    end
-    if string.find(loStudyMeta['PatientMainDicomTags']['PatientName'], loSystemMeta['Name']) then 
-        if gVerbose then print('Appears to be already anonymized (name match)') end
-        return
-    end
-
-    local lFlagImagesSent = false
-    if (not loStudyMeta['ModifiedFrom']) and (not loStudyMeta['AnonymizedFrom']) and (not loStudyMeta['ModifiedFrom']) then
-
-        -- Check that previously anonymized studies are not on Orthanc
-        if not gFlagForceAnon then
-            for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
-                local loOtherStudyMeta = ParseJson(RestApiGet('/studies/' .. loOtherStudyID, false))
-                if (loOtherStudyMeta['AnonymizedFrom'] == aoStudyID) or (loOtherStudyMeta['ModifiedFrom'] == aoStudyID) then
-                   if gVerbose then print('already anonymized') end
-                   gIndent = gIndent - 3
-                   if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-                   if gIndent > 0 then gIndent = gIndent - 3 end
-                   return
-                end 
-            end
-        end
-
-        -- Filter by original/primary and other status
-        local lFlagPreScreenSendToRemote = os.getenv('LUA_FLAG_PRESCREEN_ORIGINAL_PRIMARY') == 'true'
-        if lFlagPreScreenSendToRemote then
-            local lFlagDeleted, lNSeriesStart, lNSeriesDeleted
-            -- lFlagDeleted, lNSeriesStart, lNSeriesDeleted = PreScreenSendToRemote(aoStudyID) 
-            lResults = ParseJson(RestApiPost('/prescreen_send_to_remote_lua', DumpJson(aoStudyID), false))
-            lFlagDeleted = lResults['FlagDeleted']
-            lNSeriesStart = lResults['NSeriesStart']
-            lNSeriesDeleted = lResults['NSeriesDeleted']
-            if lFlagDeleted then
-                loStudyMeta = nil
-                for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
-                    if (loOtherStudyID == aoStudyID) then
-                        loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
-                    end
-                end
-            end
-            if not loStudyMeta then
-                gIndent = gIndent - 3
-                if gVerbose then 
-                    print(string.rep(' ', gIndent) .. 'All series deleted by prefilter. Aborting anonymization.')
-                    print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0)
-                end
-                if gIndent > 0 then gIndent = gIndent - 3 end
-                return
-            end
-        end
-
-        -- Filter by modality
-        local lFlagPreScreenByModality = os.getenv('LUA_FLAG_PRESCREEN_BY_MODALITY') == 'true'
-        if lFlagPreScreenByModality then
-            local lFlagDeleted, lNSeriesStart, lNSeriesDeleted
-            -- lFlagDeleted, lNSeriesStart, lNSeriesDeleted = PreScreenSeriesByModality(aoStudyID) 
-            lResults = ParseJson(RestApiPost('/prescreen_send_to_remote_lua', DumpJson(aoStudyID), false))
-            lFlagDeleted = lResults['FlagDeleted']
-            lNSeriesStart = lResults['NSeriesStart']
-            lNSeriesDeleted = lResults['NSeriesDeleted']
-            if lFlagDeleted then
-                loStudyMeta = nil
-                for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
-                    if (loOtherStudyID == aoStudyID) then
-                        loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
-                    end
-                end
-            end
-            if not loStudyMeta then
-                gIndent = gIndent - 3
-                if gVerbose then 
-                    print(string.rep(' ', gIndent) .. 'All series deleted by modality. Aborting anonymization.')
-                    print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0)
-                end
-                if gIndent > 0 then gIndent = gIndent - 3 end
-                return
-            end
-        end
-
-        local lFlagAnonymizeBySeries = os.getenv('LUA_FLAG_ANON_BY_SERIES') == 'true'
-        if lFlagAnonymizeBySeries then
-            local lFlagSplit2DFromCViewTomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO') == 'true'
-            if lFlagSplit2DFromCViewTomo then
-                -- local lFlagComplete = CheckSplit2DFromCViewTomo(aoStudyID)
-                lFlagComplete = ParseJson(RestApiPost('/check_split_2d_from_cview_tomo_lua', DumpJson(aoStudyID), false))
-                if not lFlagComplete then return end
-            end
-            local lPostData = {}
-            lPostData['StudyID'] = aoStudyID
-            if loStudyMeta then lPostData['StudyMeta'] = loStudyMeta end
-            if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
-            if gAddressList then lPostData['AddressList'] = gAddressList end
-            if gFlagForceAnon then lPostData['FlagForceAnon'] = gFlagForceAnon end
-            if gKeptUID then lPostData['KeptUID'] = gKeptUID end
-            if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
-            if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
-            if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
-            if gUIDMap then lPostData['UIDMap'] = gUIDMap end
-            local lStatus = ParseJson(RestApiPost('/anonymize_study_by_series_lua', DumpJson(lPostData), false))
-            if lStatus['status'] ~= 0 then
-                error(lStatus['error_text'])
-            end
-            -- AnonymizeStudyBySeries(aoStudyID, loStudyMeta)
-            if gIndent > 0 then gIndent = gIndent - 3 end
-            if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-            if gIndent > 0 then gIndent = gIndent - 3 end
-            return
-        end
-
---         if gSQLOpen then
---             if gSQLConn then
---                 CloseSQL()
+-- -- ======================================================
+-- function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Anonymizing ' .. aoStudyID) end
+--     if gVerbose and gFlagForceAnon then print(string.rep(' ', gIndent) .. 'Forcing anonymization') end
+--     local lTime0 = os.time()
+--     local loSystemMeta = ParseJson(RestApiGet('/system', false))
+--     local loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+--     if (not loStudyMeta) then
+--         if gVerbose then print('No meta in response') end
+--         return
+--     end
+--     if string.find(loStudyMeta['PatientMainDicomTags']['PatientName'], loSystemMeta['Name']) then 
+--         if gVerbose then print('Appears to be already anonymized (name match)') end
+--         return
+--     end
+-- 
+--     local lFlagImagesSent = false
+--     if (not loStudyMeta['ModifiedFrom']) and (not loStudyMeta['AnonymizedFrom']) and (not loStudyMeta['ModifiedFrom']) then
+-- 
+--         -- Check that previously anonymized studies are not on Orthanc
+--         if not gFlagForceAnon then
+--             for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
+--                 local loOtherStudyMeta = ParseJson(RestApiGet('/studies/' .. loOtherStudyID, false))
+--                 if (loOtherStudyMeta['AnonymizedFrom'] == aoStudyID) or (loOtherStudyMeta['ModifiedFrom'] == aoStudyID) then
+--                    if gVerbose then print('already anonymized') end
+--                    gIndent = gIndent - 3
+--                    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--                    if gIndent > 0 then gIndent = gIndent - 3 end
+--                    return
+--                 end 
 --             end
 --         end
---         gSQLOpen = false
---         OpenSQL()
-
-        -- We modify the incoming patientIDs based on descriptions
-        -- If "screen" appears in the description, the modifier is 's' else 'd' for diagnostic
-        -- This has the effect of generating possibly to anonymous subjects for each incoming subject
-        -- Comment out the call to the routine if you want normal use of PatientIDs
-        local lPatientIDModifier = ''
-        local lFlagSplitScreenFromDiagnostic = os.getenv('LUA_FLAG_SPLIT_SCREEN_DIAG') == 'true'
-        -- if lFlagSplitScreenFromDiagnostic then lPatientIDModifier = SetScreenOrDiagnostic(aoStudyID) end
-        if lFlagSplitScreenFromDiagnostic then lPatientIDModifier = RestApiGet('/studies/' .. aoStudyID .. '/set_screen_or_diagnostic', false) end
-        local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
-        if lFlagEveryAccessionAPatient then lPatientIDModifier = '_' .. loStudyMeta['MainDicomTags']['AccessionNumber'] end
-
-        -- Check to see if this subject was previously anonymized
-        -- StudyInstanceUID is only modified when anonymizing at the series level
-        local lStudyInstanceUIDModifier = ''
-        local lSQLpid, ldPatientIDAnon, lSQLsiuid, ldStudyInstanceUIDAnon
-        -- local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(loStudyMeta,lPatientIDModifier)
-        local lPostData = {}
-        lPostData['OrthancStudyID'] = loStudyMeta['ID']
-        if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
-        local lResults
-        lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
-        if lResults['status'] and lResults['status'] > 0 then
---             gSQLConn:rollback()
---             CloseSQL()
-            error(lResults['error_text'])
-        end
-        local lFlagNewPatientID = lResults['FlagPatientNewID']
-        local lSQLpid = lResults['SQLpid']
-        local ldPatientIDAnon = lResults['PatientIDAnon']
-        -- local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(loStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
-        local lPostData = {}
-        lPostData['OrthancStudyID'] = loStudyMeta['ID']
-        lPostData['SQLpid'] = lSQLpid
-        if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
-        local lResults
-        lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
-        if lResults['status'] then error(lResults['error_text']) end
-        local lFlagNewStudyInstanceUID = lResults['FlagNewStudyInstanceUID']
-        local lSQLsiuid = lResults['SQLsiuid']
-        local ldStudyInstanceUIDAnon = lResults['StudyInstanceUIDAnon']
-
-        -- We're not going to bother anonymizing unless either a new patient or study
-        local lFlagNonOriginalDetected = false
-        local lFlagForceAnon = false or gFlagForceAnon
-        if lFlagForceAnon or (lFlagNewPatientID or lFlagNewStudyInstanceUID) then
-
-            -- First pass anonymization
-            local loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon
-            local lFlagFirstCall = true
-            if false then
-                -- If you set the above to true, be sure to uncomment the Lua routine
-                loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon = AnonymizeInstances('Study', aoStudyID, lFlagFirstCall, 
-                                                                                           lSQLpid,ldPatientIDAnon,
-                                                                                           lSQLsiuid,ldStudyInstanceUIDAnon, lPatientIDModifier)
-            else
-                local lPostData = {}
-                if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
-                if gAddressList then lPostData['AddressList'] = gAddressList end
-                lPostData['FlagFirstCall'] = lFlagFirstCall
-                if gKeptUID then lPostData['KeptUID'] = gKeptUID end
-                lPostData['Level'] = 'Study'
-                lPostData['LevelID'] = aoStudyID
-                if ldPatientIDAnon then lPostData['PatientIDAnon'] = ldPatientIDAnon end
-                if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
-                if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
-                if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
-                lPostData['SQLpid'] = lSQLpid
-                lPostData['SQLsiuid'] = lSQLsiuid
-                if ldStudyInstanceUIDAnon then lPostData['StudyInstanceUIDAnon'] = ldStudyInstanceUIDAnon end
-                if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
-                if gUIDMap then lPostData['UIDMap'] = gUIDMap end
-                local lResult = ParseJson(RestApiPost('/anonymize_instances_lua', DumpJson(lPostData,false)))
-                if lResult['status'] then error('Problem with anonymization ' .. lResult['error_text']) end
-                if lResult['AddressConstructor'] then gAddressConstructor = lResult['AddressConstructor'] end
-                if lResult['AddressList'] then gAddressList  = lResult['AddressList'] end
-                loInstancesAnonMeta = lResult['InstancesAnonMeta']
-                if lResult['KeptUID'] then gKeptUID = lResult['KeptUID'] end
-                if lResult['PatientNameAnon'] then ldPatientNameAnon = lResult['PatientNameAnon'] end
-                if lResult['PatientNameBase'] then gPatientNameBase  = lResult['PatientNameBase'] end
-                if lResult['PatientNameIDChar'] then gPatientNameIDChar  = lResult['PatientNameIDChar'] end
-                loStudyIDAnon = lResult['StudyIDAnon']
-                if lResult['TopLevelTagToKeep'] then gTopLevelTagToKeep  = lResult['TopLevelTagToKeep'] end
-                if lResult['UIDMap'] then gUIDMap = lResult['UIDMap'] end
-            end
-
---             print('post anon -----------------------------------')
---             if gAddressConstructor then
---                 print('gAddressConstructor')
---                 print(DumpJson(gAddressConstructor))
+-- 
+--         -- Filter by original/primary and other status
+--         local lFlagPreScreenSendToRemote = os.getenv('LUA_FLAG_PRESCREEN_ORIGINAL_PRIMARY') == 'true'
+--         if lFlagPreScreenSendToRemote then
+--             local lFlagDeleted, lNSeriesStart, lNSeriesDeleted
+--             -- lFlagDeleted, lNSeriesStart, lNSeriesDeleted = PreScreenSendToRemote(aoStudyID) 
+--             lResults = ParseJson(RestApiPost('/prescreen_send_to_remote_lua', DumpJson(aoStudyID), false))
+--             lFlagDeleted = lResults['FlagDeleted']
+--             lNSeriesStart = lResults['NSeriesStart']
+--             lNSeriesDeleted = lResults['NSeriesDeleted']
+--             if lFlagDeleted then
+--                 loStudyMeta = nil
+--                 for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
+--                     if (loOtherStudyID == aoStudyID) then
+--                         loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+--                     end
+--                 end
 --             end
---             if gAddressList then
---                 print('gAddressList')
---                 print(DumpJson(gAddressList))
+--             if not loStudyMeta then
+--                 gIndent = gIndent - 3
+--                 if gVerbose then 
+--                     print(string.rep(' ', gIndent) .. 'All series deleted by prefilter. Aborting anonymization.')
+--                     print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0)
+--                 end
+--                 if gIndent > 0 then gIndent = gIndent - 3 end
+--                 return
 --             end
---             if gKeptUID then
---                 print('gKeptUID')
---                 print(DumpJson(gKeptUID))
+--         end
+-- 
+--         -- Filter by modality
+--         local lFlagPreScreenByModality = os.getenv('LUA_FLAG_PRESCREEN_BY_MODALITY') == 'true'
+--         if lFlagPreScreenByModality then
+--             local lFlagDeleted, lNSeriesStart, lNSeriesDeleted
+--             -- lFlagDeleted, lNSeriesStart, lNSeriesDeleted = PreScreenSeriesByModality(aoStudyID) 
+--             lResults = ParseJson(RestApiPost('/prescreen_send_to_remote_lua', DumpJson(aoStudyID), false))
+--             lFlagDeleted = lResults['FlagDeleted']
+--             lNSeriesStart = lResults['NSeriesStart']
+--             lNSeriesDeleted = lResults['NSeriesDeleted']
+--             if lFlagDeleted then
+--                 loStudyMeta = nil
+--                 for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
+--                     if (loOtherStudyID == aoStudyID) then
+--                         loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+--                     end
+--                 end
 --             end
+--             if not loStudyMeta then
+--                 gIndent = gIndent - 3
+--                 if gVerbose then 
+--                     print(string.rep(' ', gIndent) .. 'All series deleted by modality. Aborting anonymization.')
+--                     print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0)
+--                 end
+--                 if gIndent > 0 then gIndent = gIndent - 3 end
+--                 return
+--             end
+--         end
+-- 
+--         local lFlagAnonymizeBySeries = os.getenv('LUA_FLAG_ANON_BY_SERIES') == 'true'
+--         if lFlagAnonymizeBySeries then
+--             local lFlagSplit2DFromCViewTomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO') == 'true'
+--             if lFlagSplit2DFromCViewTomo then
+--                 -- local lFlagComplete = CheckSplit2DFromCViewTomo(aoStudyID)
+--                 lFlagComplete = ParseJson(RestApiPost('/check_split_2d_from_cview_tomo_lua', DumpJson(aoStudyID), false))
+--                 if not lFlagComplete then return end
+--             end
+--             local lPostData = {}
+--             lPostData['StudyID'] = aoStudyID
+--             if loStudyMeta then lPostData['StudyMeta'] = loStudyMeta end
+--             if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
+--             if gAddressList then lPostData['AddressList'] = gAddressList end
+--             if gFlagForceAnon then lPostData['FlagForceAnon'] = gFlagForceAnon end
+--             if gKeptUID then lPostData['KeptUID'] = gKeptUID end
+--             if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
+--             if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
+--             if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
+--             if gUIDMap then lPostData['UIDMap'] = gUIDMap end
+--             local lStatus = ParseJson(RestApiPost('/anonymize_study_by_series_lua', DumpJson(lPostData), false))
+--             if lStatus['status'] ~= 0 then
+--                 error(lStatus['error_text'])
+--             end
+--             -- AnonymizeStudyBySeries(aoStudyID, loStudyMeta)
+--             if gIndent > 0 then gIndent = gIndent - 3 end
+--             if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--             if gIndent > 0 then gIndent = gIndent - 3 end
+--             return
+--         end
+-- 
+-- --         if gSQLOpen then
+-- --             if gSQLConn then
+-- --                 CloseSQL()
+-- --             end
+-- --         end
+-- --         gSQLOpen = false
+-- --         OpenSQL()
+-- 
+--         -- We modify the incoming patientIDs based on descriptions
+--         -- If "screen" appears in the description, the modifier is 's' else 'd' for diagnostic
+--         -- This has the effect of generating possibly to anonymous subjects for each incoming subject
+--         -- Comment out the call to the routine if you want normal use of PatientIDs
+--         local lPatientIDModifier = ''
+--         local lFlagSplitScreenFromDiagnostic = os.getenv('LUA_FLAG_SPLIT_SCREEN_DIAG') == 'true'
+--         -- if lFlagSplitScreenFromDiagnostic then lPatientIDModifier = SetScreenOrDiagnostic(aoStudyID) end
+--         if lFlagSplitScreenFromDiagnostic then lPatientIDModifier = RestApiGet('/studies/' .. aoStudyID .. '/set_screen_or_diagnostic', false) end
+--         local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
+--         if lFlagEveryAccessionAPatient then lPatientIDModifier = '_' .. loStudyMeta['MainDicomTags']['AccessionNumber'] end
+-- 
+--         -- Check to see if this subject was previously anonymized
+--         -- StudyInstanceUID is only modified when anonymizing at the series level
+--         local lStudyInstanceUIDModifier = ''
+--         local lSQLpid, ldPatientIDAnon, lSQLsiuid, ldStudyInstanceUIDAnon
+--         -- local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(loStudyMeta,lPatientIDModifier)
+--         local lPostData = {}
+--         lPostData['OrthancStudyID'] = loStudyMeta['ID']
+--         if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+--         local lResults
+--         lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
+--         if lResults['status'] and lResults['status'] > 0 then
+-- --             gSQLConn:rollback()
+-- --             CloseSQL()
+--             error(lResults['error_text'])
+--         end
+--         local lFlagNewPatientID = lResults['FlagPatientNewID']
+--         local lSQLpid = lResults['SQLpid']
+--         local ldPatientIDAnon = lResults['PatientIDAnon']
+--         -- local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(loStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
+--         local lPostData = {}
+--         lPostData['OrthancStudyID'] = loStudyMeta['ID']
+--         lPostData['SQLpid'] = lSQLpid
+--         if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
+--         local lResults
+--         lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
+--         if lResults['status'] then error(lResults['error_text']) end
+--         local lFlagNewStudyInstanceUID = lResults['FlagNewStudyInstanceUID']
+--         local lSQLsiuid = lResults['SQLsiuid']
+--         local ldStudyInstanceUIDAnon = lResults['StudyInstanceUIDAnon']
+-- 
+--         -- We're not going to bother anonymizing unless either a new patient or study
+--         local lFlagNonOriginalDetected = false
+--         local lFlagForceAnon = false or gFlagForceAnon
+--         if lFlagForceAnon or (lFlagNewPatientID or lFlagNewStudyInstanceUID) then
+-- 
+--             -- First pass anonymization
+--             local loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon
+--             local lFlagFirstCall = true
+--             if false then
+--                 -- If you set the above to true, be sure to uncomment the Lua routine
+--                 loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon = AnonymizeInstances('Study', aoStudyID, lFlagFirstCall, 
+--                                                                                            lSQLpid,ldPatientIDAnon,
+--                                                                                            lSQLsiuid,ldStudyInstanceUIDAnon, lPatientIDModifier)
+--             else
+--                 local lPostData = {}
+--                 if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
+--                 if gAddressList then lPostData['AddressList'] = gAddressList end
+--                 lPostData['FlagFirstCall'] = lFlagFirstCall
+--                 if gKeptUID then lPostData['KeptUID'] = gKeptUID end
+--                 lPostData['Level'] = 'Study'
+--                 lPostData['LevelID'] = aoStudyID
+--                 if ldPatientIDAnon then lPostData['PatientIDAnon'] = ldPatientIDAnon end
+--                 if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+--                 if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
+--                 if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
+--                 lPostData['SQLpid'] = lSQLpid
+--                 lPostData['SQLsiuid'] = lSQLsiuid
+--                 if ldStudyInstanceUIDAnon then lPostData['StudyInstanceUIDAnon'] = ldStudyInstanceUIDAnon end
+--                 if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
+--                 if gUIDMap then lPostData['UIDMap'] = gUIDMap end
+--                 local lResult = ParseJson(RestApiPost('/anonymize_instances_lua', DumpJson(lPostData,false)))
+--                 if lResult['status'] then error('Problem with anonymization ' .. lResult['error_text']) end
+--                 if lResult['AddressConstructor'] then gAddressConstructor = lResult['AddressConstructor'] end
+--                 if lResult['AddressList'] then gAddressList  = lResult['AddressList'] end
+--                 loInstancesAnonMeta = lResult['InstancesAnonMeta']
+--                 if lResult['KeptUID'] then gKeptUID = lResult['KeptUID'] end
+--                 if lResult['PatientNameAnon'] then ldPatientNameAnon = lResult['PatientNameAnon'] end
+--                 if lResult['PatientNameBase'] then gPatientNameBase  = lResult['PatientNameBase'] end
+--                 if lResult['PatientNameIDChar'] then gPatientNameIDChar  = lResult['PatientNameIDChar'] end
+--                 loStudyIDAnon = lResult['StudyIDAnon']
+--                 if lResult['TopLevelTagToKeep'] then gTopLevelTagToKeep  = lResult['TopLevelTagToKeep'] end
+--                 if lResult['UIDMap'] then gUIDMap = lResult['UIDMap'] end
+--             end
+-- 
+-- --             print('post anon -----------------------------------')
+-- --             if gAddressConstructor then
+-- --                 print('gAddressConstructor')
+-- --                 print(DumpJson(gAddressConstructor))
+-- --             end
+-- --             if gAddressList then
+-- --                 print('gAddressList')
+-- --                 print(DumpJson(gAddressList))
+-- --             end
+-- --             if gKeptUID then
+-- --                 print('gKeptUID')
+-- --                 print(DumpJson(gKeptUID))
+-- --             end
+-- --             if ldPatientNameAnon then
+-- --                 print('ldPatientNameAnon')
+-- --                 print(ldPatientNameAnon)
+-- --             end
+-- --             if gPatientNameBase then
+-- --                 print('gPatientNameBase')
+-- --                 print(gPatientNameBase)
+-- --             end
+-- --             if gPatientNameIDChar then
+-- --                 print('gPatientNameIDChar')
+-- --                 print(gPatientNameIDChar)
+-- --             end
+-- --             if gTopLevelTagToKeep then
+-- --                 print('gTopLevelTagToKeep')
+-- --                 print(DumpJson(gTopLevelTagToKeep))
+-- --             end
+-- --             if gUIDMap then
+-- --                 print('gUIDMap')
+-- --                 print(DumpJson(gUIDMap))
+-- --             end
+-- 
+--             -- Set up old-->new UID map
+--             local lFlagRemapSOPInstanceUID = true
+--             local lFlagRemapKeptUID = true
+--             -- gUIDMap, gUIDType = MapUIDOldToNew(loStudyIDAnon,lFlagRemapSOPInstanceUID,lFlagRemapKeptUID)
+--             local lPostData = {}
+--             lPostData['StudyIDNew'] = loStudyIDAnon
+--             lPostData['FlagRemapSOPInstanceUID'] = lFlagRemapSOPInstanceUID
+--             lPostData['FlagRemapKeptUID'] = lFlagRemapKeptUID
+--             lPostData['KeptUID'] = gKeptUID
+--             local lResults = ParseJson(RestApiPost('/map_uid_old_to_new_lua', DumpJson(lPostData), false))
+--             gUIDMap = lResults['UIDMap']
+--             gUIDType = lResults['UIDType']
+-- --             print('----------------map gen')
+-- --             if gUIDMap then
+-- --                 print('gUIDMap')
+-- --                 print(DumpJson(gUIDMap))
+-- --             end
+-- --             if gUIDType then
+-- --                 print('gUIDType')
+-- --                 print(DumpJson(gUIDType))
+-- --             end
+--             
+--             -- Set up replacements for AccessionNumber and StudyID
+--             local lReplaceRoot = {}
+--             lReplaceRoot['AccessionNumber'] = string.sub(loStudyIDAnon,1,8) .. string.sub(loStudyIDAnon,10,17)
+--             lReplaceRoot['StudyID'] = string.sub(loStudyIDAnon,19,26) .. string.sub(loStudyIDAnon,28,35)
+--     
+--             -- Check for existing lShiftEpoch
+--             -- local lShiftEpoch = LoadShiftEpochFromDB(lSQLpid)
+--             local lPostData = {}
+--             lPostData['SQLpid'] = lSQLpid
+--             local lStatus = ParseJson(RestApiPost('/load_shift_epoch_from_db_lua', DumpJson(lPostData), false))
+--             if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
+--             local lShiftEpoch = lStatus['ShiftEpoch']
+-- 
+--             -- Compute lShiftEpoch
+--             if not lShiftEpoch then 
+--                 -- Compute lShiftEpoch (used to shift earliest date to Jan 01 same year)
+--                 -- lShiftEpoch = ComputeShiftEpochFromEarliestDate(loInstancesAnonMeta)
+--                 -- Compute random shift up to one year
+--                 math.randomseed(os.time())
+--                 lShiftEpoch = math.floor(math.floor(math.random() * 365.0) * 24.0 * 3600.0)
+--                 -- SaveShiftEpochToDB(lShiftEpoch,lSQLpid)
+--                 local lPostData = {}
+--                 lPostData['SQLpid'] = lSQLpid
+--                 lPostData['ShiftEpoch'] = lShiftEpoch
+--                 local lStatus = ParseJson(RestApiPost('/save_shift_epoch_to_db_lua', DumpJson(lPostData), false))
+--                 if lStatus['status'] and lStatus['status'] > 0 then
+--                     error('Problem saving ShiftEpoch to DB')
+--                 end
+--             end
+-- 
+--             -- For some cases, we keep the dates, so lShiftEpoch=0
+--             local lFlagKeepOriginalDates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES') == 'true'
+--             if lFlagKeepOriginalDates then
+--                 local currentTime = os.time
+--                 lShiftEpoch = 0
+--             end
+-- 
+--             -- Second pass anonymization creates files modified by lShiftEpoch
+--             -- Deletes First pass anonymized files following lShiftEpoch modification
+--             local lPostData = {}
+--             lPostData['InstancesMeta'] = loInstancesAnonMeta
+--             lPostData['ShiftEpoch'] = lShiftEpoch
+--             lPostData['ReplaceRoot'] = lReplaceRoot
+--             lPostData['UIDMap'] = gUIDMap
+--             lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep
+--             lPostData['AddressList'] = gAddressList
+--             lPostData['KeptUID'] = gKeptUID
+--             -- local loInstanceIDNew = ShiftDateTimePatAgeOfInstances(loInstancesAnonMeta, lShiftEpoch, lReplaceRoot)
+--             local lResults = ParseJson(RestApiPost('/shift_date_time_patage_of_instances_lua', DumpJson(lPostData), false))
+--             if lResults['status'] ~= 0 then
+--                 error('Problem calling python shift date time patage')
+--             end
+--             loInstanceIDNew = lResults['InstanceIDNew']
+--     
+--             -- Delete the original instance
+--             for i, loInstanceAnonMeta in pairs(loInstancesAnonMeta) do
+--                 loInstanceID = (loInstanceAnonMeta['ID'])
+--                 RestApiDelete('/instances/' .. loInstanceID, false)
+--                 --Delete(loInstanceID)
+--             end -- loop over loInstancesAnonMeta
+--     
+--             -- Send to receiving modality
+--             local lPostData = {}
+--             lPostData['orthanc_instance_ids'] = {}
+--             for i, loInstanceID in pairs(loInstanceIDNew) do
+--                 table.insert(lPostData['orthanc_instance_ids'], loInstanceID)
+--             end
+--             local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
+--             if not lResults then
+--                error('Problem calling send_instances_to_remote_filter_lua')
+--             end 
+--             -- for i, loInstanceID in pairs(loInstanceIDNew) do
+--             for loInstanceID, lFlagSendToRemote in pairs(lResults) do
+--                 -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
+--                 if lFlagSendToRemote then
+--                     local dumby=3
+--                     if not lFlagForceAnon then
+--                         -- RestApiPost('/modalities/' .. os.getenv('LUA_ANON_ORTHANC') .. '/store', loInstanceID, false)
+--                         lFlagImagesSent = true
+--                     end
+--                 else
+--                     RestApiDelete('/instances/' .. loInstanceID, false)
+--                     lFlagNonOriginalDetected = true
+--                 end
+--             end
+-- 
+--             if gVerbose then print(string.rep(' ',gIndent) .. 'Updating lookup table') end
+--             RestApiGet('/update_lookup_table_html_lua', false)
+--             -- UpdateLookupHTML()
 --             if ldPatientNameAnon then
---                 print('ldPatientNameAnon')
---                 print(ldPatientNameAnon)
+--                 SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete:' .. ldPatientNameAnon)
+--             else
+--                 SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete.')
 --             end
---             if gPatientNameBase then
---                 print('gPatientNameBase')
---                 print(gPatientNameBase)
---             end
---             if gPatientNameIDChar then
---                 print('gPatientNameIDChar')
---                 print(gPatientNameIDChar)
---             end
---             if gTopLevelTagToKeep then
---                 print('gTopLevelTagToKeep')
---                 print(DumpJson(gTopLevelTagToKeep))
---             end
---             if gUIDMap then
---                 print('gUIDMap')
---                 print(DumpJson(gUIDMap))
---             end
-
-            -- Set up old-->new UID map
-            local lFlagRemapSOPInstanceUID = true
-            local lFlagRemapKeptUID = true
-            -- gUIDMap, gUIDType = MapUIDOldToNew(loStudyIDAnon,lFlagRemapSOPInstanceUID,lFlagRemapKeptUID)
-            local lPostData = {}
-            lPostData['StudyIDNew'] = loStudyIDAnon
-            lPostData['FlagRemapSOPInstanceUID'] = lFlagRemapSOPInstanceUID
-            lPostData['FlagRemapKeptUID'] = lFlagRemapKeptUID
-            lPostData['KeptUID'] = gKeptUID
-            local lResults = ParseJson(RestApiPost('/map_uid_old_to_new_lua', DumpJson(lPostData), false))
-            gUIDMap = lResults['UIDMap']
-            gUIDType = lResults['UIDType']
---             print('----------------map gen')
---             if gUIDMap then
---                 print('gUIDMap')
---                 print(DumpJson(gUIDMap))
---             end
---             if gUIDType then
---                 print('gUIDType')
---                 print(DumpJson(gUIDType))
---             end
-            
-            -- Set up replacements for AccessionNumber and StudyID
-            local lReplaceRoot = {}
-            lReplaceRoot['AccessionNumber'] = string.sub(loStudyIDAnon,1,8) .. string.sub(loStudyIDAnon,10,17)
-            lReplaceRoot['StudyID'] = string.sub(loStudyIDAnon,19,26) .. string.sub(loStudyIDAnon,28,35)
-    
-            -- Check for existing lShiftEpoch
-            -- local lShiftEpoch = LoadShiftEpochFromDB(lSQLpid)
-            local lPostData = {}
-            lPostData['SQLpid'] = lSQLpid
-            local lStatus = ParseJson(RestApiPost('/load_shift_epoch_from_db_lua', DumpJson(lPostData), false))
-            if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
-            local lShiftEpoch = lStatus['ShiftEpoch']
-
-            -- Compute lShiftEpoch
-            if not lShiftEpoch then 
-                -- Compute lShiftEpoch (used to shift earliest date to Jan 01 same year)
-                -- lShiftEpoch = ComputeShiftEpochFromEarliestDate(loInstancesAnonMeta)
-                -- Compute random shift up to one year
-                math.randomseed(os.time())
-                lShiftEpoch = math.floor(math.floor(math.random() * 365.0) * 24.0 * 3600.0)
-                -- SaveShiftEpochToDB(lShiftEpoch,lSQLpid)
-                local lPostData = {}
-                lPostData['SQLpid'] = lSQLpid
-                lPostData['ShiftEpoch'] = lShiftEpoch
-                local lStatus = ParseJson(RestApiPost('/save_shift_epoch_to_db_lua', DumpJson(lPostData), false))
-                if lStatus['status'] and lStatus['status'] > 0 then
-                    error('Problem saving ShiftEpoch to DB')
-                end
-            end
-
-            -- For some cases, we keep the dates, so lShiftEpoch=0
-            local lFlagKeepOriginalDates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES') == 'true'
-            if lFlagKeepOriginalDates then
-                local currentTime = os.time
-                lShiftEpoch = 0
-            end
-
-            -- Second pass anonymization creates files modified by lShiftEpoch
-            -- Deletes First pass anonymized files following lShiftEpoch modification
-            local lPostData = {}
-            lPostData['InstancesMeta'] = loInstancesAnonMeta
-            lPostData['ShiftEpoch'] = lShiftEpoch
-            lPostData['ReplaceRoot'] = lReplaceRoot
-            lPostData['UIDMap'] = gUIDMap
-            lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep
-            lPostData['AddressList'] = gAddressList
-            lPostData['KeptUID'] = gKeptUID
-            -- local loInstanceIDNew = ShiftDateTimePatAgeOfInstances(loInstancesAnonMeta, lShiftEpoch, lReplaceRoot)
-            local lResults = ParseJson(RestApiPost('/shift_date_time_patage_of_instances_lua', DumpJson(lPostData), false))
-            if lResults['status'] ~= 0 then
-                error('Problem calling python shift date time patage')
-            end
-            loInstanceIDNew = lResults['InstanceIDNew']
-    
-            -- Delete the original instance
-            for i, loInstanceAnonMeta in pairs(loInstancesAnonMeta) do
-                loInstanceID = (loInstanceAnonMeta['ID'])
-                RestApiDelete('/instances/' .. loInstanceID, false)
-                --Delete(loInstanceID)
-            end -- loop over loInstancesAnonMeta
-    
-            -- Send to receiving modality
-            local lPostData = {}
-            lPostData['orthanc_instance_ids'] = {}
-            for i, loInstanceID in pairs(loInstanceIDNew) do
-                table.insert(lPostData['orthanc_instance_ids'], loInstanceID)
-            end
-            local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
-            if not lResults then
-               error('Problem calling send_instances_to_remote_filter_lua')
-            end 
-            -- for i, loInstanceID in pairs(loInstanceIDNew) do
-            for loInstanceID, lFlagSendToRemote in pairs(lResults) do
-                -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
-                if lFlagSendToRemote then
-                    local dumby=3
-                    if not lFlagForceAnon then
-                        -- RestApiPost('/modalities/' .. os.getenv('LUA_ANON_ORTHANC') .. '/store', loInstanceID, false)
-                        lFlagImagesSent = true
-                    end
-                else
-                    RestApiDelete('/instances/' .. loInstanceID, false)
-                    lFlagNonOriginalDetected = true
-                end
-            end
-
-            if gVerbose then print(string.rep(' ',gIndent) .. 'Updating lookup table') end
-            RestApiGet('/update_lookup_table_html_lua', false)
-            -- UpdateLookupHTML()
-            if ldPatientNameAnon then
-                SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete:' .. ldPatientNameAnon)
-            else
-                SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete.')
-            end
-
-        else -- existing patient/study combo
-
-           if gVerbose then print(string.rep(' ', gIndent) .. 'Skipping re-anon of existing patient/study') end
-
-        end -- endif new patient or new study
-
-        if lFlagNonOriginalDetected then
-            if gVerbose then print('Some non-original images were not sent') end
-        end
-
-        -- CloseSQL()
-        
-    end -- endif no nonanonymized data detected
-
-    if lFlagImagesSent and gVerbose then
-        print(string.rep(' ',gIndent) .. 'Images sent to remote modalities') 
-    end
-
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-
-end
-
+-- 
+--         else -- existing patient/study combo
+-- 
+--            if gVerbose then print(string.rep(' ', gIndent) .. 'Skipping re-anon of existing patient/study') end
+-- 
+--         end -- endif new patient or new study
+-- 
+--         if lFlagNonOriginalDetected then
+--             if gVerbose then print('Some non-original images were not sent') end
+--         end
+-- 
+--         -- CloseSQL()
+--         
+--     end -- endif no nonanonymized data detected
+-- 
+--     if lFlagImagesSent and gVerbose then
+--         print(string.rep(' ',gIndent) .. 'Images sent to remote modalities') 
+--     end
+-- 
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+-- 
+-- end
+-- 
 -- -- ======================================================
 -- function OnStableStudy(aoStudyID, aTags, aoStudyMeta)
 -- 
@@ -5530,69 +5530,69 @@ end
 -- 
 -- end
 -- 
--- ========================================
-function OutgoingFindRequestFilter(query, modality)
-    for key, value in pairs(query) do
-       if value == '*' then
-          query[key] = ''
-       end
-    end
-    return query
-
-end
-
--- ========================================
-function SendEmailUpdate(aSubject, aMessage)
-
-    if gIndent then gIndent=gIndent+3 else gIndent=0 end
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
-    gIndent = gIndent + 3
-    local lTime0 = os.time()
-    local lFlagSendEmailUpdate = os.getenv('LUA_MAIL_AUTO') == 'true'
-    if lFlagSendEmailUpdate then
-
-        local lDataToPython = {}
-        lDataToPython['Subject'] = aSubject
-        lDataToPython['Message'] = aMessage
-        local lPostEmail = ParseJson(RestApiPost('/email_message_lua', DumpJson(lDataToPython,true), false, {['x-remote-user']='lua-SendEmailUpdate'}))
-        if lPostEmail['error_text'] then
-            if gVerbose then print(string.rep(' ', gIndent+3) .. 'Error sending mail ' .. lPostEmail['error_text']) end
-        end
-        
---         local lMailTo = os.getenv('LUA_MAIL_TO'):gsub("^['\"]*(.-)['\"]*$", "%1")
---  
---         smtp = require("socket.smtp")
---         from = os.getenv('ORTHANC__NAME') .. ' <' .. os.getenv('ORTHANC__NAME') .. '@' .. os.getenv('LUA_MAIL_ORIGIN') .. '>'
---         rcpt = {lMailTo}
---         
---         mesgt = {
---            headers = {
---               to = lMailTo, 
---               subject = aSubject
---            },
---            body = aMessage
---         }
---         
---         r, e = smtp.send{
---            server = os.getenv('LUA_MAIL_SERVER'), 
---            from = from, 
---            rcpt = rcpt, 
---            source = smtp.message(mesgt)
---         }
---         if e then
---            print(r)
---            print(e)
---         end
- 
-    end
- 
-    gIndent = gIndent - 3
-    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
-    if gIndent > 0 then gIndent = gIndent - 3 end
-
-end
-
 -- -- ========================================
+-- function OutgoingFindRequestFilter(query, modality)
+--     for key, value in pairs(query) do
+--        if value == '*' then
+--           query[key] = ''
+--        end
+--     end
+--     return query
+-- 
+-- end
+-- 
+-- -- ========================================
+-- function SendEmailUpdate(aSubject, aMessage)
+-- 
+--     if gIndent then gIndent=gIndent+3 else gIndent=0 end
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+--     gIndent = gIndent + 3
+--     local lTime0 = os.time()
+--     local lFlagSendEmailUpdate = os.getenv('LUA_MAIL_AUTO') == 'true'
+--     if lFlagSendEmailUpdate then
+-- 
+--         local lDataToPython = {}
+--         lDataToPython['Subject'] = aSubject
+--         lDataToPython['Message'] = aMessage
+--         local lPostEmail = ParseJson(RestApiPost('/email_message_lua', DumpJson(lDataToPython,true), false, {['x-remote-user']='lua-SendEmailUpdate'}))
+--         if lPostEmail['error_text'] then
+--             if gVerbose then print(string.rep(' ', gIndent+3) .. 'Error sending mail ' .. lPostEmail['error_text']) end
+--         end
+--         
+-- --         local lMailTo = os.getenv('LUA_MAIL_TO'):gsub("^['\"]*(.-)['\"]*$", "%1")
+-- --  
+-- --         smtp = require("socket.smtp")
+-- --         from = os.getenv('ORTHANC__NAME') .. ' <' .. os.getenv('ORTHANC__NAME') .. '@' .. os.getenv('LUA_MAIL_ORIGIN') .. '>'
+-- --         rcpt = {lMailTo}
+-- --         
+-- --         mesgt = {
+-- --            headers = {
+-- --               to = lMailTo, 
+-- --               subject = aSubject
+-- --            },
+-- --            body = aMessage
+-- --         }
+-- --         
+-- --         r, e = smtp.send{
+-- --            server = os.getenv('LUA_MAIL_SERVER'), 
+-- --            from = from, 
+-- --            rcpt = rcpt, 
+-- --            source = smtp.message(mesgt)
+-- --         }
+-- --         if e then
+-- --            print(r)
+-- --            print(e)
+-- --         end
+--  
+--     end
+--  
+--     gIndent = gIndent - 3
+--     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+--     if gIndent > 0 then gIndent = gIndent - 3 end
+-- 
+-- end
+-- 
+-- -- -- ========================================
 -- function PrepareDataForAnonymizeGUI(aQueryPACS)
 -- 
 --     local lQueryPACS = false
