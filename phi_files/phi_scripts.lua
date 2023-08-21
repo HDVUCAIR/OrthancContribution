@@ -1,83 +1,85 @@
+-- These functions have been completely rewritten in python.
+-- They serve only as a reference.
 -- ======================================================
--- function trim(s)
---     return (s:gsub("^%s*(.-)%s*$", "%1"))
--- end
---
--- -- ======================================================
--- function SplitToKeyList(aInputStr, aSep)
---    if aSep == nil then
---       aSep = "%s"
---    end
---    local t={}
---    for str in string.gmatch(aInputStr, "([^"..aSep.."]+)") do
---       t[str] = true
---    end
---    return t
--- end
--- 
--- -- ======================================================
--- function OpenSQL()
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     local lTime0 = os.time()
---     local lOrthancConfig = GetOrthancConfiguration()
---     local lUser, lPass, lHost, lPort
---     if lOrthancConfig['PostgreSQL'] then
---         lUser = lOrthancConfig['PostgreSQL']['Username']
---         lPass = lOrthancConfig['PostgreSQL']['Password']
---         lHost = lOrthancConfig['PostgreSQL']['Host']
---         lPort = math.floor(lOrthancConfig['PostgreSQL']['Port']+0.5)
---     else
---         lUser = os.getenv('ORTHANC__POSTGRESQL__USERNAME')
---         lPass = os.getenv('ORTHANC__POSTGRESQL__PASSWORD')
---         lHost = os.getenv('ORTHANC__POSTGRESQL__HOST')        
---         lPort = 5432
---     end
---     local lSQLStatus
---     if not gSQLOpen then
---         if gVerbose then print(string.rep(' ', gIndent+3) .. 'Loading postgres engine') end
---         gSQLEngine = require "luasql.postgres"
---         if gVerbose then print(string.rep(' ', gIndent+3) .. 'Calling postgres engine') end
---         lSQLStatus, gSQLEnviron = pcall(gSQLEngine.postgres)
---         if not lSQLStatus then error("Problem starting SQL engine") end
---         if gVerbose then print(string.rep(' ', gIndent+3) .. 'Connecting to database') end
---         lSQLStatus, gSQLConn = pcall(gSQLEnviron.connect,gSQLEnviron,
---                                  'philookup', lUser, lPass, lHost,lPort)
---         if gVerbose then print(string.rep(' ', gIndent+3) .. 'Connection status', lSQLStatus) end
---         if gVerbose then print(string.rep(' ', gIndent+3) .. 'Database', gSQLConn) end
---         if not lSQLStatus then error("Problem connecting to remote postgres") end
---         gSQLOpen = true
---     end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
--- 
--- end
--- 
--- -- ======================================================
--- function CloseSQL()
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     local lTime0 = os.time()
---     if gSQLOpen then
---         if gVerbose then print(string.rep(' ', gIndent+3) .. 'Setting autocommit to true') end
---         gSQLConn:setautocommit(true)
---         if not pcall(gSQLConn.close,gSQLConn) then 
---             error("Problem closing sql connection") 
---         end
---         if not pcall(gSQLEnviron.close,gSQLEnviron) then
---             error("Problem closing sql environment")
---         end
---         gSQLConn = nil
---         gSQLEnviron = nil
---         gSQLOpen = false
---     end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
--- 
--- end 
--- 
+function trim(s)
+    return (s:gsub("^%s*(.-)%s*$", "%1"))
+end
+
+-- ======================================================
+function SplitToKeyList(aInputStr, aSep)
+   if aSep == nil then
+      aSep = "%s"
+   end
+   local t={}
+   for str in string.gmatch(aInputStr, "([^"..aSep.."]+)") do
+      t[str] = true
+   end
+   return t
+end
+
+-- ======================================================
+function OpenSQL()
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    local lTime0 = os.time()
+    local lOrthancConfig = GetOrthancConfiguration()
+    local lUser, lPass, lHost, lPort
+    if lOrthancConfig['PostgreSQL'] then
+        lUser = lOrthancConfig['PostgreSQL']['Username']
+        lPass = lOrthancConfig['PostgreSQL']['Password']
+        lHost = lOrthancConfig['PostgreSQL']['Host']
+        lPort = math.floor(lOrthancConfig['PostgreSQL']['Port']+0.5)
+    else
+        lUser = os.getenv('ORTHANC__POSTGRESQL__USERNAME')
+        lPass = os.getenv('ORTHANC__POSTGRESQL__PASSWORD')
+        lHost = os.getenv('ORTHANC__POSTGRESQL__HOST')        
+        lPort = 5432
+    end
+    local lSQLStatus
+    if not gSQLOpen then
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Loading postgres engine') end
+        gSQLEngine = require "luasql.postgres"
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Calling postgres engine') end
+        lSQLStatus, gSQLEnviron = pcall(gSQLEngine.postgres)
+        if not lSQLStatus then error("Problem starting SQL engine") end
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Connecting to database') end
+        lSQLStatus, gSQLConn = pcall(gSQLEnviron.connect,gSQLEnviron,
+                                 'philookup', lUser, lPass, lHost,lPort)
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Connection status', lSQLStatus) end
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Database', gSQLConn) end
+        if not lSQLStatus then error("Problem connecting to remote postgres") end
+        gSQLOpen = true
+    end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+
+end
+
+-- ======================================================
+function CloseSQL()
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    local lTime0 = os.time()
+    if gSQLOpen then
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'Setting autocommit to true') end
+        gSQLConn:setautocommit(true)
+        if not pcall(gSQLConn.close,gSQLConn) then 
+            error("Problem closing sql connection") 
+        end
+        if not pcall(gSQLEnviron.close,gSQLEnviron) then
+            error("Problem closing sql environment")
+        end
+        gSQLConn = nil
+        gSQLEnviron = nil
+        gSQLOpen = false
+    end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+
+end 
+
 -- -- ======================================================
 -- function CreateLookupTablesSQL()
 -- 
@@ -668,7 +670,7 @@
 -- 
 -- end
 -- 
--- ======================================================
+-- -- ======================================================
 -- function TestSaveStudyInstanceUIDToDB(aoOrthancStudyID)
 -- 
 --     if gSQLOpen then
@@ -929,7 +931,7 @@
 -- 
 -- end
 --
--- ======================================================
+-- -- ======================================================
 -- function ConstructPatientName(aInteger)
 -- 
 --     if gIndent then gIndent=gIndent+3 else gIndent=0 end
@@ -955,7 +957,7 @@
 -- 
 -- end
 -- 
--- ======================================================
+-- -- ======================================================
 -- function SavePatientIDsAnonToDB(aoStudyMeta,aSQLpid)
 -- 
 --     if gIndent then gIndent=gIndent+3 else gIndent=0 end
@@ -1000,7 +1002,7 @@
 -- 
 -- end
 -- 
--- ======================================================
+-- -- ======================================================
 -- function SaveStudyInstanceUIDAnonToDB(aoStudyMeta,aSQLsiuid)
 -- 
 --     if gIndent then gIndent=gIndent+3 else gIndent=0 end
@@ -1039,7 +1041,7 @@
 -- 
 -- end
 -- 
--- ======================================================
+-- -- ======================================================
 -- function SavePatientNameAnonToDB(aPatientName,aSQLsiuid)
 -- 
 --     if gIndent then gIndent=gIndent+3 else gIndent=0 end
@@ -1085,7 +1087,7 @@
 -- 
 -- end
 -- 
--- ======================================================
+-- -- ======================================================
 -- function TestRecursiveFindUID()
 -- 
 --     gTopLevelTagToKeep = {}
@@ -2262,2076 +2264,2076 @@ function BaseTagHandling ()
 
 end
 
--- -- ======================================================
--- function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall, 
---                             aSQLpid,adPatientIDAnon,
---                             aSQLsiuid, adStudyInstanceUIDAnon, aPatientIDModifier)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     local lFlagByStudy = string.find(aLevel, 'Study')
--- 
---     -- Load tag keep/remove info
---     local lTagHandling, lTagHandlingList
---     -- lTagHandling, lTagHandlingList = BaseTagHandling()
---     local lResults = ParseJson(RestApiGet('/base_tag_handling_lua', false))
---     lTagHandling = lResults['TagHandling']
---     lTagHandlingList = lResults['TagHandlingList']
---  
---     -- Capture all UID values for all instances and collect keep/remove data
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Capturing UID for all instances') end
---     local lTagsEncountered = {}
---     local lTagsToKeep = {}
---     local lTagsToRemove = {}
---     if aFlagFirstCall then
---         gTopLevelTagToKeep = {}
---         gKeptUID = {}
---     end
---     local loLevelInstancesMeta
---     local lRecurseProprietary, lRecurseRemove, lRecurseGroupKeep, lRecurseGroupRemoveRe
---     if lFlagByStudy then
---         loLevelInstancesMeta = ParseJson(RestApiGet('/studies/' .. aoLevelID .. '/instances', false))
---         lRecurseProprietary = ParseJson(RestApiGet('/studies/' .. aoLevelID .. '/odd_group_recursive_search', false))
---         lRecurseRemove = ParseJson(RestApiPost('/studies/' .. aoLevelID .. '/group_element_recursive_search', DumpJson(lTagHandlingList['remove']), false))
---         if lTagHandling['groupkeep'] then
---             lRecurseGroupKeep = ParseJson(RestApiPost('/studies/' .. aoLevelID .. '/group_recursive_search', DumpJson(lTagHandlingList['groupkeep']), false))
---         end
---         if lTagHandling['groupremovere'] then
---             lRecurseGroupRemoveRe = ParseJson(RestApiPost('/studies/' .. aoLevelID .. '/group_regexp_recursive_search', DumpJson(lTagHandlingList['groupremovere']), false))
---         else
---             lRecurseGroupRemoveRe = nil
---         end
---     else
---         loLevelInstancesMeta = ParseJson(RestApiGet('/series/' .. aoLevelID .. '/instances', false))
---         lRecurseProprietary = ParseJson(RestApiGet('/series/' .. aoLevelID .. '/odd_group_recursive_search', false))
---         lRecurseRemove = ParseJson(RestApiPost('/series/' .. aoLevelID .. '/group_element_recursive_search', DumpJson(lTagHandlingList['remove']), false))
---         if lTagHandling['groupkeep'] then
---             lRecurseGroupKeep = ParseJson(RestApiPost('/series/' .. aoLevelID .. '/group_recursive_search', DumpJson(lTagHandlingList['groupkeep']), false))
---         end
---         if lTagHandling['groupremovere'] then
---             lRecurseGroupRemoveRe = ParseJson(RestApiPost('/series/' .. aoLevelID .. '/group_regexp_recursive_search', DumpJson(lTagHandlingList['groupremovere']), false))
---         else
---             lRecurseGroupRemoveRe = nil
---         end
---     end
---     -- print('lRecurse Groups')
---     -- print(DumpJson(lRecurseProprietary))
---     -- print(DumpJson(lRecurseRemove))
---     -- if lRecurseGroupKeep then print(DumpJson(lRecurseGroupKeep)) end
---     -- if lRecurseGroupRemoveRe then print(DumpJson(lRecurseGroupRemoveRe)) end
---     
---     local loInstanceID, lGroup, lElement, lField
---     for i, loLevelInstanceMeta in pairs(loLevelInstancesMeta) do
---         loInstanceID = loLevelInstanceMeta['ID']
---         local loInstanceMeta = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
---         -- First the UID mapping info
---         -- RecursiveFindUIDToKeep(loInstanceMeta)
---         local lResult = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/recursive_find_uid_to_keep_lua', false))
---         if lResult['status'] and lResult['status'] > 0 then error(lResult['error_text']) end
---         for kk,vv in pairs(lResult['TopLevelTagToKeep']) do gTopLevelTagToKeep[kk] = vv end
---         for kk,vv in pairs(lResult['KeptUID']) do gKeptUID[kk] = vv end
---         for lTagKey, lTagVal in pairs(loInstanceMeta) do
---             _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
---             lField = lGroup .. '-' .. lElement
---             lTagsEncountered[lField] = true
---         end
---         if lTagHandling['groupkeep'] then
---             for lTagKey, lTagVal in pairs(loInstanceMeta) do
---                 _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
---                 if lTagHandling['groupkeep'][lGroup] then
---                     lField = lGroup .. '-' .. lElement
---                     lTagsToKeep[lField] = true
---                 end
---             end
---             for lField, lTagList in pairs(lRecurseGroupKeep) do
---                 lTagsToKeep[lField] = true
---             end
---         end
---         if lTagHandling['groupremovere'] then
---             for lTagKey, lTagVal in pairs(loInstanceMeta) do
---                 _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
---                 for lGroupRE, lValue in pairs(lTagHandling['groupremovere']) do
---                     if string.find(lGroup,lGroupRE) then
---                         lField = lGroup .. '-' .. lElement
---                         lTagsToRemove[lField] = true
---                     end
---                 end
---             end
---             if lRecurseGroupRemoveRe then
---                 for lField, lValueList in pairs(lRecurseGroupRemoveRe) do
---                     lTagsToRemove[lField] = true
---                 end
---             end
---         end
---     end -- loop over instances    
---   
---     -- Remove any private tags not already explicity kept
---     if lTagHandling['KeepSomePrivate'] then
---         for i, loLevelInstanceMeta in pairs(loLevelInstancesMeta) do
---             loInstanceID = loLevelInstanceMeta['ID']
---             local loInstanceMeta = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
---             for lTagKey, lTagVal in pairs(loInstanceMeta) do
---                 _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
---                 if ((tonumber(lGroup,16) % 2) == 1) then
---                     local lField = lGroup .. '-' .. lElement
---                     if not (lTagHandling['keep'][lField] or lTagsToKeep[lField]) then
---                         lTagsToRemove[lField] = true
---                     end
---                 end
---             end
---         end
---         for lField, lProprietary in pairs(lRecurseProprietary) do 
---             if not (lTagHandling['keep'][lField] or lTagsToKeep[lField]) then
---                 lTagsToRemove[lField] = true
---             end
---         end
---     else
---         for lField, lProprietary in pairs(lRecurseProprietary) do 
---             lTagsToRemove[lField] = true
---         end
---     end
---     -- print('Pre scan results')
---     -- print(DumpJson(gTopLevelTagToKeep))
---     -- print(DumpJson(gKeptUID))
---     -- print(DumpJson(lTagsEncountered))
---     -- print(DumpJson(lTagsToKeep))
---     -- print(DumpJson(lTagsToRemove))
---  
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (1) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
--- 
---     local lDataToPython = {}
---     lDataToPython['SQLpid'] = aSQLpid
---     if aPatientIDModifier then lDataToPython['PatientIDModifier'] = aPatientIDModifier end
---     -- local lSQLInternalNumber = GetInternalNumber(aSQLpid, aPatientIDModifier)
---     local lSQLInternalNumberResult = ParseJson(RestApiPost('/get_internal_number_lua', DumpJson(lDataToPython,true), false, {['x-remote-user']='lua-GetInternalNumberLua'}))
---     local lSQLInternalNumber
---     if lSQLInternalNumberResult['internal_number'] then
---         lSQLInternalNumber = lSQLInternalNumberResult['internal_number']
---     else
--- --         gSQLConn:rollback()
--- --         CloseSQL()
---         error(lSQLInternalNumberResult['status']['error_text'])
---     end
---     -- local ldPatientNameAnon = ConstructPatientName(lSQLInternalNumber)
---     local lDataToPython = {}
---     lDataToPython['InternalNumber'] = lSQLInternalNumber
---     if gPatientNameBase then lDataToPython['PatientNameBase'] = gPatientNameBase end
---     if gPatientNameIDChar then lDataToPython['PatientNameIDChar'] = gPatientNameIDChar end
---     local ldPatientNameAnon = RestApiPost('/construct_patient_name', DumpJson(lDataToPython,true), false)
--- 
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (2) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
--- 
---     -- Tags to be replaced
---     local lReplace = {}
---     lReplace['PatientName'] = ldPatientNameAnon
---     if adPatientIDAnon then
---         lReplace['PatientID'] = adPatientIDAnon
---     end
---     if adStudyInstanceUIDAnon then
---         lReplace['StudyInstanceUID'] = adStudyInstanceUIDAnon
---     end
---     if lTagHandling['empty'] then
---         for lField, lValue in pairs(lTagHandling['empty']) do
---             lReplace[lField] = ''
---         end
---     end
---     if lTagHandling['emptyseq'] then
---         for lField, lValue in pairs(lTagHandling['emptyseq']) do
---             lReplace[lField] = {}
---         end
---     end
---     if lTagHandling['emptyx'] then
---         for lField, lValue in pairs(lTagHandling['emptyx']) do
---             lReplace[lField] = 'xxxxxx'
---         end
---     end
--- 
---     local lRemove = {}
---     -- Top level tags
---     -- for lElement, lValue in pairs(lTagHandling['remove']) do
---     --     if lTagsEncountered[lElement] then table.insert(lRemove,lElement) end
---     -- end
---     -- The above is now accomplised by the python recursive routine.
---     for lElement, lValueList in pairs(lRecurseRemove) do
---         for i, lValue in pairs(lValueList) do
---             table.insert(lRemove, lValue)
---         end
---     end
---     for lElement, lValue in pairs(lTagsToRemove) do
---         if not lTagHandling['remove'][lElement] then table.insert(lRemove, lElement) end
---         if lRecurseProprietary[lElement] then
---             for i, lProprietaryAddress in pairs(lRecurseProprietary[lElement]) do
---                 table.insert(lRemove, lProprietaryAddress)
---             end
---         end
---         if lTagHandling['groupremovere'] and lRecurseGroupRemoveRe and lRecurseGroupRemoveRe[lElement] then
---             for i, lGroupReAddress in pairs(lRecurseGroupRemoveRe[lElement]) do
---                 table.insert(lRemove, lGroupReAddress)
---             end
---         end
---     end
--- 
---     local lKeep = {}
---     for lElement, lValue in pairs(lTagHandling['keep']) do
---         if lTagsEncountered[lElement] then table.insert(lKeep, lElement) end
---     end
---     for lElement, lValue in pairs(lTagsToKeep) do
---         if not lTagHandling['keep'][lElement] then table.insert(lKeep, lElement) end
---     end
--- 
---     lIndex = #lKeep
---     for lTagKey, lTagVal in pairs(gTopLevelTagToKeep) do 
---         if not string.find(lTagKey,'Unknown') then
---             lIndex = lIndex + 1
---             lKeep[lIndex] = lTagKey
---         end
---     end
---     -- print('Replace/Remove/Keep')
---     -- print(DumpJson(lReplace))
---     -- print(DumpJson(lRemove))
---     -- print(DumpJson(lKeep))
--- 
---     -- Modify the study: It seems remove clashes with keep and I need to run them separate
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Starting the study modification call') end
---     local loStudyIDMod
---     local loSeriesIDMod
---     local lModifyPostData = {}
---     lModifyPostData['Remove'] = lRemove
---     local lFlagRemovePrivateTags = os.getenv('LUA_FLAG_REMOVE_PRIVATE_TAGS') == 'true'
---     if lFlagRemovePrivateTags and not lTagHandling['KeepSomePrivate'] then
---         lModifyPostData['RemovePrivateTags'] = lFlagRemovePrivateTags
---     end
---     lModifyPostData['Force'] = true
---     lModifyPostData['DicomVersion'] = '2008'
---     -- print('Modify Post')
---     -- print(DumpJson(lModifyPostData))
---     if lFlagByStudy then
---         local lSuccess, loStudyModMetaJson = pcall(RestApiPost, 
---                                                   '/studies/' .. aoLevelID .. '/modify', 
---                                                   DumpJson(lModifyPostData,true), false)
---         if not lSuccess then
---             PrintRecursive(lModifyPostData)
--- --             gSQLConn:rollback()
--- --             CloseSQL()
---             error('Could not complete modify statement')
---         end
---         local loStudyModMeta = ParseJson(loStudyModMetaJson)
---         loStudyIDMod = loStudyModMeta['ID']
---     else
---         local lSuccess, loSeriesModMetaJson = pcall(RestApiPost, 
---                                                     '/series/' .. aoLevelID .. '/modify', 
---                                                     DumpJson(lModifyPostData,true), false)
---         if not lSuccess then 
---             PrintRecursive(lModifyPostData)
--- --             gSQLConn:rollback()
--- --             CloseSQL()
---             error('Could no complete modify statement')
---         end
---         local loSeriesModMeta = ParseJson(loSeriesModMetaJson)
---         loSeriesIDMod = loSeriesModMeta['ID']
---         loSeriesModMeta = ParseJson(RestApiGet('/series/' .. loSeriesIDMod, false))
---         loStudyIDMod = loSeriesModMeta['ParentStudy']
---     end
---     -- print('StudyIDMod: ' .. loStudyIDMod)
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (3) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
--- 
---     -- Anonymize the study
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Starting the study anonymization call') end
---     local loStudyIDAnon
---     local lAnonPostData = {}
---     if lReplace then
---         lAnonPostData['Replace'] = lReplace
---     end
---     lAnonPostData['Keep'] = lKeep
---     lAnonPostData['Force'] = true
---     lAnonPostData['DicomVersion'] = '2008'
---     -- print('AnonPostData')
---     -- print(DumpJson(lAnonPostData))
---     local loInstancesAnonMeta 
---     if lFlagByStudy then
---         local lSuccess, loStudyAnonMetaJson = pcall(RestApiPost, 
---                                                     '/studies/' .. loStudyIDMod .. '/anonymize', 
---                                                     DumpJson(lAnonPostData,true), false)
---         if not lSuccess then
---             PrintRecursive(lAnonPostData)
--- --             gSQLConn:rollback()
--- --             CloseSQL()
---             error('Problem calling anonymize')
---         end
---        
---         local loStudyAnonMeta = ParseJson(loStudyAnonMetaJson)
---         loStudyIDAnon = loStudyAnonMeta['ID']
---         loInstancesAnonMeta = ParseJson(RestApiGet('/studies/' .. loStudyIDAnon .. '/instances', false))
---     else
---         local lSuccess, loSeriesAnonMetaJson = pcall(RestApiPost,
---                                                     '/series/' .. loSeriesIDMod .. '/anonymize', 
---                                                      DumpJson(lAnonPostData,true), false)
---         if not lSuccess then 
---             PrintRecursive(lAnonPostData)
--- --             gSQLConn:rollback()
--- --             CloseSQL()
---             error('Problem calling anonymize')
---         end
---         local loSeriesAnonMeta = ParseJson(loSeriesAnonMetaJson)
---         local loSeriesIDAnon = loSeriesAnonMeta['ID']
---         loSeriesAnonMeta = ParseJson(RestApiGet('/series/' .. loSeriesIDAnon, false))
---         loStudyIDAnon = loSeriesAnonMeta['ParentStudy']
---         loInstancesAnonMeta = ParseJson(RestApiGet('/series/' .. loSeriesAnonMeta['ID'] .. '/instances', false))
---     end
---     -- print('InstancesAnonMeta')
---     -- print(DumpJson(loInstancesAnonMeta))
---     if gVerbose then print(string.rep(' ', gIndent) .. 'N instances anon: ', #loInstancesAnonMeta) end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (4) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
--- 
---     local loStudyAnonMeta = ParseJson(RestApiGet('/studies/' .. loStudyIDAnon, false))
---     -- print('MetaStudyAnon')
---     -- print(DumpJson(loStudyAnonMeta))
--- 
---     if not adPatientIDAnon then
---         -- SavePatientIDsAnonToDB(loStudyAnonMeta,aSQLpid)
---         local lPostData = {}
---         lPostData['OrthancStudyID'] = loStudyAnonMeta['ID']
---         lPostData['SQLpid'] = aSQLpid
---         -- print('OrthancStudyID: ' .. loStudyAnonMeta['ID'])
---         -- print('SQLpid: ' .. aSQLpid)
---         local lStatus = ParseJson(RestApiPost('/save_patient_ids_anon_to_db_lua', DumpJson(lPostData), false))
---         if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
---     end
---     if not adStudyInstanceUIDAnon then
---         -- SaveStudyInstanceUIDAnonToDB(loStudyAnonMeta,aSQLsiuid)
---         local lPostData = {}
---         lPostData['OrthancStudyID'] = loStudyAnonMeta['ID']
---         lPostData['SQLsiuid'] = aSQLsiuid
---         -- print('OrthancStudyID: ' .. loStudyAnonMeta['ID'])
---         -- print('SQLsiuid: ' .. aSQLsiuid)
---         local lStatus = ParseJson(RestApiPost('/save_study_instance_uid_anon_to_db_lua', DumpJson(lPostData), false))
---         if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
---     end
---     local lFlagSavePatientNameAnon = os.getenv('LUA_FLAG_SAVE_PATIENTNAME_ANON') == 'true'
---     if lFlagSavePatientNameAnon then
---         -- SavePatientNameAnonToDB(ldPatientNameAnon, aSQLsiuid)
---         local lPostData = {}
---         lPostData['PatientNameAnon'] = ldPatientNameAnon
---         lPostData['SQLsiuid'] = aSQLsiuid
---         -- print('PatientNameAnon: ' .. ldPatientNameAnon)
---         -- print('SQLsiuid: ' .. aSQLsiuid)
---         local lStatus = ParseJson(RestApiPost('/save_patient_name_anon_to_db_lua', DumpJson(lPostData), false))
---         if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
---     end
--- 
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
---     if lFlagSavePatientNameAnon then
---         return loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon
---     else
---         return loInstancesAnonMeta, loStudyIDAnon, nil
---     end
--- 
--- end
--- 
--- -- ======================================================
--- function MapUIDOldToNew(aoStudyIDNew, aFlagRemapSOPInstanceUID, aFlagRemapKeptUID)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     local lFlagRemapSOPInstanceUID = aFlagRemapSOPInstanceUID
---     local lFlagRemapKeptUID = aFlagRemapKeptUID
---     local lUIDMap = {}
---     local lUIDType = {}
--- 
---     -- Cycle through anonymized versions to set up one-to-one maps
---     -- First at the study level
---     local loStudyIDOld, loStudyIDMod
---     local loStudyMetaNew, loStudyMetaOld, loStudyMetaMod
---     local ldStudyInstanceUIDNew, ldStudyInstanceUIDOld, ldStudyInstanceUIDMod
---     loStudyMetaNew = ParseJson(RestApiGet('/studies/' .. aoStudyIDNew, false))
---     ldStudyInstanceUIDNew = loStudyMetaNew['MainDicomTags']['StudyInstanceUID']
--- 
---     loStudyIDMod = loStudyMetaNew['AnonymizedFrom']
---     loStudyMetaMod = ParseJson(RestApiGet('/studies/' .. loStudyIDMod, false))
---     ldStudyInstanceUIDMod = loStudyMetaMod['MainDicomTags']['StudyInstanceUID']
--- 
---     loStudyIDOld = loStudyMetaMod['ModifiedFrom']
---     loStudyMetaOld = ParseJson(RestApiGet('/studies/' .. loStudyIDOld, false))
---     ldStudyInstanceUIDOld = loStudyMetaOld['MainDicomTags']['StudyInstanceUID']
---     lUIDMap[ldStudyInstanceUIDOld] = ldStudyInstanceUIDNew
---     lUIDType[ldStudyInstanceUIDOld] = 'StudyInstanceUID'
--- 
---     local loSeriesIDOld, loSeiesIDMod
---     local loSeriesMetaNew, loSeriesMetaOld, loSeriesMetaMod
---     local ldSeriesInstanceUIDNew, ldSeriesInstanceUIDOld, ldSeriesInstanceUIDMod
--- 
---     local loInstanceIDOld
---     local loInstanceMetaNew, loInstanceMetaOld, loInstanceMetaMod
---     local ldSOPInstanceUIDNew, ldSOPInstanceUIDOld, ldSOPInstanceUIDMod
--- 
---     for i, loSeriesIDNew in pairs(loStudyMetaNew['Series']) do
--- 
---         -- Now series
---         loSeriesMetaNew = ParseJson(RestApiGet('/series/' .. loSeriesIDNew, false))
---         ldSeriesInstanceUIDNew = loSeriesMetaNew['MainDicomTags']['SeriesInstanceUID']
--- 
---         loSeriesIDMod = loSeriesMetaNew['AnonymizedFrom']
---         loSeriesMetaMod = ParseJson(RestApiGet('/series/' .. loSeriesIDMod, false))
---         if not loSeriesMetaMod then
---             if gVerbose then print(string.rep(' ', gIndent) .. 'Missing series:' .. loSeriesIDMod .. ' of ' .. aoStudyIDNew ) end
---         end
---         ldSeriesInstanceUIDMod = loSeriesMetaMod['MainDicomTags']['SeriesInstanceUID']
--- 
---         loSeriesIDOld = loSeriesMetaMod['ModifiedFrom']
---         loSeriesMetaOld = ParseJson(RestApiGet('/series/' .. loSeriesIDOld, false))
---         ldSeriesInstanceUIDOld = loSeriesMetaOld['MainDicomTags']['SeriesInstanceUID']
--- 
---         lUIDMap[ldSeriesInstanceUIDOld] = ldSeriesInstanceUIDNew
---         lUIDType[ldSeriesInstanceUIDOld] = 'SeriesInstanceUID'
--- 
---         for j, loInstanceIDNew in pairs(loSeriesMetaNew['Instances']) do
---             -- Now instances 
---             loInstanceMetaNew = ParseJson(RestApiGet('/instances/' .. loInstanceIDNew, false))
---             ldSOPInstanceUIDNew = loInstanceMetaNew['MainDicomTags']['SOPInstanceUID']
---             loInstanceIDMod = loInstanceMetaNew['AnonymizedFrom'] 
---             loInstanceMetaMod = ParseJson(RestApiGet('/instances/' .. loInstanceIDMod, false))
---             ldSOPInstanceUIDMod = loInstanceMetaMod['MainDicomTags']['SOPInstanceUID']
---             loInstanceIDOld = loInstanceMetaMod['ModifiedFrom'] 
---             if loInstanceIDOld then 
---                 loInstanceMetaOld = ParseJson(RestApiGet('/instances/' .. loInstanceIDOld, false))
---                 ldSOPInstanceUIDOld = loInstanceMetaOld['MainDicomTags']['SOPInstanceUID']
---                 lUIDMap[ldSOPInstanceUIDOld] = ldSOPInstanceUIDNew
---                 lUIDType[ldSOPInstanceUIDOld] = 'SOPInstanceUID'
---                 -- Delete the Modified intermediate
---                 RestApiDelete('/instances/' .. loInstanceIDMod, false)
---             end
--- 
---             if lFlagRemapSOPInstanceUID then
---                 local ldInstanceUIDRemap = RestApiGet('/tools/generate-uid?level=instance') 
---                 lUIDMap[ldSOPInstanceUIDNew] = ldInstanceUIDRemap
---                 lUIDType[ldSOPInstanceUIDNew] = 'SOPInstanceUID'
---             end
--- 
---         end
--- 
---     end
--- 
---     -- Now check for non-modified UID
---     if lFlagRemapKeptUID then
---         for lKeptUIDVal, lKeptUIDType in pairs(gKeptUID) do
--- 
---             -- We really only care if it does not exist
---             if not lUIDMap[lKeptUIDVal] then
--- 
---                 if string.find(lKeptUIDType['Name'], 'StudyInstanceUID') or string.find(lKeptUIDType['Name'], 'FrameOfReferenceUID') then
---                     ldStudyInstanceUIDNew = RestApiGet('/tools/generate-uid?level=study') 
---                     lUIDMap[lKeptUIDVal] =  ldStudyInstanceUIDNew
---                     lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
---                 end
--- 
---                 if string.find(lKeptUIDType['Name'], 'SeriesInstanceUID') then
---                     ldSeriesInstanceUIDNew = RestApiGet('/tools/generate-uid?level=series') 
---                     lUIDMap[lKeptUIDVal] =  ldSeriesInstanceUIDNew
---                     lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
---                 end
--- 
---                 if string.find(lKeptUIDType['Name'], 'SOPInstanceUID') then
---                     local ldInstanceUIDRemap
---                     ldInstanceUIDRemap = RestApiGet('/tools/generate-uid?level=instance') 
---                     lUIDMap[lKeptUIDVal] = ldInstanceUIDRemap
---                     lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
---                 end
--- 
---                 if string.find(lKeptUIDType['Name'], 'SOPClassUID') or string.find(lKeptUIDType['Name'], 'CodingScheme') then -- we keep these
---                     lUIDMap[lKeptUIDVal] = lKeptUIDVal
---                     lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
---                 end
--- 
---                 -- Generic catch all will be a study uid
---                 if not lUIDMap[lKeptUIDVal] then
---                     ldStudyInstanceUIDNew = RestApiGet('/tools/generate-uid?level=study') 
---                     lUIDMap[lKeptUIDVal] =  ldStudyInstanceUIDNew
---                     lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
---                 end
--- 
---             end
--- 
---         end
---     end
--- 
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
---     return lUIDMap, lUIDType
--- 
--- end
--- 
--- -- ======================================================
--- function LoadShiftEpochFromDB(aSQLpid)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     local lSQLQuery = string.format([[SELECT value FROM shiftepoch WHERE pid=%d]],aSQLpid)
---     local lSQLStatus, lSQLCursor
---     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
---     if not lSQLStatus then 
+-- ======================================================
+function AnonymizeInstances(aLevel, aoLevelID, aFlagFirstCall, 
+                            aSQLpid,adPatientIDAnon,
+                            aSQLsiuid, adStudyInstanceUIDAnon, aPatientIDModifier)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    local lFlagByStudy = string.find(aLevel, 'Study')
+
+    -- Load tag keep/remove info
+    local lTagHandling, lTagHandlingList
+    -- lTagHandling, lTagHandlingList = BaseTagHandling()
+    local lResults = ParseJson(RestApiGet('/base_tag_handling_lua', false))
+    lTagHandling = lResults['TagHandling']
+    lTagHandlingList = lResults['TagHandlingList']
+ 
+    -- Capture all UID values for all instances and collect keep/remove data
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Capturing UID for all instances') end
+    local lTagsEncountered = {}
+    local lTagsToKeep = {}
+    local lTagsToRemove = {}
+    if aFlagFirstCall then
+        gTopLevelTagToKeep = {}
+        gKeptUID = {}
+    end
+    local loLevelInstancesMeta
+    local lRecurseProprietary, lRecurseRemove, lRecurseGroupKeep, lRecurseGroupRemoveRe
+    if lFlagByStudy then
+        loLevelInstancesMeta = ParseJson(RestApiGet('/studies/' .. aoLevelID .. '/instances', false))
+        lRecurseProprietary = ParseJson(RestApiGet('/studies/' .. aoLevelID .. '/odd_group_recursive_search', false))
+        lRecurseRemove = ParseJson(RestApiPost('/studies/' .. aoLevelID .. '/group_element_recursive_search', DumpJson(lTagHandlingList['remove']), false))
+        if lTagHandling['groupkeep'] then
+            lRecurseGroupKeep = ParseJson(RestApiPost('/studies/' .. aoLevelID .. '/group_recursive_search', DumpJson(lTagHandlingList['groupkeep']), false))
+        end
+        if lTagHandling['groupremovere'] then
+            lRecurseGroupRemoveRe = ParseJson(RestApiPost('/studies/' .. aoLevelID .. '/group_regexp_recursive_search', DumpJson(lTagHandlingList['groupremovere']), false))
+        else
+            lRecurseGroupRemoveRe = nil
+        end
+    else
+        loLevelInstancesMeta = ParseJson(RestApiGet('/series/' .. aoLevelID .. '/instances', false))
+        lRecurseProprietary = ParseJson(RestApiGet('/series/' .. aoLevelID .. '/odd_group_recursive_search', false))
+        lRecurseRemove = ParseJson(RestApiPost('/series/' .. aoLevelID .. '/group_element_recursive_search', DumpJson(lTagHandlingList['remove']), false))
+        if lTagHandling['groupkeep'] then
+            lRecurseGroupKeep = ParseJson(RestApiPost('/series/' .. aoLevelID .. '/group_recursive_search', DumpJson(lTagHandlingList['groupkeep']), false))
+        end
+        if lTagHandling['groupremovere'] then
+            lRecurseGroupRemoveRe = ParseJson(RestApiPost('/series/' .. aoLevelID .. '/group_regexp_recursive_search', DumpJson(lTagHandlingList['groupremovere']), false))
+        else
+            lRecurseGroupRemoveRe = nil
+        end
+    end
+    -- print('lRecurse Groups')
+    -- print(DumpJson(lRecurseProprietary))
+    -- print(DumpJson(lRecurseRemove))
+    -- if lRecurseGroupKeep then print(DumpJson(lRecurseGroupKeep)) end
+    -- if lRecurseGroupRemoveRe then print(DumpJson(lRecurseGroupRemoveRe)) end
+    
+    local loInstanceID, lGroup, lElement, lField
+    for i, loLevelInstanceMeta in pairs(loLevelInstancesMeta) do
+        loInstanceID = loLevelInstanceMeta['ID']
+        local loInstanceMeta = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
+        -- First the UID mapping info
+        -- RecursiveFindUIDToKeep(loInstanceMeta)
+        local lResult = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/recursive_find_uid_to_keep_lua', false))
+        if lResult['status'] and lResult['status'] > 0 then error(lResult['error_text']) end
+        for kk,vv in pairs(lResult['TopLevelTagToKeep']) do gTopLevelTagToKeep[kk] = vv end
+        for kk,vv in pairs(lResult['KeptUID']) do gKeptUID[kk] = vv end
+        for lTagKey, lTagVal in pairs(loInstanceMeta) do
+            _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
+            lField = lGroup .. '-' .. lElement
+            lTagsEncountered[lField] = true
+        end
+        if lTagHandling['groupkeep'] then
+            for lTagKey, lTagVal in pairs(loInstanceMeta) do
+                _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
+                if lTagHandling['groupkeep'][lGroup] then
+                    lField = lGroup .. '-' .. lElement
+                    lTagsToKeep[lField] = true
+                end
+            end
+            for lField, lTagList in pairs(lRecurseGroupKeep) do
+                lTagsToKeep[lField] = true
+            end
+        end
+        if lTagHandling['groupremovere'] then
+            for lTagKey, lTagVal in pairs(loInstanceMeta) do
+                _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
+                for lGroupRE, lValue in pairs(lTagHandling['groupremovere']) do
+                    if string.find(lGroup,lGroupRE) then
+                        lField = lGroup .. '-' .. lElement
+                        lTagsToRemove[lField] = true
+                    end
+                end
+            end
+            if lRecurseGroupRemoveRe then
+                for lField, lValueList in pairs(lRecurseGroupRemoveRe) do
+                    lTagsToRemove[lField] = true
+                end
+            end
+        end
+    end -- loop over instances    
+  
+    -- Remove any private tags not already explicity kept
+    if lTagHandling['KeepSomePrivate'] then
+        for i, loLevelInstanceMeta in pairs(loLevelInstancesMeta) do
+            loInstanceID = loLevelInstanceMeta['ID']
+            local loInstanceMeta = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
+            for lTagKey, lTagVal in pairs(loInstanceMeta) do
+                _, _, lGroup, lElement = string.find(lTagKey, "([^,]+),([^,]+)")
+                if ((tonumber(lGroup,16) % 2) == 1) then
+                    local lField = lGroup .. '-' .. lElement
+                    if not (lTagHandling['keep'][lField] or lTagsToKeep[lField]) then
+                        lTagsToRemove[lField] = true
+                    end
+                end
+            end
+        end
+        for lField, lProprietary in pairs(lRecurseProprietary) do 
+            if not (lTagHandling['keep'][lField] or lTagsToKeep[lField]) then
+                lTagsToRemove[lField] = true
+            end
+        end
+    else
+        for lField, lProprietary in pairs(lRecurseProprietary) do 
+            lTagsToRemove[lField] = true
+        end
+    end
+    -- print('Pre scan results')
+    -- print(DumpJson(gTopLevelTagToKeep))
+    -- print(DumpJson(gKeptUID))
+    -- print(DumpJson(lTagsEncountered))
+    -- print(DumpJson(lTagsToKeep))
+    -- print(DumpJson(lTagsToRemove))
+ 
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (1) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+
+    local lDataToPython = {}
+    lDataToPython['SQLpid'] = aSQLpid
+    if aPatientIDModifier then lDataToPython['PatientIDModifier'] = aPatientIDModifier end
+    -- local lSQLInternalNumber = GetInternalNumber(aSQLpid, aPatientIDModifier)
+    local lSQLInternalNumberResult = ParseJson(RestApiPost('/get_internal_number_lua', DumpJson(lDataToPython,true), false, {['x-remote-user']='lua-GetInternalNumberLua'}))
+    local lSQLInternalNumber
+    if lSQLInternalNumberResult['internal_number'] then
+        lSQLInternalNumber = lSQLInternalNumberResult['internal_number']
+    else
+--         gSQLConn:rollback()
 --         CloseSQL()
---         error("Problem selecting shiftepoch")
---     end
---     if lSQLCursor:numrows() > 0 then
---         local lSQLRow = lSQLCursor:fetch({}, "a")
---         gIndent = gIndent - 3
---         if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---         if gIndent > 0 then gIndent = gIndent - 3 end
---         return lSQLRow.value
---     end
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
--- 
--- end
--- 
--- -- ======================================================
--- function SaveShiftEpochToDB(aShiftEpoch,aSQLpid)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
---     local lSQLResult = gSQLConn:setautocommit(false)
---     local lSQLQuery = string.format(
---                         [[INSERT INTO shiftepoch (value,pid) VALUES(%d,%d)]],
---                         aShiftEpoch, aSQLpid)
---     local lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
---     if not lSQLStatus then
---         lSQLResult = gSQLConn:rollback()
---         if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
---         lSQLResult = gSQLConn:setautocommit(true)
---         CloseSQL()
---         error("Problem inserting shiftepoch")
---     end
---     lSQLResult = gSQLConn:commit()
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
---     lSQLResult = gSQLConn:setautocommit(true)
--- 
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
--- 
--- end
--- 
--- -- ======================================================
--- function ComputeShiftEpochFromEarliestDate(aoInstancesMeta)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     local lDicomFields = { 'Study', 'Series', 'Acquisition', 
---                            'Content', 'InstanceCreation',
---                            'PerformedProcedureStepStart' }
---     local lDateTimeFields = { 'AcquisitionDateTime' }
---     -- Default to current time if no date/time fields found
---     local lMinEpoch = os.time()
---     local lDateField, lTimeField
---     for i, loInstanceMeta in pairs(aoInstancesMeta) do
---         local loInstanceID = (loInstanceMeta['ID'])
---         local lSuccess, loDicomTagsJson =pcall(RestApiGet,
---                                                '/instances/' .. loInstanceID .. '/simplified-tags',
---                                                 false)
---         if not lSuccess then
+        error(lSQLInternalNumberResult['status']['error_text'])
+    end
+    -- local ldPatientNameAnon = ConstructPatientName(lSQLInternalNumber)
+    local lDataToPython = {}
+    lDataToPython['InternalNumber'] = lSQLInternalNumber
+    if gPatientNameBase then lDataToPython['PatientNameBase'] = gPatientNameBase end
+    if gPatientNameIDChar then lDataToPython['PatientNameIDChar'] = gPatientNameIDChar end
+    local ldPatientNameAnon = RestApiPost('/construct_patient_name', DumpJson(lDataToPython,true), false)
+
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (2) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+
+    -- Tags to be replaced
+    local lReplace = {}
+    lReplace['PatientName'] = ldPatientNameAnon
+    if adPatientIDAnon then
+        lReplace['PatientID'] = adPatientIDAnon
+    end
+    if adStudyInstanceUIDAnon then
+        lReplace['StudyInstanceUID'] = adStudyInstanceUIDAnon
+    end
+    if lTagHandling['empty'] then
+        for lField, lValue in pairs(lTagHandling['empty']) do
+            lReplace[lField] = ''
+        end
+    end
+    if lTagHandling['emptyseq'] then
+        for lField, lValue in pairs(lTagHandling['emptyseq']) do
+            lReplace[lField] = {}
+        end
+    end
+    if lTagHandling['emptyx'] then
+        for lField, lValue in pairs(lTagHandling['emptyx']) do
+            lReplace[lField] = 'xxxxxx'
+        end
+    end
+
+    local lRemove = {}
+    -- Top level tags
+    -- for lElement, lValue in pairs(lTagHandling['remove']) do
+    --     if lTagsEncountered[lElement] then table.insert(lRemove,lElement) end
+    -- end
+    -- The above is now accomplised by the python recursive routine.
+    for lElement, lValueList in pairs(lRecurseRemove) do
+        for i, lValue in pairs(lValueList) do
+            table.insert(lRemove, lValue)
+        end
+    end
+    for lElement, lValue in pairs(lTagsToRemove) do
+        if not lTagHandling['remove'][lElement] then table.insert(lRemove, lElement) end
+        if lRecurseProprietary[lElement] then
+            for i, lProprietaryAddress in pairs(lRecurseProprietary[lElement]) do
+                table.insert(lRemove, lProprietaryAddress)
+            end
+        end
+        if lTagHandling['groupremovere'] and lRecurseGroupRemoveRe and lRecurseGroupRemoveRe[lElement] then
+            for i, lGroupReAddress in pairs(lRecurseGroupRemoveRe[lElement]) do
+                table.insert(lRemove, lGroupReAddress)
+            end
+        end
+    end
+
+    local lKeep = {}
+    for lElement, lValue in pairs(lTagHandling['keep']) do
+        if lTagsEncountered[lElement] then table.insert(lKeep, lElement) end
+    end
+    for lElement, lValue in pairs(lTagsToKeep) do
+        if not lTagHandling['keep'][lElement] then table.insert(lKeep, lElement) end
+    end
+
+    lIndex = #lKeep
+    for lTagKey, lTagVal in pairs(gTopLevelTagToKeep) do 
+        if not string.find(lTagKey,'Unknown') then
+            lIndex = lIndex + 1
+            lKeep[lIndex] = lTagKey
+        end
+    end
+    -- print('Replace/Remove/Keep')
+    -- print(DumpJson(lReplace))
+    -- print(DumpJson(lRemove))
+    -- print(DumpJson(lKeep))
+
+    -- Modify the study: It seems remove clashes with keep and I need to run them separate
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Starting the study modification call') end
+    local loStudyIDMod
+    local loSeriesIDMod
+    local lModifyPostData = {}
+    lModifyPostData['Remove'] = lRemove
+    local lFlagRemovePrivateTags = os.getenv('LUA_FLAG_REMOVE_PRIVATE_TAGS') == 'true'
+    if lFlagRemovePrivateTags and not lTagHandling['KeepSomePrivate'] then
+        lModifyPostData['RemovePrivateTags'] = lFlagRemovePrivateTags
+    end
+    lModifyPostData['Force'] = true
+    lModifyPostData['DicomVersion'] = '2008'
+    -- print('Modify Post')
+    -- print(DumpJson(lModifyPostData))
+    if lFlagByStudy then
+        local lSuccess, loStudyModMetaJson = pcall(RestApiPost, 
+                                                  '/studies/' .. aoLevelID .. '/modify', 
+                                                  DumpJson(lModifyPostData,true), false)
+        if not lSuccess then
+            PrintRecursive(lModifyPostData)
 --             gSQLConn:rollback()
 --             CloseSQL()
---             error('Could not query instance for tags')
---         end
---         local loDicomTags = ParseJson(loDicomTagsJson)
---         -- local loDicomTags = 
---         --        ParseJson(RestApiGet('/instances/' .. 
---         --                             loInstanceID .. '/simplified-tags', false))
---         for j, lDicomField in pairs(lDicomFields) do
---             local lDateField = lDicomField .. 'Date'
---             local lTimeField = lDicomField .. 'Time'
---             if loDicomTags[lDateField] and string.len(trim(loDicomTags[lDateField])) > 0 then
---                 if loDicomTags[lTimeField] and string.len(trim(loDicomTags[lTimeField])) > 0 then
---                     local lYear           = tonumber(string.sub(loDicomTags[lDateField],1,4))
---                     local lMonth          = tonumber(string.sub(loDicomTags[lDateField],5,6))
---                     local lDay            = tonumber(string.sub(loDicomTags[lDateField],7,8))
---                     local lHour           = tonumber(string.sub(loDicomTags[lTimeField],1,2))
---                     local lMinute         = tonumber(string.sub(loDicomTags[lTimeField],3,4))
---                     local lSec = math.floor(tonumber(string.sub(loDicomTags[lTimeField],5)) or 0)
---                     if not lMinEpoch then
---                         lMinEpoch = os.time{year=lYear, 
---                                            month=lMonth or 1, 
---                                            day=lDay or 1, 
---                                            hour=lHour or 0, 
---                                            min=lMinute or 0, 
---                                            sec=lSec or 0}
---                     else
---                         lMinEpoch = math.min(lMinEpoch, os.time{year=lYear, 
---                                                               month=lMonth or 1, 
---                                                               day=lDay or 1, 
---                                                               hour=lHour or 0, 
---                                                               min=lMinute or 0, 
---                                                               sec=lSec or 0 })
---                     end
---                 else
---                     if gVerbose then 
---                         print ('No matching time for date: ' .. lDateField .. ', ' .. lTimeField)
---                         PrintRecursive(loDicomTags)
---                     end
---                 end
---             end -- endif found lDateField
---         end -- loop over lDicomFields
---         for j, lDateTimeField in pairs(lDateTimeFields) do 
---             if loDicomTags[lDateTimeField] and string.len(trim(loDicomTags[lDateTimeField])) > 0 then
---                 local lYear           = tonumber(string.sub(loDicomTags[lDateTimeField],1,4))
---                 local lMonth          = tonumber(string.sub(loDicomTags[lDateTimeField],5,6))
---                 local lDay            = tonumber(string.sub(loDicomTags[lDateTimeField],7,8))
---                 local lHour           = tonumber(string.sub(loDicomTags[lDateTimeField],9,10))
---                 local lMinute         = tonumber(string.sub(loDicomTags[lDateTimeField],11,12))
---                 local lSec = math.floor(tonumber(string.sub(loDicomTags[lDateTimeField],13)) or 0)
---                 if not lMinEpoch then
---                     lMinEpoch = os.time{year=lYear, 
---                                        month=lMonth or 1, 
---                                        day=lDay or 1, 
---                                        hour=lHour or 0, 
---                                        min=lMinute or 0, 
---                                        sec=lSec or 0}
---                 else
---                     lMinEpoch = math.min(lMinEpoch, 
---                                         os.time{year=lYear, 
---                                                 month=lMonth or 1, 
---                                                 day=lDay or 1, 
---                                                 hour=lHour or 0, 
---                                                 min=lMinute or 0, 
---                                                 sec=lSec or 0 })
---                 end
---             end
---         end -- loop over lDateTimeFields
---     end -- loop over aoInstancesMeta
---     local lTemp = os.date("*t", lMinEpoch)
---     local lMinYear = lTemp['year']
---     local lShiftEpoch = lMinEpoch - os.time{year=lMinYear, 
---                                             month=1, 
---                                             day=1, 
---                                             hour=12, 
---                                             min=0, 
---                                             sec=0}
--- 
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
---     return lShiftEpoch
--- 
--- end
--- 
+            error('Could not complete modify statement')
+        end
+        local loStudyModMeta = ParseJson(loStudyModMetaJson)
+        loStudyIDMod = loStudyModMeta['ID']
+    else
+        local lSuccess, loSeriesModMetaJson = pcall(RestApiPost, 
+                                                    '/series/' .. aoLevelID .. '/modify', 
+                                                    DumpJson(lModifyPostData,true), false)
+        if not lSuccess then 
+            PrintRecursive(lModifyPostData)
+--             gSQLConn:rollback()
+--             CloseSQL()
+            error('Could no complete modify statement')
+        end
+        local loSeriesModMeta = ParseJson(loSeriesModMetaJson)
+        loSeriesIDMod = loSeriesModMeta['ID']
+        loSeriesModMeta = ParseJson(RestApiGet('/series/' .. loSeriesIDMod, false))
+        loStudyIDMod = loSeriesModMeta['ParentStudy']
+    end
+    -- print('StudyIDMod: ' .. loStudyIDMod)
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (3) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+
+    -- Anonymize the study
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Starting the study anonymization call') end
+    local loStudyIDAnon
+    local lAnonPostData = {}
+    if lReplace then
+        lAnonPostData['Replace'] = lReplace
+    end
+    lAnonPostData['Keep'] = lKeep
+    lAnonPostData['Force'] = true
+    lAnonPostData['DicomVersion'] = '2008'
+    -- print('AnonPostData')
+    -- print(DumpJson(lAnonPostData))
+    local loInstancesAnonMeta 
+    if lFlagByStudy then
+        local lSuccess, loStudyAnonMetaJson = pcall(RestApiPost, 
+                                                    '/studies/' .. loStudyIDMod .. '/anonymize', 
+                                                    DumpJson(lAnonPostData,true), false)
+        if not lSuccess then
+            PrintRecursive(lAnonPostData)
+--             gSQLConn:rollback()
+--             CloseSQL()
+            error('Problem calling anonymize')
+        end
+       
+        local loStudyAnonMeta = ParseJson(loStudyAnonMetaJson)
+        loStudyIDAnon = loStudyAnonMeta['ID']
+        loInstancesAnonMeta = ParseJson(RestApiGet('/studies/' .. loStudyIDAnon .. '/instances', false))
+    else
+        local lSuccess, loSeriesAnonMetaJson = pcall(RestApiPost,
+                                                    '/series/' .. loSeriesIDMod .. '/anonymize', 
+                                                     DumpJson(lAnonPostData,true), false)
+        if not lSuccess then 
+            PrintRecursive(lAnonPostData)
+--             gSQLConn:rollback()
+--             CloseSQL()
+            error('Problem calling anonymize')
+        end
+        local loSeriesAnonMeta = ParseJson(loSeriesAnonMetaJson)
+        local loSeriesIDAnon = loSeriesAnonMeta['ID']
+        loSeriesAnonMeta = ParseJson(RestApiGet('/series/' .. loSeriesIDAnon, false))
+        loStudyIDAnon = loSeriesAnonMeta['ParentStudy']
+        loInstancesAnonMeta = ParseJson(RestApiGet('/series/' .. loSeriesAnonMeta['ID'] .. '/instances', false))
+    end
+    -- print('InstancesAnonMeta')
+    -- print(DumpJson(loInstancesAnonMeta))
+    if gVerbose then print(string.rep(' ', gIndent) .. 'N instances anon: ', #loInstancesAnonMeta) end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time so far (4) in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+
+    local loStudyAnonMeta = ParseJson(RestApiGet('/studies/' .. loStudyIDAnon, false))
+    -- print('MetaStudyAnon')
+    -- print(DumpJson(loStudyAnonMeta))
+
+    if not adPatientIDAnon then
+        -- SavePatientIDsAnonToDB(loStudyAnonMeta,aSQLpid)
+        local lPostData = {}
+        lPostData['OrthancStudyID'] = loStudyAnonMeta['ID']
+        lPostData['SQLpid'] = aSQLpid
+        -- print('OrthancStudyID: ' .. loStudyAnonMeta['ID'])
+        -- print('SQLpid: ' .. aSQLpid)
+        local lStatus = ParseJson(RestApiPost('/save_patient_ids_anon_to_db_lua', DumpJson(lPostData), false))
+        if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
+    end
+    if not adStudyInstanceUIDAnon then
+        -- SaveStudyInstanceUIDAnonToDB(loStudyAnonMeta,aSQLsiuid)
+        local lPostData = {}
+        lPostData['OrthancStudyID'] = loStudyAnonMeta['ID']
+        lPostData['SQLsiuid'] = aSQLsiuid
+        -- print('OrthancStudyID: ' .. loStudyAnonMeta['ID'])
+        -- print('SQLsiuid: ' .. aSQLsiuid)
+        local lStatus = ParseJson(RestApiPost('/save_study_instance_uid_anon_to_db_lua', DumpJson(lPostData), false))
+        if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
+    end
+    local lFlagSavePatientNameAnon = os.getenv('LUA_FLAG_SAVE_PATIENTNAME_ANON') == 'true'
+    if lFlagSavePatientNameAnon then
+        -- SavePatientNameAnonToDB(ldPatientNameAnon, aSQLsiuid)
+        local lPostData = {}
+        lPostData['PatientNameAnon'] = ldPatientNameAnon
+        lPostData['SQLsiuid'] = aSQLsiuid
+        -- print('PatientNameAnon: ' .. ldPatientNameAnon)
+        -- print('SQLsiuid: ' .. aSQLsiuid)
+        local lStatus = ParseJson(RestApiPost('/save_patient_name_anon_to_db_lua', DumpJson(lPostData), false))
+        if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
+    end
+
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+    if lFlagSavePatientNameAnon then
+        return loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon
+    else
+        return loInstancesAnonMeta, loStudyIDAnon, nil
+    end
+
+end
+
+-- ======================================================
+function MapUIDOldToNew(aoStudyIDNew, aFlagRemapSOPInstanceUID, aFlagRemapKeptUID)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    local lFlagRemapSOPInstanceUID = aFlagRemapSOPInstanceUID
+    local lFlagRemapKeptUID = aFlagRemapKeptUID
+    local lUIDMap = {}
+    local lUIDType = {}
+
+    -- Cycle through anonymized versions to set up one-to-one maps
+    -- First at the study level
+    local loStudyIDOld, loStudyIDMod
+    local loStudyMetaNew, loStudyMetaOld, loStudyMetaMod
+    local ldStudyInstanceUIDNew, ldStudyInstanceUIDOld, ldStudyInstanceUIDMod
+    loStudyMetaNew = ParseJson(RestApiGet('/studies/' .. aoStudyIDNew, false))
+    ldStudyInstanceUIDNew = loStudyMetaNew['MainDicomTags']['StudyInstanceUID']
+
+    loStudyIDMod = loStudyMetaNew['AnonymizedFrom']
+    loStudyMetaMod = ParseJson(RestApiGet('/studies/' .. loStudyIDMod, false))
+    ldStudyInstanceUIDMod = loStudyMetaMod['MainDicomTags']['StudyInstanceUID']
+
+    loStudyIDOld = loStudyMetaMod['ModifiedFrom']
+    loStudyMetaOld = ParseJson(RestApiGet('/studies/' .. loStudyIDOld, false))
+    ldStudyInstanceUIDOld = loStudyMetaOld['MainDicomTags']['StudyInstanceUID']
+    lUIDMap[ldStudyInstanceUIDOld] = ldStudyInstanceUIDNew
+    lUIDType[ldStudyInstanceUIDOld] = 'StudyInstanceUID'
+
+    local loSeriesIDOld, loSeiesIDMod
+    local loSeriesMetaNew, loSeriesMetaOld, loSeriesMetaMod
+    local ldSeriesInstanceUIDNew, ldSeriesInstanceUIDOld, ldSeriesInstanceUIDMod
+
+    local loInstanceIDOld
+    local loInstanceMetaNew, loInstanceMetaOld, loInstanceMetaMod
+    local ldSOPInstanceUIDNew, ldSOPInstanceUIDOld, ldSOPInstanceUIDMod
+
+    for i, loSeriesIDNew in pairs(loStudyMetaNew['Series']) do
+
+        -- Now series
+        loSeriesMetaNew = ParseJson(RestApiGet('/series/' .. loSeriesIDNew, false))
+        ldSeriesInstanceUIDNew = loSeriesMetaNew['MainDicomTags']['SeriesInstanceUID']
+
+        loSeriesIDMod = loSeriesMetaNew['AnonymizedFrom']
+        loSeriesMetaMod = ParseJson(RestApiGet('/series/' .. loSeriesIDMod, false))
+        if not loSeriesMetaMod then
+            if gVerbose then print(string.rep(' ', gIndent) .. 'Missing series:' .. loSeriesIDMod .. ' of ' .. aoStudyIDNew ) end
+        end
+        ldSeriesInstanceUIDMod = loSeriesMetaMod['MainDicomTags']['SeriesInstanceUID']
+
+        loSeriesIDOld = loSeriesMetaMod['ModifiedFrom']
+        loSeriesMetaOld = ParseJson(RestApiGet('/series/' .. loSeriesIDOld, false))
+        ldSeriesInstanceUIDOld = loSeriesMetaOld['MainDicomTags']['SeriesInstanceUID']
+
+        lUIDMap[ldSeriesInstanceUIDOld] = ldSeriesInstanceUIDNew
+        lUIDType[ldSeriesInstanceUIDOld] = 'SeriesInstanceUID'
+
+        for j, loInstanceIDNew in pairs(loSeriesMetaNew['Instances']) do
+            -- Now instances 
+            loInstanceMetaNew = ParseJson(RestApiGet('/instances/' .. loInstanceIDNew, false))
+            ldSOPInstanceUIDNew = loInstanceMetaNew['MainDicomTags']['SOPInstanceUID']
+            loInstanceIDMod = loInstanceMetaNew['AnonymizedFrom'] 
+            loInstanceMetaMod = ParseJson(RestApiGet('/instances/' .. loInstanceIDMod, false))
+            ldSOPInstanceUIDMod = loInstanceMetaMod['MainDicomTags']['SOPInstanceUID']
+            loInstanceIDOld = loInstanceMetaMod['ModifiedFrom'] 
+            if loInstanceIDOld then 
+                loInstanceMetaOld = ParseJson(RestApiGet('/instances/' .. loInstanceIDOld, false))
+                ldSOPInstanceUIDOld = loInstanceMetaOld['MainDicomTags']['SOPInstanceUID']
+                lUIDMap[ldSOPInstanceUIDOld] = ldSOPInstanceUIDNew
+                lUIDType[ldSOPInstanceUIDOld] = 'SOPInstanceUID'
+                -- Delete the Modified intermediate
+                RestApiDelete('/instances/' .. loInstanceIDMod, false)
+            end
+
+            if lFlagRemapSOPInstanceUID then
+                local ldInstanceUIDRemap = RestApiGet('/tools/generate-uid?level=instance') 
+                lUIDMap[ldSOPInstanceUIDNew] = ldInstanceUIDRemap
+                lUIDType[ldSOPInstanceUIDNew] = 'SOPInstanceUID'
+            end
+
+        end
+
+    end
+
+    -- Now check for non-modified UID
+    if lFlagRemapKeptUID then
+        for lKeptUIDVal, lKeptUIDType in pairs(gKeptUID) do
+
+            -- We really only care if it does not exist
+            if not lUIDMap[lKeptUIDVal] then
+
+                if string.find(lKeptUIDType['Name'], 'StudyInstanceUID') or string.find(lKeptUIDType['Name'], 'FrameOfReferenceUID') then
+                    ldStudyInstanceUIDNew = RestApiGet('/tools/generate-uid?level=study') 
+                    lUIDMap[lKeptUIDVal] =  ldStudyInstanceUIDNew
+                    lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
+                end
+
+                if string.find(lKeptUIDType['Name'], 'SeriesInstanceUID') then
+                    ldSeriesInstanceUIDNew = RestApiGet('/tools/generate-uid?level=series') 
+                    lUIDMap[lKeptUIDVal] =  ldSeriesInstanceUIDNew
+                    lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
+                end
+
+                if string.find(lKeptUIDType['Name'], 'SOPInstanceUID') then
+                    local ldInstanceUIDRemap
+                    ldInstanceUIDRemap = RestApiGet('/tools/generate-uid?level=instance') 
+                    lUIDMap[lKeptUIDVal] = ldInstanceUIDRemap
+                    lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
+                end
+
+                if string.find(lKeptUIDType['Name'], 'SOPClassUID') or string.find(lKeptUIDType['Name'], 'CodingScheme') then -- we keep these
+                    lUIDMap[lKeptUIDVal] = lKeptUIDVal
+                    lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
+                end
+
+                -- Generic catch all will be a study uid
+                if not lUIDMap[lKeptUIDVal] then
+                    ldStudyInstanceUIDNew = RestApiGet('/tools/generate-uid?level=study') 
+                    lUIDMap[lKeptUIDVal] =  ldStudyInstanceUIDNew
+                    lUIDType[lKeptUIDVal] = lKeptUIDType['Name']
+                end
+
+            end
+
+        end
+    end
+
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+    return lUIDMap, lUIDType
+
+end
+
+-- ======================================================
+function LoadShiftEpochFromDB(aSQLpid)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    local lSQLQuery = string.format([[SELECT value FROM shiftepoch WHERE pid=%d]],aSQLpid)
+    local lSQLStatus, lSQLCursor
+    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
+    if not lSQLStatus then 
+        CloseSQL()
+        error("Problem selecting shiftepoch")
+    end
+    if lSQLCursor:numrows() > 0 then
+        local lSQLRow = lSQLCursor:fetch({}, "a")
+        gIndent = gIndent - 3
+        if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+        if gIndent > 0 then gIndent = gIndent - 3 end
+        return lSQLRow.value
+    end
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+
+end
+
+-- ======================================================
+function SaveShiftEpochToDB(aShiftEpoch,aSQLpid)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to false') end
+    local lSQLResult = gSQLConn:setautocommit(false)
+    local lSQLQuery = string.format(
+                        [[INSERT INTO shiftepoch (value,pid) VALUES(%d,%d)]],
+                        aShiftEpoch, aSQLpid)
+    local lSQLStatus, lSQLResult = pcall(gSQLConn.execute,gSQLConn, lSQLQuery)
+    if not lSQLStatus then
+        lSQLResult = gSQLConn:rollback()
+        if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+        lSQLResult = gSQLConn:setautocommit(true)
+        CloseSQL()
+        error("Problem inserting shiftepoch")
+    end
+    lSQLResult = gSQLConn:commit()
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Setting autocommit to true') end
+    lSQLResult = gSQLConn:setautocommit(true)
+
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+
+end
+
+-- ======================================================
+function ComputeShiftEpochFromEarliestDate(aoInstancesMeta)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    local lDicomFields = { 'Study', 'Series', 'Acquisition', 
+                           'Content', 'InstanceCreation',
+                           'PerformedProcedureStepStart' }
+    local lDateTimeFields = { 'AcquisitionDateTime' }
+    -- Default to current time if no date/time fields found
+    local lMinEpoch = os.time()
+    local lDateField, lTimeField
+    for i, loInstanceMeta in pairs(aoInstancesMeta) do
+        local loInstanceID = (loInstanceMeta['ID'])
+        local lSuccess, loDicomTagsJson =pcall(RestApiGet,
+                                               '/instances/' .. loInstanceID .. '/simplified-tags',
+                                                false)
+        if not lSuccess then
+            gSQLConn:rollback()
+            CloseSQL()
+            error('Could not query instance for tags')
+        end
+        local loDicomTags = ParseJson(loDicomTagsJson)
+        -- local loDicomTags = 
+        --        ParseJson(RestApiGet('/instances/' .. 
+        --                             loInstanceID .. '/simplified-tags', false))
+        for j, lDicomField in pairs(lDicomFields) do
+            local lDateField = lDicomField .. 'Date'
+            local lTimeField = lDicomField .. 'Time'
+            if loDicomTags[lDateField] and string.len(trim(loDicomTags[lDateField])) > 0 then
+                if loDicomTags[lTimeField] and string.len(trim(loDicomTags[lTimeField])) > 0 then
+                    local lYear           = tonumber(string.sub(loDicomTags[lDateField],1,4))
+                    local lMonth          = tonumber(string.sub(loDicomTags[lDateField],5,6))
+                    local lDay            = tonumber(string.sub(loDicomTags[lDateField],7,8))
+                    local lHour           = tonumber(string.sub(loDicomTags[lTimeField],1,2))
+                    local lMinute         = tonumber(string.sub(loDicomTags[lTimeField],3,4))
+                    local lSec = math.floor(tonumber(string.sub(loDicomTags[lTimeField],5)) or 0)
+                    if not lMinEpoch then
+                        lMinEpoch = os.time{year=lYear, 
+                                           month=lMonth or 1, 
+                                           day=lDay or 1, 
+                                           hour=lHour or 0, 
+                                           min=lMinute or 0, 
+                                           sec=lSec or 0}
+                    else
+                        lMinEpoch = math.min(lMinEpoch, os.time{year=lYear, 
+                                                              month=lMonth or 1, 
+                                                              day=lDay or 1, 
+                                                              hour=lHour or 0, 
+                                                              min=lMinute or 0, 
+                                                              sec=lSec or 0 })
+                    end
+                else
+                    if gVerbose then 
+                        print ('No matching time for date: ' .. lDateField .. ', ' .. lTimeField)
+                        PrintRecursive(loDicomTags)
+                    end
+                end
+            end -- endif found lDateField
+        end -- loop over lDicomFields
+        for j, lDateTimeField in pairs(lDateTimeFields) do 
+            if loDicomTags[lDateTimeField] and string.len(trim(loDicomTags[lDateTimeField])) > 0 then
+                local lYear           = tonumber(string.sub(loDicomTags[lDateTimeField],1,4))
+                local lMonth          = tonumber(string.sub(loDicomTags[lDateTimeField],5,6))
+                local lDay            = tonumber(string.sub(loDicomTags[lDateTimeField],7,8))
+                local lHour           = tonumber(string.sub(loDicomTags[lDateTimeField],9,10))
+                local lMinute         = tonumber(string.sub(loDicomTags[lDateTimeField],11,12))
+                local lSec = math.floor(tonumber(string.sub(loDicomTags[lDateTimeField],13)) or 0)
+                if not lMinEpoch then
+                    lMinEpoch = os.time{year=lYear, 
+                                       month=lMonth or 1, 
+                                       day=lDay or 1, 
+                                       hour=lHour or 0, 
+                                       min=lMinute or 0, 
+                                       sec=lSec or 0}
+                else
+                    lMinEpoch = math.min(lMinEpoch, 
+                                        os.time{year=lYear, 
+                                                month=lMonth or 1, 
+                                                day=lDay or 1, 
+                                                hour=lHour or 0, 
+                                                min=lMinute or 0, 
+                                                sec=lSec or 0 })
+                end
+            end
+        end -- loop over lDateTimeFields
+    end -- loop over aoInstancesMeta
+    local lTemp = os.date("*t", lMinEpoch)
+    local lMinYear = lTemp['year']
+    local lShiftEpoch = lMinEpoch - os.time{year=lMinYear, 
+                                            month=1, 
+                                            day=1, 
+                                            hour=12, 
+                                            min=0, 
+                                            sec=0}
+
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+    return lShiftEpoch
+
+end
+
+-- ======================================================
+function RecursiveReplaceUID(aParent, aLevelIn)
+
+    gMaxRecurseDepth = 20
+    local lElement
+    local lLevelIn = (aLevelIn) or gMaxRecurseDepth
+    local lLevelOut = lLevelIn - 1
+    if not aLevelIn then
+        gAddressConstructor = {}
+        gAddressList = {}
+    end
+    if (lLevelIn<1) then return {}, lLevelOut end;
+    local lParentType = type(aParent);
+    lElement = {}
+    if (lParentType ~= "table") then return lElement, lLevelOut end
+    local lUIDNew
+    local lValue
+    if aParent['Value'] then
+        if type(aParent['Value']) == "table" then
+            for k,lChild in pairs(aParent['Value']) do  
+                table.insert(gAddressConstructor, aParent['Name'] .. "[" .. tostring(k-1) .. "]")
+                lValue, iLevelOut = RecursiveReplaceUID(lChild, lLevelIn-1)
+                if (lLevelOut < 0) then break end
+                if type(lValue) == "table" then
+                    if next(lValue) then lElement[k] = lValue end
+                else
+                    if string.len(lValue) > 0 then lElement[k] = lValue end
+                end
+                table.remove(gAddressConstructor)
+            end
+        else
+            if string.find(aParent['Name'],'UID') then
+                table.insert(gAddressConstructor, aParent['Name'])
+                lUIDNew = aParent['Value']
+                while gUIDMap[lUIDNew] do
+                    if lUIDNew == gUIDMap[lUIDNew] then break end
+                    lUIDNew = gUIDMap[lUIDNew]
+                end
+                local lAddressEntry = ""
+                local lNAddressStub = #gAddressConstructor
+                for k, lAddressStub in pairs(gAddressConstructor) do
+                    if (k < lNAddressStub) then
+                        lAddressEntry = lAddressEntry .. lAddressStub .. "."
+                    else
+                        lAddressEntry = lAddressEntry .. lAddressStub
+                    end
+                end
+                gAddressList[lAddressEntry] = lUIDNew
+                aParent['Value'] = lUIDNew
+                table.remove(gAddressConstructor)
+            end
+            return aParent['Value'], iLevelOut
+        end
+    else
+        for k,lChild in pairs(aParent) do  
+            lValue, iLevelOut = RecursiveReplaceUID(lChild, lLevelIn-1)
+            if (lLevelOut < 0) then break end
+            if type(lValue) == "table" then
+                if next(lValue) then lElement[k] = lValue end
+            else
+                if string.len(lValue) > 0 then lElement[k] = lValue end
+            end
+        end
+    end
+    return lElement, iLevelOut
+
+end
+
 -- -- ======================================================
--- function RecursiveReplaceUID(aParent, aLevelIn)
--- 
---     gMaxRecurseDepth = 20
---     local lElement
---     local lLevelIn = (aLevelIn) or gMaxRecurseDepth
---     local lLevelOut = lLevelIn - 1
---     if not aLevelIn then
---         gAddressConstructor = {}
---         gAddressList = {}
---     end
---     if (lLevelIn<1) then return {}, lLevelOut end;
---     local lParentType = type(aParent);
---     lElement = {}
---     if (lParentType ~= "table") then return lElement, lLevelOut end
---     local lUIDNew
---     local lValue
---     if aParent['Value'] then
---         if type(aParent['Value']) == "table" then
---             for k,lChild in pairs(aParent['Value']) do  
---                 table.insert(gAddressConstructor, aParent['Name'] .. "[" .. tostring(k-1) .. "]")
---                 lValue, iLevelOut = RecursiveReplaceUID(lChild, lLevelIn-1)
---                 if (lLevelOut < 0) then break end
---                 if type(lValue) == "table" then
---                     if next(lValue) then lElement[k] = lValue end
---                 else
---                     if string.len(lValue) > 0 then lElement[k] = lValue end
---                 end
---                 table.remove(gAddressConstructor)
---             end
---         else
---             if string.find(aParent['Name'],'UID') then
---                 table.insert(gAddressConstructor, aParent['Name'])
---                 lUIDNew = aParent['Value']
---                 while gUIDMap[lUIDNew] do
---                     if lUIDNew == gUIDMap[lUIDNew] then break end
---                     lUIDNew = gUIDMap[lUIDNew]
---                 end
---                 local lAddressEntry = ""
---                 local lNAddressStub = #gAddressConstructor
---                 for k, lAddressStub in pairs(gAddressConstructor) do
---                     if (k < lNAddressStub) then
---                         lAddressEntry = lAddressEntry .. lAddressStub .. "."
---                     else
---                         lAddressEntry = lAddressEntry .. lAddressStub
---                     end
---                 end
---                 gAddressList[lAddressEntry] = lUIDNew
---                 aParent['Value'] = lUIDNew
---                 table.remove(gAddressConstructor)
---             end
---             return aParent['Value'], iLevelOut
---         end
---     else
---         for k,lChild in pairs(aParent) do  
---             lValue, iLevelOut = RecursiveReplaceUID(lChild, lLevelIn-1)
---             if (lLevelOut < 0) then break end
---             if type(lValue) == "table" then
---                 if next(lValue) then lElement[k] = lValue end
---             else
---                 if string.len(lValue) > 0 then lElement[k] = lValue end
---             end
---         end
---     end
---     return lElement, iLevelOut
--- 
--- end
--- 
--- -- -- ======================================================
--- function ShiftDateTimeString(aShiftEpoch,aYYYYMMDDString,aHHMMSSString)
---    
---     local lYear = tonumber(string.sub(aYYYYMMDDString, 1, 4))
---     local lMonth = tonumber(string.sub(aYYYYMMDDString,5,6))
---     local lDay = tonumber(string.sub(aYYYYMMDDString,7,8))
--- 
---     local lHour, lMinute, lSec, lSecFrac
---     local lHHMMSSString 
---     if aHHMMSSString then
---         if string.len(trim(aHHMMSSString)) >= 6 then
---            lHHMMSSString = aHHMMSSString
---         else
---            if gVerbose then print(string.rep(' ', gIndent+3) .. 'Bad shift date time string ' .. aHHMMSSString) end
---            lHHMMSSString = nil
---         end
---     end
---     if lHHMMSSString then
---         lHour = tonumber(string.sub(lHHMMSSString, 1, 2))
---         lMinute = tonumber(string.sub(lHHMMSSString,3,4))
---         local lSecString = string.sub(lHHMMSSString,5)
---         lSec = math.floor(tonumber(lSecString) or 0)
---         if string.find(lSecString,'%.') then
---             lSecFrac = string.sub(lSecString,3)
---         else
---             lSecFrac = nil
---         end
---     elseif string.len(aYYYYMMDDString) > 12 then
---         lHour = tonumber(string.sub(aYYYYMMDDString, 9, 10))
---         lMinute = tonumber(string.sub(aYYYYMMDDString,11,12))
---         local lSecString 
---         if string.find(aYYYYMMDDString, '%-') then
---             lSecString = string.sub(aYYYYMMDDString,13,14)
---         else
---             lSecString = string.sub(aYYYYMMDDString,13)
---         end
---         lSec = math.floor(tonumber(lSecString))
---         if string.find(lSecString,'%.') then
---             lSecFrac = string.sub(lSecString,3)
---         else
---             lSecFrac = nil
---         end
---     else
---         lHour = 0
---         lMinute = 0
---         lSec = 0
---     end
---     local lThisEpoch = os.time{year=lYear, 
---                                month=lMonth or 1, 
---                                day=lDay or 1, 
---                                hour=lHour or 0, 
---                                min=lMinute or 0, 
---                                sec=lSec or 0}
---     local lTemp = os.date("*t", lThisEpoch)
---     local lThisDST = lTemp['isdst']
--- 
---     local lNewEpoch = lThisEpoch - aShiftEpoch
---     local lTemp = os.date("*t", lNewEpoch)
---     local lNewDST = lTemp['isdst']
--- 
---     -- Preserve the original hour, minute, second
---     local lNewHour = lHour
--- 
---     local lNewDateString
---     if string.len(aYYYYMMDDString) > 12 then
---         if lSecFrac then
---             lNewDateString = 
---                 string.format("%04d%02d%02d%02d%02d%0d%s", 
---                               lTemp['year'], lTemp['month'], 
---                               lTemp['day'], lNewHour, 
---                               lTemp['min'], lTemp['sec'], lSecFrac)
---         else
---             lNewDateString = 
---                 string.format("%04d%02d%02d%02d%02d%02d.0", 
---                               lTemp['year'], lTemp['month'], 
---                               lTemp['day'], lNewHour, 
---                               lTemp['min'], lTemp['sec'])
---         end
---     else
---         lNewDateString = string.format("%04d%02d%02d", lTemp['year'], lTemp['month'], lTemp['day'])
---     end
---     local lNewTimeString = nil
---     if aHHMMSSString then
---         if lSecFrac then
---            lNewTimeString = string.format("%02d%02d%02d%s", lNewHour, lTemp['min'], lTemp['sec'], lSecFrac)
---         else
---            lNewTimeString = string.format("%02d%02d%02d.0", lNewHour, lTemp['min'], lTemp['sec'])
---         end
---     end
--- 
---     return lNewDateString, lNewtimeString
--- 
--- end
---    
--- -- ======================================================
--- function ShiftDateTimePatAgeOfInstances(aoInstancesMeta, aShiftEpoch, aReplaceRoot)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     local lDicomFields = { 'Study', 'Series', 'Acquisition', 
---                            'Content', 'InstanceCreation',
---                            'PerformedProcedureStepStart' }
---     local lDateTimeFields = { 'AcquisitionDateTime' }
---     local lDateTimeFieldsRadio = { 'RadiopharmaceuticalStartDateTime', 'RadiopharmaceuticalStopDateTime' }
---     local loInstanceIDNew = {}
---     local lNumInstances = 0
---     for i, loInstanceMeta in pairs(aoInstancesMeta) do lNumInstances = lNumInstances+1 end
---     local lTenPercent = math.ceil(lNumInstances / 10)
---     local lPostData = {}
---     lPostData['orthanc_instance_ids'] = {}
---     for i, loInstanceMeta in pairs(aoInstancesMeta) do
---         table.insert(lPostData['orthanc_instance_ids'], loInstanceMeta['ID'])
---     end
---     local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
---     if not lResults then
---        error('Problem calling send_instances_to_remote_filter_lua')
---     end 
---     -- for i, loInstanceMeta in pairs(aoInstancesMeta) do
---     local i = 0
---     for loInstanceID, lFlagSendToRemote in pairs(lResults) do
---         i = i + 1
---         if gVerbose and (((i-1) % lTenPercent) == 0) then print(string.rep(' ', gIndent) .. 'Progress', i, 'of', lNumInstances) end
---         local lReplace = {}
---         for lReplaceRootKey, lReplaceRootVal in pairs(aReplaceRoot) do
---             lReplace[lReplaceRootKey] = lReplaceRootVal
---         end
---         -- local loInstanceID = (loInstanceMeta['ID'])
---         -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
---         local loDicomTags
---         if lFlagSendToRemote then
---             loDicomTags = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/simplified-tags', false))
---         else
---             loDicomTags = {}
---             if gVerbose then print(string.rep(' ', gIndent) .. 'Shift date will skip non orig/prim /instances/' .. loInstanceID .. '/simplified-tags') end
---         end
---         for j, lDicomField in pairs(lDicomFields) do
---             local lDateField = lDicomField .. 'Date'
---             local lTimeField = lDicomField .. 'Time'
---             if loDicomTags[lDateField] and string.len(trim(loDicomTags[lDateField])) > 0 then
---                 if loDicomTags[lTimeField] and string.len(trim(loDicomTags[lTimeField])) > 0 then
---                     -- local lNewDateString, lNewTimeString
---                     -- lNewDateString, lNewTimeString = 
---                     --     ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateField], loDicomTags[lTimeField])
---                     local lPostData = {}
---                     lPostData['ShiftEpoch'] = aShiftEpoch
---                     lPostData['YYYYMMDD'] = loDicomTags[lDateField]
---                     lPostData['HHMMSS'] = loDicomTags[lTimeField]
---                     local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
---                     lReplace[lDateField] = lResults['NewDateString']
---                     lReplace[lTimeField] = lResults['NewTimeString']
---                 else
---                     if gVerbose then 
---                         print ('No matching time for date: ' .. lDateField .. ', ' .. lTimeField)
---                         -- PrintRecursive(loDicomTags)
---                     end
---                 end
---             end
---         end -- loop over lDicomFields
---         for j, lDateTimeField in pairs(lDateTimeFields) do 
---             if loDicomTags[lDateTimeField] and string.len(trim(loDicomTags[lDateTimeField])) > 0 then
---                 -- lReplace[lDateTimeField] = ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateTimeField])
---                 local lPostData = {}
---                 lPostData['ShiftEpoch'] = aShiftEpoch
---                 lPostData['YYYYMMDD'] = loDicomTags[lDateTimeField]
---                 local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
---                 lReplace[lDateTimeField] = lResults['NewDateString']
---                 -- lReplace[lDateTimeField] = ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateTimeField])
---             end
---         end -- loop over lDateTimeFields
---         local lRadio = 'RadiopharmaceuticalInformationSequence'
---         if loDicomTags[lRadio] then
---             lReplace[lRadio] = loDicomTags[lRadio]
---             for lItem, lTags in pairs(loDicomTags[lRadio]) do
---                 for j, lDateTimeField in pairs(lDateTimeFieldsRadio) do 
---                     if lTags[lDateTimeField] and string.len(trim(lTags[lDateTimeField])) > 0 then
---                         -- lReplace[lRadio][lItem][lDateTimeField] = ShiftDateTimeString(aShiftEpoch, lTags[lDateTimeField])
---                         local lPostData = {}
---                         lPostData['ShiftEpoch'] = aShiftEpoch
---                         lPostData['YYYYMMDD'] = lTags[lDateTimeField]
---                         local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
---                         lReplace[lRadio][lItem][lDateTimeField] = lResults['NewDateString']
---                     end
---                 end -- loop over lDateTimeFields
---             end
---         end
--- 
---         if loDicomTags['PatientBirthDate'] then
---             -- lReplace['PatientBirthDate'] = ShiftDateTimeString(aShiftEpoch, loDicomTags['PatientBirthDate'])
---             local lPostData = {}
---             lPostData['ShiftEpoch'] = aShiftEpoch
---             lPostData['YYYYMMDD'] = loDicomTags['PatientBirthDate']
---             local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
---             lReplace['PatientBirthDate'] = lResults['NewDateString']
---         end
---         if loDicomTags['PatientAge'] then
---             local lAgeNumber = tonumber(string.sub(loDicomTags['PatientAge'], 1, 3))
---             local lAgeUnit = string.sub(loDicomTags['PatientAge'],4)
---             if lAgeUnit == 'Y' then
---                 if lAgeNumber > 89 then
---                     lAgeNumber = 90
---                     lReplace['PatientAge'] = string.format("%03dY", lAgeNumber)
---                 end
---             end
---         end
---         if loDicomTags['SOPInstanceUID'] then
---             local ldSOPInstanceUIDNew = gUIDMap[loDicomTags['SOPInstanceUID']]
---             while gUIDMap[ldSOPInstanceUIDNew] do
---                 ldSOPInstanceUIDNew = gUIDMap[ldSOPInstanceUIDNew]
---             end
---             lReplace['SOPInstanceUID'] = ldSOPInstanceUIDNew
---         end
---         if lFlagSendToRemote then
---             loDicomTags = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
---             local lPostData = {}
---             lPostData['UIDMap'] = gUIDMap
---             for lTagKey, lTagVal in pairs(gTopLevelTagToKeep) do 
---                 if loDicomTags[lTagKey] then
---                     --if type(loDicomTags[lTagKey]) == 'table' then
---                     if type(loDicomTags[lTagKey]['Value']) == 'table' then
---                         local iReplaceValue, lLevelOut
---                         -- iReplaceValue, lLevelOut = RecursiveReplaceUID(loDicomTags[lTagKey])
---                         lPostData['Parent'] = loDicomTags[lTagKey]
---                         local lResults = ParseJson(RestApiPost('/recursive_replace_uid_lua', DumpJson(lPostData), false))
---                         iReplaceValue = lResults['ReplaceValue']
---                         lLevelOut = lResults['LevelOut']
---                         gAddressList = lResults['AddressList']
---                         if gAddressList then
---                             for lAddressKey, lAddressVal in pairs(gAddressList) do
---                                 lReplace[lAddressKey] = lAddressVal
---                             end
---                         end
---                         --lReplace[lTagKey] = iReplaceValue
---                     else
---                         local lUIDNew = gUIDMap[loDicomTags[lTagKey]['Value']]
---                         while gUIDMap[lUIDNew] do
---                             if lUIDNew == gUIDMap[lUIDNew] then break end
---                             lUIDNew = gUIDMap[lUIDNew]
---                         end
---                         lReplace[lTagKey] = lUIDNew
---                     end
---                 end
---             end
---         end
--- 
---         if next(loDicomTags) then
---             local lPostData = {}
---             lPostData['Replace'] = lReplace
---             -- lPostData['DicomVersion'] = '2017c'
---             -- lPostData['DicomVersion'] = '2008'
---             lPostData['Force'] = true
---             lPostDataJson = DumpJson(lPostData,true)
---             local lSuccess, lModifiedDICOMBlob = pcall(RestApiPost,
---                                                        '/instances/' .. loInstanceID .. '/modify', 
---                                                        lPostDataJson, false)
---             if not lSuccess then
---                 PrintRecursive(lPostDataJson)
--- --                 gSQLConn:rollback()
--- --                 CloseSQL()
---                 error('Unable to adjust dates')
---             end
---             -- Upload the lModifiedDICOMBlob
---             local lSuccess, loModifiedInstanceIDJson = pcall(RestApiPost,
---                                                              '/instances/', lModifiedDICOMBlob, false)
---             if not lSuccess then
--- --                 gSQLConn:rollback()
--- --                 CloseSQL()
---                 error('Problem uploading new image blob')
---             end
---             --local loModifiedInstanceID = ParseJson(RestApiPost('/instances/', lModifiedDICOMBlob, false))['ID']
---             local loModifiedInstanceID = ParseJson(loModifiedInstanceIDJson)['ID']
---             -- Store new ID
---             loInstanceIDNew[i] = loModifiedInstanceID
---         end
---     
---     end -- loop over aoInstancesMeta
--- 
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if (gIndent > 0) then gIndent = gIndent - 3 end
---     return loInstanceIDNew
--- 
--- end
---  
--- -- ======================================================
--- function SendToRemoteFilter(aoInstanceID)
--- 
---     local loDicomTags = ParseJson(RestApiGet('/instances/' .. aoInstanceID .. '/simplified-tags', false))
---     -- By default we assume derived (for safety) unless proven otherwise by existing ImageType 
---     local lFlagAssumeOriginalPrimary = os.getenv('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY') == 'true'
--- 
---     local lFlagOriginalPrimary = lFlagAssumeOriginalPrimary
---     local lFlagPrimary = lFlagAssumeOriginalPrimary
---     local lCharStartOriginal, lCharStopOriginal, lCharStartPrimary, lCharStopPrimary
---     if not lFlagAssumeOriginalPrimary then -- Turn off in order to keep Derived/Secondaries
---         if loDicomTags['ImageType'] then
---             lCharStartOriginal, lCharStopOriginal = string.find(loDicomTags['ImageType'],'ORIGINAL')
---             lCharStartPrimary, lCharStopPrimary = string.find(loDicomTags['ImageType'],'PRIMARY')
---             lFlagOriginalPrimary = (lCharStartOriginal == 1) and (lCharStartPrimary == (lCharStopOriginal + 2))
---             lFlagPrimary = lFlagPrimary or lCharStartPrimary
---         else
---             if loDicomTags['FrameType'] then
---                 lCharStartOriginal, lCharStopOriginal = string.find(loDicomTags['FrameType'],'ORIGINAL')
---                 lCharStartPrimary, lCharStopPrimary = string.find(loDicomTags['FrameType'],'PRIMARY')
---                 lFlagPrimary = lFlagPrimary or lCharStartPrimary
---                 lFlagOriginalPrimary = (lCharStartOriginal == 1) and (lCharStartPrimary == (lCharStopOriginal + 2))
---             end
---         end
---     end
--- 
---     -- Exception for HIFU and Dynacad
---     local lFlagDynacad = false
---     -- lFlagDynacad = lFlagDynacad or string.find(loDicomTags['SeriesDescription'], 'DCAD-')
---     -- lFlagDynacad = lFlagDynacad or (loDicomTags['0073,1003'] and string.find(loDicomTags['0073,1003'],'DYNACAD'))
---     
---     -- Checking for non-mammo images
---     local lFlagScreenForReports = os.getenv('LUA_FLAG_SCREEN_FOR_REPORTS') == 'true' -- turn on to weed out reports
---     local lFlagNonReport
---     if loDicomTags['ImageType'] then
---         lFlagNonReport = true
---     else
---         lFlagNonReport = false
---     end
---     if lFlagScreenForReports then -- Test for unwanted mammo studies
---         if lFlagNonReport and loDicomTags['ImageType'] then
---             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'dose'))
---             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'screen'))
---             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'report'))
---             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'exam protocol'))
---         end
---         if lFlagNonReport and loDicomTags['StudyDescription'] then
---             -- lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StudyDescription']), 'no rpt'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['StudyDescription'], 'SecurView'))
---         end
---         if lFlagNonReport and loDicomTags['SecondaryCaptureDeviceManufacturer'] then
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturer'], 'PACSGEAR'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturer'], 'HipGrahics'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturer'], 'Lexmark'))
---         end
---         if lFlagNonReport and loDicomTags['SecondaryCaptureDeviceManufacturerModelName'] then
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturerModelName'], 'PACSSCAN'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturerModelName'], 'InSpace'))
---         end
---         if lFlagNonReport and loDicomTags['StationName'] then
---             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StationName']), 'rapid'))
---             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StationName']), 'sonosite'))
---         end
---         if lFlagNonReport and loDicomTags['Manufacturer'] then
---             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['Manufacturer']), 'ischemaview'))
---         end
---         if lFlagNonReport and loDicomTags['ManufacturerModelName'] then
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['ManufacturerModelName'], 'SecurView'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['ManufacturerModelName'], 'Blackford'))
---         end
---         if lFlagNonReport and loDicomTags['SeriesDescription'] then
---             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'screen snapshot'))
---             lFlagNonReport = lFlagNonReport and (not string.match(string.lower(loDicomTags['SeriesDescription']), 'screen *s[a-z]*er*'))
---             lFlagNonReport = lFlagNonReport and (not string.match(string.lower(loDicomTags['SeriesDescription']), '*dose report*'))
---             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'no rpt'))
---             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'summary'))
---             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'vpct'))
---             lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'history'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'RAPID'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'SecurView'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Patient Protocol'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Phoenix'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Carestream'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'REQ'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'REPORT'))
---             lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Blackford'))
---         end
---     end
---     -- Consider both original and primary
---     if (os.getenv('LUA_FLAG_MUST_BE_ORIGINAL') == 'true') then 
---        return lFlagDynacad or (lFlagOriginalPrimary and lFlagNonReport)
---     -- else only primary
---     else
---        return lFlagDynacad or (lFlagPrimary and lFlagNonReport)
---     end
--- 
--- end
---  
--- -- ======================================================
--- function PreScreenSendToRemote(aoStudyID)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     local lFlagDeleted = false
---     
---     local loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
---     local lNSeriesStart = #loStudyMeta['Series']
--- 
---     local lPostData = {}
---     lPostData['orthanc_study_ids'] = { aoStudyID } 
---     local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
---     if not lResults then
---        error('Problem calling send_instances_to_remote_filter_lua')
---     end 
---     for loInstanceID, lFlagSendToRemote in pairs(lResults) do
---         if not lFlagSendToRemote then
---             if gVerbose then print(string.rep(' ', gIndent) .. 'Prefilter will delete non orig/prim /instances/' .. loInstanceID .. '/simplified-tags') end
---             RestApiDelete('/instances/' .. loInstanceID, false)
---         end
---     end
---     
---     -- for i, loSeriesID in pairs(loStudyMeta['Series']) do
---     --     local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
---     --     if loSeriesMeta['MainDicomTags'] then 
---     --         if loSeriesMeta['Instances'] then
---     --             for ioInstanceID, oInstanceID in pairs(loSeriesMeta['Instances']) do
---     --                 local lFlagSendToRemote = SendToRemoteFilter(oInstanceID)
---     --                 if not lFlagSendToRemote then
---     --                     if gVerbose then print(string.rep(' ', gIndent) .. 'Prefilter will delete non orig/prim /instances/' .. oInstanceID .. '/simplified-tags') end
---     --                     RestApiDelete('/instances/' .. oInstanceID, false)
---     --                 end
---     --             end
---     --         end
---     --     end
---     -- end
--- 
---     loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
---     local lNSeriesEnd = 0
---     if loStudyMeta then
---         if loStudyMeta['Series'] then
---             lNSeriesEnd = #loStudyMeta['Series']
---         end
---     end
---     local lNSeriesDeleted = lNSeriesStart - lNSeriesEnd
---     if lNSeriesStart > lNSeriesEnd then lFlagDeleted = true end
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
---     return lFlagDeleted, lNSeriesStart, lNSeriesDeleted
--- 
--- end
--- 
--- -- ======================================================
--- function PreScreenSeriesByModality(aoStudyID)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     local lFlagDeleted = false
---     local lAllowedModalities = {}
---     if string.len(trim(os.getenv('LUA_ALLOWED_MODALITIES'))) > 0 then
---         for lModality in string.gmatch(os.getenv('LUA_ALLOWED_MODALITIES'), '[^," ]+') do
---             if lModality and string.len(trim(lModality)) > 0 then
---                 table.insert(lAllowedModalities,lModality)
---             end
---         end
---     end
---     local lDeniedModalities = {}
---     if string.len(trim(os.getenv('LUA_DENIED_MODALITIES'))) > 0 then
---         for lModality in string.gmatch(os.getenv('LUA_DENIED_MODALITIES'), '[^," ]+') do
---             if lModality and string.len(trim(lModality)) > 0 then
---                 table.insert(lDeniedModalities, lModality)
---             end
---         end
---     end
---     local lFlagAllowed 
---     local loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
---     local lNSeriesStart = #loStudyMeta['Series']
---     local lNSeriesDeleted = 0
---     for i, loSeriesID in pairs(loStudyMeta['Series']) do
---         local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
---         if loSeriesMeta['MainDicomTags'] then 
---              if loSeriesMeta['MainDicomTags']['Modality'] then
---                  lFlagAllowed = #lAllowedModalities == 0
---                  for j, lAllowedModality in pairs(lAllowedModalities) do
---                      lFlagAllowed = lFlagAllowed or (loSeriesMeta['MainDicomTags']['Modality'] == lAllowedModality)
---                  end
---                  for j, lDeniedModality in pairs(lDeniedModalities) do
---                      lFlagAllowed = lFlagAllowed and (loSeriesMeta['MainDicomTags']['Modality'] ~= lDeniedModality)
---                  end
---                  if not lFlagAllowed then
---                      if gVerbose then print(string.rep(' ', gIndent) .. 'Deleting non modality series', loSeriesID) end
---                      RestApiDelete('/series/' .. loSeriesID, false)
---                      lFlagDeleted = true
---                      lNSeriesDeleted = lNSeriesDeleted + 1
---                  end
---              end
---          end
---     end
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
---     return lFlagDeleted, lNSeriesStart, lNSeriesDeleted
--- 
--- end
--- 
--- -- ======================================================
--- function CheckSplit2DFromCViewTomo(aoStudyID)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     local loSeriesMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID .. '/series', false))
--- 
---     -- We need R/L CC, R/L MLO for 2D and C-View (others are extra)
---     local lSearchStrings = { 'r cc', 'l cc', 'r mlo', 'l mlo' }
---     local lCount2D = {0, 0, 0, 0}
---     local lCountCView = {0, 0, 0, 0}
---     for i, loSeriesData in pairs(loSeriesMeta) do
---         local lFlagCView = false
---         local lFlagNon2D = false
---         if loSeriesData['MainDicomTags']['SeriesDescription'] then
---             local lDescriptionLower = string.lower(loSeriesData['MainDicomTags']['SeriesDescription'])
---             lFlagCView = lFlagCView or string.find(lDescriptionLower, 'c-view')
---             lFlagNon2D = lFlagNon2D or lFlagCView
---             lFlagNon2D = lFlagNon2D or string.find(lDescriptionLower, 'tomo')
---             if lFlagCView or (not lFlagNon2D) then
---                 for j = 1, 4 do 
---                     local lFoundStr = string.find(lDescriptionLower, lSearchStrings[j])
---                     if lFoundStr then
---                         if lFlagCView then
---                             lCountCView[j] = 1
---                         else
---                             lCount2D[j] = 1
---                         end
---                     end
---                 end
+function ShiftDateTimeString(aShiftEpoch,aYYYYMMDDString,aHHMMSSString)
+   
+    local lYear = tonumber(string.sub(aYYYYMMDDString, 1, 4))
+    local lMonth = tonumber(string.sub(aYYYYMMDDString,5,6))
+    local lDay = tonumber(string.sub(aYYYYMMDDString,7,8))
+
+    local lHour, lMinute, lSec, lSecFrac
+    local lHHMMSSString 
+    if aHHMMSSString then
+        if string.len(trim(aHHMMSSString)) >= 6 then
+           lHHMMSSString = aHHMMSSString
+        else
+           if gVerbose then print(string.rep(' ', gIndent+3) .. 'Bad shift date time string ' .. aHHMMSSString) end
+           lHHMMSSString = nil
+        end
+    end
+    if lHHMMSSString then
+        lHour = tonumber(string.sub(lHHMMSSString, 1, 2))
+        lMinute = tonumber(string.sub(lHHMMSSString,3,4))
+        local lSecString = string.sub(lHHMMSSString,5)
+        lSec = math.floor(tonumber(lSecString) or 0)
+        if string.find(lSecString,'%.') then
+            lSecFrac = string.sub(lSecString,3)
+        else
+            lSecFrac = nil
+        end
+    elseif string.len(aYYYYMMDDString) > 12 then
+        lHour = tonumber(string.sub(aYYYYMMDDString, 9, 10))
+        lMinute = tonumber(string.sub(aYYYYMMDDString,11,12))
+        local lSecString 
+        if string.find(aYYYYMMDDString, '%-') then
+            lSecString = string.sub(aYYYYMMDDString,13,14)
+        else
+            lSecString = string.sub(aYYYYMMDDString,13)
+        end
+        lSec = math.floor(tonumber(lSecString))
+        if string.find(lSecString,'%.') then
+            lSecFrac = string.sub(lSecString,3)
+        else
+            lSecFrac = nil
+        end
+    else
+        lHour = 0
+        lMinute = 0
+        lSec = 0
+    end
+    local lThisEpoch = os.time{year=lYear, 
+                               month=lMonth or 1, 
+                               day=lDay or 1, 
+                               hour=lHour or 0, 
+                               min=lMinute or 0, 
+                               sec=lSec or 0}
+    local lTemp = os.date("*t", lThisEpoch)
+    local lThisDST = lTemp['isdst']
+
+    local lNewEpoch = lThisEpoch - aShiftEpoch
+    local lTemp = os.date("*t", lNewEpoch)
+    local lNewDST = lTemp['isdst']
+
+    -- Preserve the original hour, minute, second
+    local lNewHour = lHour
+
+    local lNewDateString
+    if string.len(aYYYYMMDDString) > 12 then
+        if lSecFrac then
+            lNewDateString = 
+                string.format("%04d%02d%02d%02d%02d%0d%s", 
+                              lTemp['year'], lTemp['month'], 
+                              lTemp['day'], lNewHour, 
+                              lTemp['min'], lTemp['sec'], lSecFrac)
+        else
+            lNewDateString = 
+                string.format("%04d%02d%02d%02d%02d%02d.0", 
+                              lTemp['year'], lTemp['month'], 
+                              lTemp['day'], lNewHour, 
+                              lTemp['min'], lTemp['sec'])
+        end
+    else
+        lNewDateString = string.format("%04d%02d%02d", lTemp['year'], lTemp['month'], lTemp['day'])
+    end
+    local lNewTimeString = nil
+    if aHHMMSSString then
+        if lSecFrac then
+           lNewTimeString = string.format("%02d%02d%02d%s", lNewHour, lTemp['min'], lTemp['sec'], lSecFrac)
+        else
+           lNewTimeString = string.format("%02d%02d%02d.0", lNewHour, lTemp['min'], lTemp['sec'])
+        end
+    end
+
+    return lNewDateString, lNewtimeString
+
+end
+   
+-- ======================================================
+function ShiftDateTimePatAgeOfInstances(aoInstancesMeta, aShiftEpoch, aReplaceRoot)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    local lDicomFields = { 'Study', 'Series', 'Acquisition', 
+                           'Content', 'InstanceCreation',
+                           'PerformedProcedureStepStart' }
+    local lDateTimeFields = { 'AcquisitionDateTime' }
+    local lDateTimeFieldsRadio = { 'RadiopharmaceuticalStartDateTime', 'RadiopharmaceuticalStopDateTime' }
+    local loInstanceIDNew = {}
+    local lNumInstances = 0
+    for i, loInstanceMeta in pairs(aoInstancesMeta) do lNumInstances = lNumInstances+1 end
+    local lTenPercent = math.ceil(lNumInstances / 10)
+    local lPostData = {}
+    lPostData['orthanc_instance_ids'] = {}
+    for i, loInstanceMeta in pairs(aoInstancesMeta) do
+        table.insert(lPostData['orthanc_instance_ids'], loInstanceMeta['ID'])
+    end
+    local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
+    if not lResults then
+       error('Problem calling send_instances_to_remote_filter_lua')
+    end 
+    -- for i, loInstanceMeta in pairs(aoInstancesMeta) do
+    local i = 0
+    for loInstanceID, lFlagSendToRemote in pairs(lResults) do
+        i = i + 1
+        if gVerbose and (((i-1) % lTenPercent) == 0) then print(string.rep(' ', gIndent) .. 'Progress', i, 'of', lNumInstances) end
+        local lReplace = {}
+        for lReplaceRootKey, lReplaceRootVal in pairs(aReplaceRoot) do
+            lReplace[lReplaceRootKey] = lReplaceRootVal
+        end
+        -- local loInstanceID = (loInstanceMeta['ID'])
+        -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
+        local loDicomTags
+        if lFlagSendToRemote then
+            loDicomTags = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/simplified-tags', false))
+        else
+            loDicomTags = {}
+            if gVerbose then print(string.rep(' ', gIndent) .. 'Shift date will skip non orig/prim /instances/' .. loInstanceID .. '/simplified-tags') end
+        end
+        for j, lDicomField in pairs(lDicomFields) do
+            local lDateField = lDicomField .. 'Date'
+            local lTimeField = lDicomField .. 'Time'
+            if loDicomTags[lDateField] and string.len(trim(loDicomTags[lDateField])) > 0 then
+                if loDicomTags[lTimeField] and string.len(trim(loDicomTags[lTimeField])) > 0 then
+                    -- local lNewDateString, lNewTimeString
+                    -- lNewDateString, lNewTimeString = 
+                    --     ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateField], loDicomTags[lTimeField])
+                    local lPostData = {}
+                    lPostData['ShiftEpoch'] = aShiftEpoch
+                    lPostData['YYYYMMDD'] = loDicomTags[lDateField]
+                    lPostData['HHMMSS'] = loDicomTags[lTimeField]
+                    local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+                    lReplace[lDateField] = lResults['NewDateString']
+                    lReplace[lTimeField] = lResults['NewTimeString']
+                else
+                    if gVerbose then 
+                        print ('No matching time for date: ' .. lDateField .. ', ' .. lTimeField)
+                        -- PrintRecursive(loDicomTags)
+                    end
+                end
+            end
+        end -- loop over lDicomFields
+        for j, lDateTimeField in pairs(lDateTimeFields) do 
+            if loDicomTags[lDateTimeField] and string.len(trim(loDicomTags[lDateTimeField])) > 0 then
+                -- lReplace[lDateTimeField] = ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateTimeField])
+                local lPostData = {}
+                lPostData['ShiftEpoch'] = aShiftEpoch
+                lPostData['YYYYMMDD'] = loDicomTags[lDateTimeField]
+                local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+                lReplace[lDateTimeField] = lResults['NewDateString']
+                -- lReplace[lDateTimeField] = ShiftDateTimeString(aShiftEpoch, loDicomTags[lDateTimeField])
+            end
+        end -- loop over lDateTimeFields
+        local lRadio = 'RadiopharmaceuticalInformationSequence'
+        if loDicomTags[lRadio] then
+            lReplace[lRadio] = loDicomTags[lRadio]
+            for lItem, lTags in pairs(loDicomTags[lRadio]) do
+                for j, lDateTimeField in pairs(lDateTimeFieldsRadio) do 
+                    if lTags[lDateTimeField] and string.len(trim(lTags[lDateTimeField])) > 0 then
+                        -- lReplace[lRadio][lItem][lDateTimeField] = ShiftDateTimeString(aShiftEpoch, lTags[lDateTimeField])
+                        local lPostData = {}
+                        lPostData['ShiftEpoch'] = aShiftEpoch
+                        lPostData['YYYYMMDD'] = lTags[lDateTimeField]
+                        local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+                        lReplace[lRadio][lItem][lDateTimeField] = lResults['NewDateString']
+                    end
+                end -- loop over lDateTimeFields
+            end
+        end
+
+        if loDicomTags['PatientBirthDate'] then
+            -- lReplace['PatientBirthDate'] = ShiftDateTimeString(aShiftEpoch, loDicomTags['PatientBirthDate'])
+            local lPostData = {}
+            lPostData['ShiftEpoch'] = aShiftEpoch
+            lPostData['YYYYMMDD'] = loDicomTags['PatientBirthDate']
+            local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+            lReplace['PatientBirthDate'] = lResults['NewDateString']
+        end
+        if loDicomTags['PatientAge'] then
+            local lAgeNumber = tonumber(string.sub(loDicomTags['PatientAge'], 1, 3))
+            local lAgeUnit = string.sub(loDicomTags['PatientAge'],4)
+            if lAgeUnit == 'Y' then
+                if lAgeNumber > 89 then
+                    lAgeNumber = 90
+                    lReplace['PatientAge'] = string.format("%03dY", lAgeNumber)
+                end
+            end
+        end
+        if loDicomTags['SOPInstanceUID'] then
+            local ldSOPInstanceUIDNew = gUIDMap[loDicomTags['SOPInstanceUID']]
+            while gUIDMap[ldSOPInstanceUIDNew] do
+                ldSOPInstanceUIDNew = gUIDMap[ldSOPInstanceUIDNew]
+            end
+            lReplace['SOPInstanceUID'] = ldSOPInstanceUIDNew
+        end
+        if lFlagSendToRemote then
+            loDicomTags = ParseJson(RestApiGet('/instances/' .. loInstanceID .. '/tags', false))
+            local lPostData = {}
+            lPostData['UIDMap'] = gUIDMap
+            for lTagKey, lTagVal in pairs(gTopLevelTagToKeep) do 
+                if loDicomTags[lTagKey] then
+                    --if type(loDicomTags[lTagKey]) == 'table' then
+                    if type(loDicomTags[lTagKey]['Value']) == 'table' then
+                        local iReplaceValue, lLevelOut
+                        -- iReplaceValue, lLevelOut = RecursiveReplaceUID(loDicomTags[lTagKey])
+                        lPostData['Parent'] = loDicomTags[lTagKey]
+                        local lResults = ParseJson(RestApiPost('/recursive_replace_uid_lua', DumpJson(lPostData), false))
+                        iReplaceValue = lResults['ReplaceValue']
+                        lLevelOut = lResults['LevelOut']
+                        gAddressList = lResults['AddressList']
+                        if gAddressList then
+                            for lAddressKey, lAddressVal in pairs(gAddressList) do
+                                lReplace[lAddressKey] = lAddressVal
+                            end
+                        end
+                        --lReplace[lTagKey] = iReplaceValue
+                    else
+                        local lUIDNew = gUIDMap[loDicomTags[lTagKey]['Value']]
+                        while gUIDMap[lUIDNew] do
+                            if lUIDNew == gUIDMap[lUIDNew] then break end
+                            lUIDNew = gUIDMap[lUIDNew]
+                        end
+                        lReplace[lTagKey] = lUIDNew
+                    end
+                end
+            end
+        end
+
+        if next(loDicomTags) then
+            local lPostData = {}
+            lPostData['Replace'] = lReplace
+            -- lPostData['DicomVersion'] = '2017c'
+            -- lPostData['DicomVersion'] = '2008'
+            lPostData['Force'] = true
+            lPostDataJson = DumpJson(lPostData,true)
+            local lSuccess, lModifiedDICOMBlob = pcall(RestApiPost,
+                                                       '/instances/' .. loInstanceID .. '/modify', 
+                                                       lPostDataJson, false)
+            if not lSuccess then
+                PrintRecursive(lPostDataJson)
+--                 gSQLConn:rollback()
+--                 CloseSQL()
+                error('Unable to adjust dates')
+            end
+            -- Upload the lModifiedDICOMBlob
+            local lSuccess, loModifiedInstanceIDJson = pcall(RestApiPost,
+                                                             '/instances/', lModifiedDICOMBlob, false)
+            if not lSuccess then
+--                 gSQLConn:rollback()
+--                 CloseSQL()
+                error('Problem uploading new image blob')
+            end
+            --local loModifiedInstanceID = ParseJson(RestApiPost('/instances/', lModifiedDICOMBlob, false))['ID']
+            local loModifiedInstanceID = ParseJson(loModifiedInstanceIDJson)['ID']
+            -- Store new ID
+            loInstanceIDNew[i] = loModifiedInstanceID
+        end
+    
+    end -- loop over aoInstancesMeta
+
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if (gIndent > 0) then gIndent = gIndent - 3 end
+    return loInstanceIDNew
+
+end
+ 
+-- ======================================================
+function SendToRemoteFilter(aoInstanceID)
+
+    local loDicomTags = ParseJson(RestApiGet('/instances/' .. aoInstanceID .. '/simplified-tags', false))
+    -- By default we assume derived (for safety) unless proven otherwise by existing ImageType 
+    local lFlagAssumeOriginalPrimary = os.getenv('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY') == 'true'
+
+    local lFlagOriginalPrimary = lFlagAssumeOriginalPrimary
+    local lFlagPrimary = lFlagAssumeOriginalPrimary
+    local lCharStartOriginal, lCharStopOriginal, lCharStartPrimary, lCharStopPrimary
+    if not lFlagAssumeOriginalPrimary then -- Turn off in order to keep Derived/Secondaries
+        if loDicomTags['ImageType'] then
+            lCharStartOriginal, lCharStopOriginal = string.find(loDicomTags['ImageType'],'ORIGINAL')
+            lCharStartPrimary, lCharStopPrimary = string.find(loDicomTags['ImageType'],'PRIMARY')
+            lFlagOriginalPrimary = (lCharStartOriginal == 1) and (lCharStartPrimary == (lCharStopOriginal + 2))
+            lFlagPrimary = lFlagPrimary or lCharStartPrimary
+        else
+            if loDicomTags['FrameType'] then
+                lCharStartOriginal, lCharStopOriginal = string.find(loDicomTags['FrameType'],'ORIGINAL')
+                lCharStartPrimary, lCharStopPrimary = string.find(loDicomTags['FrameType'],'PRIMARY')
+                lFlagPrimary = lFlagPrimary or lCharStartPrimary
+                lFlagOriginalPrimary = (lCharStartOriginal == 1) and (lCharStartPrimary == (lCharStopOriginal + 2))
+            end
+        end
+    end
+
+    -- Exception for HIFU and Dynacad
+    local lFlagDynacad = false
+    -- lFlagDynacad = lFlagDynacad or string.find(loDicomTags['SeriesDescription'], 'DCAD-')
+    -- lFlagDynacad = lFlagDynacad or (loDicomTags['0073,1003'] and string.find(loDicomTags['0073,1003'],'DYNACAD'))
+    
+    -- Checking for non-mammo images
+    local lFlagScreenForReports = os.getenv('LUA_FLAG_SCREEN_FOR_REPORTS') == 'true' -- turn on to weed out reports
+    local lFlagNonReport
+    if loDicomTags['ImageType'] then
+        lFlagNonReport = true
+    else
+        lFlagNonReport = false
+    end
+    if lFlagScreenForReports then -- Test for unwanted mammo studies
+        if lFlagNonReport and loDicomTags['ImageType'] then
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'dose'))
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'screen'))
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'report'))
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['ImageType']), 'exam protocol'))
+        end
+        if lFlagNonReport and loDicomTags['StudyDescription'] then
+            -- lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StudyDescription']), 'no rpt'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['StudyDescription'], 'SecurView'))
+        end
+        if lFlagNonReport and loDicomTags['SecondaryCaptureDeviceManufacturer'] then
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturer'], 'PACSGEAR'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturer'], 'HipGrahics'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturer'], 'Lexmark'))
+        end
+        if lFlagNonReport and loDicomTags['SecondaryCaptureDeviceManufacturerModelName'] then
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturerModelName'], 'PACSSCAN'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SecondaryCaptureDeviceManufacturerModelName'], 'InSpace'))
+        end
+        if lFlagNonReport and loDicomTags['StationName'] then
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StationName']), 'rapid'))
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['StationName']), 'sonosite'))
+        end
+        if lFlagNonReport and loDicomTags['Manufacturer'] then
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['Manufacturer']), 'ischemaview'))
+        end
+        if lFlagNonReport and loDicomTags['ManufacturerModelName'] then
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['ManufacturerModelName'], 'SecurView'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['ManufacturerModelName'], 'Blackford'))
+        end
+        if lFlagNonReport and loDicomTags['SeriesDescription'] then
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'screen snapshot'))
+            lFlagNonReport = lFlagNonReport and (not string.match(string.lower(loDicomTags['SeriesDescription']), 'screen *s[a-z]*er*'))
+            lFlagNonReport = lFlagNonReport and (not string.match(string.lower(loDicomTags['SeriesDescription']), '*dose report*'))
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'no rpt'))
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'summary'))
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'vpct'))
+            lFlagNonReport = lFlagNonReport and (not string.find(string.lower(loDicomTags['SeriesDescription']), 'history'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'RAPID'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'SecurView'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Patient Protocol'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Phoenix'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Carestream'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'REQ'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'REPORT'))
+            lFlagNonReport = lFlagNonReport and (not string.find(loDicomTags['SeriesDescription'], 'Blackford'))
+        end
+    end
+    -- Consider both original and primary
+    if (os.getenv('LUA_FLAG_MUST_BE_ORIGINAL') == 'true') then 
+       return lFlagDynacad or (lFlagOriginalPrimary and lFlagNonReport)
+    -- else only primary
+    else
+       return lFlagDynacad or (lFlagPrimary and lFlagNonReport)
+    end
+
+end
+ 
+-- ======================================================
+function PreScreenSendToRemote(aoStudyID)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    local lFlagDeleted = false
+    
+    local loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+    local lNSeriesStart = #loStudyMeta['Series']
+
+    local lPostData = {}
+    lPostData['orthanc_study_ids'] = { aoStudyID } 
+    local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
+    if not lResults then
+       error('Problem calling send_instances_to_remote_filter_lua')
+    end 
+    for loInstanceID, lFlagSendToRemote in pairs(lResults) do
+        if not lFlagSendToRemote then
+            if gVerbose then print(string.rep(' ', gIndent) .. 'Prefilter will delete non orig/prim /instances/' .. loInstanceID .. '/simplified-tags') end
+            RestApiDelete('/instances/' .. loInstanceID, false)
+        end
+    end
+    
+    -- for i, loSeriesID in pairs(loStudyMeta['Series']) do
+    --     local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
+    --     if loSeriesMeta['MainDicomTags'] then 
+    --         if loSeriesMeta['Instances'] then
+    --             for ioInstanceID, oInstanceID in pairs(loSeriesMeta['Instances']) do
+    --                 local lFlagSendToRemote = SendToRemoteFilter(oInstanceID)
+    --                 if not lFlagSendToRemote then
+    --                     if gVerbose then print(string.rep(' ', gIndent) .. 'Prefilter will delete non orig/prim /instances/' .. oInstanceID .. '/simplified-tags') end
+    --                     RestApiDelete('/instances/' .. oInstanceID, false)
+    --                 end
+    --             end
+    --         end
+    --     end
+    -- end
+
+    loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+    local lNSeriesEnd = 0
+    if loStudyMeta then
+        if loStudyMeta['Series'] then
+            lNSeriesEnd = #loStudyMeta['Series']
+        end
+    end
+    local lNSeriesDeleted = lNSeriesStart - lNSeriesEnd
+    if lNSeriesStart > lNSeriesEnd then lFlagDeleted = true end
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+    return lFlagDeleted, lNSeriesStart, lNSeriesDeleted
+
+end
+
+-- ======================================================
+function PreScreenSeriesByModality(aoStudyID)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    local lFlagDeleted = false
+    local lAllowedModalities = {}
+    if string.len(trim(os.getenv('LUA_ALLOWED_MODALITIES'))) > 0 then
+        for lModality in string.gmatch(os.getenv('LUA_ALLOWED_MODALITIES'), '[^," ]+') do
+            if lModality and string.len(trim(lModality)) > 0 then
+                table.insert(lAllowedModalities,lModality)
+            end
+        end
+    end
+    local lDeniedModalities = {}
+    if string.len(trim(os.getenv('LUA_DENIED_MODALITIES'))) > 0 then
+        for lModality in string.gmatch(os.getenv('LUA_DENIED_MODALITIES'), '[^," ]+') do
+            if lModality and string.len(trim(lModality)) > 0 then
+                table.insert(lDeniedModalities, lModality)
+            end
+        end
+    end
+    local lFlagAllowed 
+    local loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+    local lNSeriesStart = #loStudyMeta['Series']
+    local lNSeriesDeleted = 0
+    for i, loSeriesID in pairs(loStudyMeta['Series']) do
+        local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
+        if loSeriesMeta['MainDicomTags'] then 
+             if loSeriesMeta['MainDicomTags']['Modality'] then
+                 lFlagAllowed = #lAllowedModalities == 0
+                 for j, lAllowedModality in pairs(lAllowedModalities) do
+                     lFlagAllowed = lFlagAllowed or (loSeriesMeta['MainDicomTags']['Modality'] == lAllowedModality)
+                 end
+                 for j, lDeniedModality in pairs(lDeniedModalities) do
+                     lFlagAllowed = lFlagAllowed and (loSeriesMeta['MainDicomTags']['Modality'] ~= lDeniedModality)
+                 end
+                 if not lFlagAllowed then
+                     if gVerbose then print(string.rep(' ', gIndent) .. 'Deleting non modality series', loSeriesID) end
+                     RestApiDelete('/series/' .. loSeriesID, false)
+                     lFlagDeleted = true
+                     lNSeriesDeleted = lNSeriesDeleted + 1
+                 end
+             end
+         end
+    end
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+    return lFlagDeleted, lNSeriesStart, lNSeriesDeleted
+
+end
+
+-- ======================================================
+function CheckSplit2DFromCViewTomo(aoStudyID)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    local loSeriesMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID .. '/series', false))
+
+    -- We need R/L CC, R/L MLO for 2D and C-View (others are extra)
+    local lSearchStrings = { 'r cc', 'l cc', 'r mlo', 'l mlo' }
+    local lCount2D = {0, 0, 0, 0}
+    local lCountCView = {0, 0, 0, 0}
+    for i, loSeriesData in pairs(loSeriesMeta) do
+        local lFlagCView = false
+        local lFlagNon2D = false
+        if loSeriesData['MainDicomTags']['SeriesDescription'] then
+            local lDescriptionLower = string.lower(loSeriesData['MainDicomTags']['SeriesDescription'])
+            lFlagCView = lFlagCView or string.find(lDescriptionLower, 'c-view')
+            lFlagNon2D = lFlagNon2D or lFlagCView
+            lFlagNon2D = lFlagNon2D or string.find(lDescriptionLower, 'tomo')
+            if lFlagCView or (not lFlagNon2D) then
+                for j = 1, 4 do 
+                    local lFoundStr = string.find(lDescriptionLower, lSearchStrings[j])
+                    if lFoundStr then
+                        if lFlagCView then
+                            lCountCView[j] = 1
+                        else
+                            lCount2D[j] = 1
+                        end
+                    end
+                end
+            end
+        end
+    end -- Initial loop over all series descriptions
+    local lSum2D = 0
+    local lSumCView = 0
+    for i = 1, 4 do 
+        lSum2D = lSum2D + lCount2D[i]
+        lSumCView = lSumCView + lCountCView[i]
+    end
+
+    if (lSum2D < 4) or (lSumCView < 4) then
+        print('Incomplete number of either 2D or C-View')
+        PrintRecursive(lCount2D)
+        PrintRecursive(lCountCView)
+        gIndent = gIndent - 3
+        print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0)
+        if gIndent > 0 then gIndent = gIndent - 3 end
+        return false
+    else
+        gIndent = gIndent - 3
+        if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+        if gIndent > 0 then gIndent = gIndent - 3 end
+        return true
+    end
+
+end
+
+-- ======================================================
+function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    -- Assume we've already pre-screened for modality
+
+    -- Get the Orthanc series ID associated with this study
+    local lPatientIDModifierBySeries = {}
+    local lSQLpidBySeries = {}
+    local ldPatientIDAnonBySeries = {}
+    local lSQLsiuidBySeries = {}
+    local ldStudyInstanceUIDAnonBySeries = {}
+    local lFlagNewPatientIDBySeries = {}
+    local lFlagNewStudyInstanceUIDBySeries = {}
+    for i, loSeriesID in pairs(aoStudyMeta['Series']) do
+
+--         if gSQLOpen then
+--             if gSQLConn then
+--                 CloseSQL()
 --             end
 --         end
---     end -- Initial loop over all series descriptions
---     local lSum2D = 0
---     local lSumCView = 0
---     for i = 1, 4 do 
---         lSum2D = lSum2D + lCount2D[i]
---         lSumCView = lSumCView + lCountCView[i]
---     end
--- 
---     if (lSum2D < 4) or (lSumCView < 4) then
---         print('Incomplete number of either 2D or C-View')
---         PrintRecursive(lCount2D)
---         PrintRecursive(lCountCView)
---         gIndent = gIndent - 3
---         print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0)
---         if gIndent > 0 then gIndent = gIndent - 3 end
---         return false
---     else
---         gIndent = gIndent - 3
---         if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---         if gIndent > 0 then gIndent = gIndent - 3 end
---         return true
---     end
--- 
--- end
--- 
--- -- ======================================================
--- function AnonymizeStudyBySeries(aoStudyID, aoStudyMeta)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     -- Assume we've already pre-screened for modality
--- 
---     -- Get the Orthanc series ID associated with this study
---     local lPatientIDModifierBySeries = {}
---     local lSQLpidBySeries = {}
---     local ldPatientIDAnonBySeries = {}
---     local lSQLsiuidBySeries = {}
---     local ldStudyInstanceUIDAnonBySeries = {}
---     local lFlagNewPatientIDBySeries = {}
---     local lFlagNewStudyInstanceUIDBySeries = {}
---     for i, loSeriesID in pairs(aoStudyMeta['Series']) do
--- 
--- --         if gSQLOpen then
--- --             if gSQLConn then
--- --                 CloseSQL()
--- --             end
--- --         end
--- --         gSQLOpen = false
--- --         OpenSQL()
--- 
---         -- Get series meta
---         local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
--- 
---         -- We modify the incoming patientIDs based on descriptions
---         -- Currently, we modify by 2D vs non-2D
---         local lPatientIDModifier = ''
---         local lFlagSplit2DFromCViewTomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO') == 'true'
---         if lFlagSplit2DFromCViewTomo then 
---             -- lPatientIDModifier = Set2DOrCViewTomo(loSeriesMeta)
---             lPatientIDModifier = RestApiGet('/series/' .. loSeriesID .. '/set_2d_or_cview_tomo_lua', false)
---         end
---         local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
---         if lFlagEveryAccessionAPatient then lPatientIDModifier = '_' .. aoStudyMeta['MainDicomTags']['AccessionNumber'] end
---         lPatientIDModifierBySeries[loSeriesID] = lPatientIDModifier
--- 
---         -- Check to see if this subject was previously anonymized
---         -- StudyInstanceUID is only modified when anonymizing at the series level
---         local lStudyInstanceUIDModifier = lPatientIDModifier
---         local lSQLpid, ldPatientIDAnon, lSQLsiuid, ldStudyInstanceUIDAnon
---         --local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(aoStudyMeta,lPatientIDModifier)
---         local lPostData = {}
---         lPostData['OrthancStudyID'] = aoStudyMeta['ID']
---         if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
---         local lResults
---         lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
---         if lResults['status'] and lResults['status'] > 0 then
--- --             gSQLConn:rollback()
--- --             CloseSQL()
---             error(lResults['error_text'])
---         end
---         local lFlagNewPatientID = lResults['FlagPatientNewID']
---         -- local lSQLpid = math.floor(lResults['SQLpid']+0.5)
---         local lSQLpid = lResults['SQLpid']
---         local ldPatientIDAnon = lResults['PatientIDAnon']
---         -- local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(aoStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
---         local lPostData = {}
---         lPostData['OrthancStudyID'] = aoStudyMeta['ID']
---         lPostData['SQLpid'] = lSQLpid
---         if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
---         local lResults
---         lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
---         if lResults['status'] then error(lResults['error_text']) end
---         local lFlagNewStudyInstanceUID = lResults['FlagNewStudyInstanceUID']
---         local lSQLsiuid = lResults['SQLsiuid']
---         local ldStudyInstanceUIDAnon = lResults['StudyInstanceUIDAnon']
---         
---         lFlagNewPatientIDBySeries[loSeriesID] = lFlagNewPatientID
---         lSQLpidBySeries[loSeriesID] = lSQLpid
---         ldPatientIDAnonBySeries[loSeriesID] = ldPatientIDAnon
---         lFlagNewStudyInstanceUIDBySeries[loSeriesID] = lFlagNewStudyInstanceUID
---         lSQLsiuidBySeries[loSeriesID] = lSQLsiuid
---         ldStudyInstanceUIDAnonBySeries[loSeriesID] = ldStudyInstanceUIDAnon
--- 
--- --        CloseSQL()
---         
---     end -- First loop over series to get modifiers and series specific IDs
--- 
---     -- Compute unique set of identifiers
---     local lPatientIDModifierUnique = {}
---     local lFlagNewPatientID = {}
---     local lFlagNewStudyInstanceUID = {}
---     local lSQLpid = {}
---     local ldPatientIDAnon = {}
---     local lSQLsiuid = {}
---     local ldStudyInstanceUIDAnon = {}
---     for loSeriesID,lPatientIDModifier in pairs(lPatientIDModifierBySeries) do
---         if not lPatientIDModifierUnique[lPatientIDModifier] then
---             lPatientIDModifierUnique[lPatientIDModifier] = {loSeriesID}
---             lFlagNewPatientID[lPatientIDModifier] = lFlagNewPatientIDBySeries[loSeriesID]
---             lFlagNewStudyInstanceUID[lPatientIDModifier] = lFlagNewStudyInstanceUIDBySeries[loSeriesID]
---             lSQLpid[lPatientIDModifier] = lSQLpidBySeries[loSeriesID]
---             ldPatientIDAnon[lPatientIDModifier] = ldPatientIDAnonBySeries[loSeriesID]
---             lSQLsiuid[lPatientIDModifier] = lSQLsiuidBySeries[loSeriesID]
---             ldStudyInstanceUIDAnon[lPatientIDModifier] = ldStudyInstanceUIDAnonBySeries[loSeriesID]
---         else
---             table.insert(lPatientIDModifierUnique[lPatientIDModifier], loSeriesID)
---             lFlagNewPatientID[lPatientIDModifier] = lFlagNewPatientID[lPatientIDModifier] or lFlagNewPatientIDBySeries[loSeriesID]
---             lFlagNewStudyInstanceUID[lPatientIDModifier] = lFlagNewStudyInstanceUID[lPatientIDModifier] or lFlagNewStudyInstanceUIDBySeries[loSeriesID]
---             if lSQLpid[lPatientIDModifier] ~= lSQLpidBySeries[loSeriesID] then
---                 error("Mismatch in SQLpid assigned to series with same patient modifier")
---             end
---             if ldPatientIDAnon[lPatientIDModifier] ~= ldPatientIDAnonBySeries[loSeriesID] then
---                 error("Mismatch in dPatientIDAnon assigned to series with same patient modifier")
---             end
---             if lSQLsiuid[lPatientIDModifier] ~= lSQLsiuidBySeries[loSeriesID] then
---                 error("Mismatch in SQLsiuid assigned to series with same patient modifier")
---             end
---             if ldStudyInstanceUIDAnon[lPatientIDModifier] ~= ldStudyInstanceUIDAnonBySeries[loSeriesID] then
---                 error("Mismatch in dStudyInstanceUIDAnon assigned to series with same patient modifier")
+--         gSQLOpen = false
+--         OpenSQL()
+
+        -- Get series meta
+        local loSeriesMeta = ParseJson(RestApiGet('/series/' .. loSeriesID, false))
+
+        -- We modify the incoming patientIDs based on descriptions
+        -- Currently, we modify by 2D vs non-2D
+        local lPatientIDModifier = ''
+        local lFlagSplit2DFromCViewTomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO') == 'true'
+        if lFlagSplit2DFromCViewTomo then 
+            -- lPatientIDModifier = Set2DOrCViewTomo(loSeriesMeta)
+            lPatientIDModifier = RestApiGet('/series/' .. loSeriesID .. '/set_2d_or_cview_tomo_lua', false)
+        end
+        local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
+        if lFlagEveryAccessionAPatient then lPatientIDModifier = '_' .. aoStudyMeta['MainDicomTags']['AccessionNumber'] end
+        lPatientIDModifierBySeries[loSeriesID] = lPatientIDModifier
+
+        -- Check to see if this subject was previously anonymized
+        -- StudyInstanceUID is only modified when anonymizing at the series level
+        local lStudyInstanceUIDModifier = lPatientIDModifier
+        local lSQLpid, ldPatientIDAnon, lSQLsiuid, ldStudyInstanceUIDAnon
+        --local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(aoStudyMeta,lPatientIDModifier)
+        local lPostData = {}
+        lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+        if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+        local lResults
+        lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
+        if lResults['status'] and lResults['status'] > 0 then
+--             gSQLConn:rollback()
+--             CloseSQL()
+            error(lResults['error_text'])
+        end
+        local lFlagNewPatientID = lResults['FlagPatientNewID']
+        -- local lSQLpid = math.floor(lResults['SQLpid']+0.5)
+        local lSQLpid = lResults['SQLpid']
+        local ldPatientIDAnon = lResults['PatientIDAnon']
+        -- local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(aoStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
+        local lPostData = {}
+        lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+        lPostData['SQLpid'] = lSQLpid
+        if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
+        local lResults
+        lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
+        if lResults['status'] then error(lResults['error_text']) end
+        local lFlagNewStudyInstanceUID = lResults['FlagNewStudyInstanceUID']
+        local lSQLsiuid = lResults['SQLsiuid']
+        local ldStudyInstanceUIDAnon = lResults['StudyInstanceUIDAnon']
+        
+        lFlagNewPatientIDBySeries[loSeriesID] = lFlagNewPatientID
+        lSQLpidBySeries[loSeriesID] = lSQLpid
+        ldPatientIDAnonBySeries[loSeriesID] = ldPatientIDAnon
+        lFlagNewStudyInstanceUIDBySeries[loSeriesID] = lFlagNewStudyInstanceUID
+        lSQLsiuidBySeries[loSeriesID] = lSQLsiuid
+        ldStudyInstanceUIDAnonBySeries[loSeriesID] = ldStudyInstanceUIDAnon
+
+--        CloseSQL()
+        
+    end -- First loop over series to get modifiers and series specific IDs
+
+    -- Compute unique set of identifiers
+    local lPatientIDModifierUnique = {}
+    local lFlagNewPatientID = {}
+    local lFlagNewStudyInstanceUID = {}
+    local lSQLpid = {}
+    local ldPatientIDAnon = {}
+    local lSQLsiuid = {}
+    local ldStudyInstanceUIDAnon = {}
+    for loSeriesID,lPatientIDModifier in pairs(lPatientIDModifierBySeries) do
+        if not lPatientIDModifierUnique[lPatientIDModifier] then
+            lPatientIDModifierUnique[lPatientIDModifier] = {loSeriesID}
+            lFlagNewPatientID[lPatientIDModifier] = lFlagNewPatientIDBySeries[loSeriesID]
+            lFlagNewStudyInstanceUID[lPatientIDModifier] = lFlagNewStudyInstanceUIDBySeries[loSeriesID]
+            lSQLpid[lPatientIDModifier] = lSQLpidBySeries[loSeriesID]
+            ldPatientIDAnon[lPatientIDModifier] = ldPatientIDAnonBySeries[loSeriesID]
+            lSQLsiuid[lPatientIDModifier] = lSQLsiuidBySeries[loSeriesID]
+            ldStudyInstanceUIDAnon[lPatientIDModifier] = ldStudyInstanceUIDAnonBySeries[loSeriesID]
+        else
+            table.insert(lPatientIDModifierUnique[lPatientIDModifier], loSeriesID)
+            lFlagNewPatientID[lPatientIDModifier] = lFlagNewPatientID[lPatientIDModifier] or lFlagNewPatientIDBySeries[loSeriesID]
+            lFlagNewStudyInstanceUID[lPatientIDModifier] = lFlagNewStudyInstanceUID[lPatientIDModifier] or lFlagNewStudyInstanceUIDBySeries[loSeriesID]
+            if lSQLpid[lPatientIDModifier] ~= lSQLpidBySeries[loSeriesID] then
+                error("Mismatch in SQLpid assigned to series with same patient modifier")
+            end
+            if ldPatientIDAnon[lPatientIDModifier] ~= ldPatientIDAnonBySeries[loSeriesID] then
+                error("Mismatch in dPatientIDAnon assigned to series with same patient modifier")
+            end
+            if lSQLsiuid[lPatientIDModifier] ~= lSQLsiuidBySeries[loSeriesID] then
+                error("Mismatch in SQLsiuid assigned to series with same patient modifier")
+            end
+            if ldStudyInstanceUIDAnon[lPatientIDModifier] ~= ldStudyInstanceUIDAnonBySeries[loSeriesID] then
+                error("Mismatch in dStudyInstanceUIDAnon assigned to series with same patient modifier")
+            end
+        end
+    end
+
+    -- Now loop over sets of series by their modifier
+    local lFlagImagesSent = false
+    for lPatientIDModifier, loSeriesIDs in pairs(lPatientIDModifierUnique) do
+
+--         if gSQLOpen then
+--             if gSQLConn then
+--                 CloseSQL()
 --             end
 --         end
---     end
--- 
---     -- Now loop over sets of series by their modifier
---     local lFlagImagesSent = false
---     for lPatientIDModifier, loSeriesIDs in pairs(lPatientIDModifierUnique) do
--- 
--- --         if gSQLOpen then
--- --             if gSQLConn then
--- --                 CloseSQL()
--- --             end
--- --         end
--- --         gSQLOpen = false
--- --         OpenSQL()
--- 
---         -- We're not going to bother anonymizing unless either a new patient or study
---         local lFlagNonOriginalDetected = false
---         local lFlagForceAnon = false or gFlagForceAnon
---         local ldPatientNameAnonDict = {}
---         if lFlagForceAnon or (lFlagNewPatientID[lPatientIDModifier] or lFlagNewStudyInstanceUID[lPatientIDModifier]) then
--- 
---             -- First pass anonymization
---             local loInstancesAnonMeta, loStudyIDAnon
---             local lFlagFirstCall = true
---             for i, loSeriesID in ipairs(loSeriesIDs) do 
---                 local loInstancesAnonMetaTemp, loStudyIDAnonTemp , ldPatientNameAnonTemp
---                 if false then
---                     -- If you set the above to true, be sure to uncomment the Lua routine
---                     loInstancesAnonMetaTemp, loStudyIDAnonTemp, ldPatientNameAnonTemp = 
---                        AnonymizeInstances('Series', loSeriesID, lFlagFirstCall, 
---                                            lSQLpid[lPatientIDModifier],ldPatientIDAnon[lPatientIDModifier],
---                                            lSQLsiuid[lPatientIDModifier], ldStudyInstanceUIDAnon[lPatientIDModifier], 
---                                            lPatientIDModifier)
---                 else
---                     local lPostData = {}
---                     if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
---                     if gAddressList then lPostData['AddressList'] = gAddressList end
---                     lPostData['Level'] = 'Series'
---                     lPostData['LevelID'] =loSeriesID 
---                     lPostData['FlagFirstCall'] = lFlagFirstCall
---                     if gKeptUID then lPostData['KeptUID'] = gKeptUID end
---                     if ldPatientIDAnon[lPatientIDModifier] then lPostData['PatientIDAnon'] = ldPatientIDAnon[lPatientIDModifier] end
---                     if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
---                     if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
---                     if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
---                     lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
---                     lPostData['SQLsiuid'] = lSQLsiuid[lPatientIDModifier]
---                     if ldStudyInstanceUIDAnon[lPatientIDModifier] then lPostData['StudyInstanceUIDAnon'] = ldStudyInstanceUIDAnon[lPatientIDModifier] end
---                     if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
---                     if gUIDMap then lPostData['UIDMap'] = gUIDMap end
---                     local lResult = ParseJson(RestApiPost('/anonymize_instances_lua', DumpJson(lPostData,false)))
---                     if lResult['status'] then error('Problem with anonymization ' .. lResult['error_text']) end
---                     if lResult['AddressConstructor'] then gAddressConstructor  = lResult['AddressConstructor'] end
---                     if lResult['AddressList'] then gAddressList  = lResult['AddressList'] end
---                     loInstancesAnonMetaTemp = lResult['InstancesAnonMeta']
---                     if lResult['KeptUID'] then gKeptUID  = lResult['KeptUID'] end
---                     if lResult['PatientNameAnon'] then ldPatientNameAnonTemp = lResult['PatientNameAnon'] end
---                     if lResult['PatientNameBase'] then gPatientNameBase  = lResult['PatientNameBase'] end
---                     if lResult['PatientNameIDChar'] then gPatientNameIDChar  = lResult['PatientNameIDChar'] end
---                     loStudyIDAnonTemp = lResult['StudyIDAnon']
---                     if lResult['TopLevelTagToKeep'] then gTopLevelTagToKeep  = lResult['TopLevelTagToKeep'] end
---                     if lResult['UIDMap'] then gUIDMap = lResult['UIDMap'] end
---                 end
---                 if ldPatientNameAnonTemp then ldPatientNameAnonDict[ldPatientNameAnonTemp] = true end
---                 if lFlagFirstCall then
---                     loInstancesAnonMeta = loInstancesAnonMetaTemp
---                     loStudyIDAnon = loStudyIDAnonTemp
---                     -- We call "Save" again just to read in the newly saved IDs (they were saved inside the anonymize routine)
---                     local lStudyInstanceUIDModifier = lPatientIDModifier
---                     local lSQLpidTemp, ldPatientIDAnonTemp, lSQLsiuidTemp, ldStudyInstanceUIDAnonTemp
---                     -- local lFlagNewPatientIDTemp, lSQLpidTemp, ldPatientIDAnonTemp = SavePatientIDsToDB(aoStudyMeta,lPatientIDModifier)
---                     local lPostData = {}
---                     lPostData['OrthancStudyID'] = aoStudyMeta['ID']
---                     if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
---                     local lResults
---                     lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
---                     if lResults['status'] and  lResults['status'] > 0 then
--- --                         gSQLConn:rollback()
--- --                         CloseSQL()
---                         error(lResults['error_text'])
---                     end
---                     local lFlagNewPatientIDTemp = lResults['FlagPatientNewID']
---                     local lSQLpidTemp = lResults['SQLpid']
---                     local ldPatientIDAnonTemp = lResults['PatientIDAnon']
---                     if lSQLpid[lPatientIDModifier] ~= lSQLpidTemp then
---                         error('Unexpected mismatch when reading SQLpid')
---                     end
---                     if not ldPatientIDAnon[lPatientIDModifier] then
---                         ldPatientIDAnon[lPatientIDModifier] = ldPatientIDAnonTemp
---                     else
---                         if lFlagNewPatientIDTemp or (ldPatientIDAnon[lPatientIDModifier] ~= ldPatientIDAnonTemp) then
---                             error('Unexpected mismatch when reading dPatientIDAnon')
---                         end
---                     end
---                     -- local lFlagNewStudyInstanceUIDTemp, lSQLsiuidTemp, ldStudyInstanceUIDAnonTemp = SaveStudyInstanceUIDToDB(aoStudyMeta,lSQLpidTemp,lStudyInstanceUIDModifier)
---                     local lPostData = {}
---                     lPostData['OrthancStudyID'] = aoStudyMeta['ID']
---                     lPostData['SQLpid'] = lSQLpidTemp
---                     if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
---                     local lResults
---                     lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
---                     if lResults['status'] then error(lResults['error_text']) end
---                     local lFlagNewStudyInstanceUIDTemp = lResults['FlagNewStudyInstanceUID']
---                     local lSQLsiuidTemp = lResults['SQLsiuid']
---                     local ldStudyInstanceUIDAnonTemp = lResults['StudyInstanceUIDAnon']
---                     if lSQLsiuid[lPatientIDModifier] ~= lSQLsiuidTemp then
---                         error('Unexpected mismatch when reading SQLsiuid')
---                     end
---                     if not ldStudyInstanceUIDAnon[lPatientIDModifier] then
---                         ldStudyInstanceUIDAnon[lPatientIDModifier] = ldStudyInstanceUIDAnonTemp
---                     else
---                         if lFlagNewStudyInstanceUIDTemp or (ldStudyInstanceUIDAnon[lPatientIDModifier] ~= ldStudyInstanceUIDAnonTemp) then
---                             error('Unexpected mismatch when reading dStudyInstanceUIDAnon')
---                         end
---                     end
---                 else
---                     -- Add instances to list of instances already anonymized
---                     for j=1,#loInstancesAnonMetaTemp do
---                         loInstancesAnonMeta[#loInstancesAnonMeta+1] = loInstancesAnonMetaTemp[j]
---                     end
---                     -- StudyIDAnon should not have changed
---                     if loStudyIDAnon ~= loStudyIDAnonTemp then
---                         error("Unexpected change in IDAnon for same modifier")
---                     end
---                 end
---                 lFlagFirstCall = false
---             end -- loop over series belonging to the current modifier
--- 
---             -- Set up old-->new UID map
---             local lFlagRemapSOPInstanceUID = true
---             local lFlagRemapKeptUID = true
---             -- gUIDMap, gUIDType = MapUIDOldToNew(loStudyIDAnon,lFlagRemapSOPInstanceUID,lFlagRemapKeptUID)
---             local lPostData = {}
---             lPostData['StudyIDNew'] = loStudyIDAnon
---             lPostData['FlagRemapSOPInstanceUID'] = lFlagRemapSOPInstanceUID
---             lPostData['FlagRemapKeptUID'] = lFlagRemapKeptUID
---             lPostData['KeptUID'] = gKeptUID
---             local lResults = ParseJson(RestApiPost('/map_uid_old_to_new_lua', DumpJson(lPostData), false))
---             gUIDMap = lResults['UIDMap']
---             gUIDType = lResults['UIDType']
--- 
---             -- Set up replacements for AccessionNumber and StudyID
---             local lReplaceRoot = {}
---             lReplaceRoot['AccessionNumber'] = string.sub(loStudyIDAnon,1,8) .. string.sub(loStudyIDAnon,10,17)
---             lReplaceRoot['StudyID'] = string.sub(loStudyIDAnon,19,26) .. string.sub(loStudyIDAnon,28,35)
---     
---             -- Check for existing lShiftEpoch
---             -- local lShiftEpoch = LoadShiftEpochFromDB(lSQLpid[lPatientIDModifier])
---             local lPostData = {}
---             lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
---             local lStatus = ParseJson(RestApiPost('/load_shift_epoch_from_db_lua', DumpJson(lPostData), false))
---             if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
---             local lShiftEpoch = lStatus['ShiftEpoch']
--- 
---             -- ------------------------------------------------
---             -- Compute lShiftEpoch
---             local lSaveShiftEpoch = false
---             if not lShiftEpoch then 
---                 -- Compute lShiftEpoch (used to shift earliest date to Jan 01 same year)
---                 -- lShiftEpoch = ComputeShiftEpochFromEarliestDate(loInstancesAnonMeta)
---                 -- Compute random shift up to one year
---                 math.randomseed(os.time())
---                 lShiftEpoch = math.floor(math.floor(math.random() * 365.0) * 24.0 * 3600.0)
---                 lSaveShiftEpoch = true
+--         gSQLOpen = false
+--         OpenSQL()
+
+        -- We're not going to bother anonymizing unless either a new patient or study
+        local lFlagNonOriginalDetected = false
+        local lFlagForceAnon = false or gFlagForceAnon
+        local ldPatientNameAnonDict = {}
+        if lFlagForceAnon or (lFlagNewPatientID[lPatientIDModifier] or lFlagNewStudyInstanceUID[lPatientIDModifier]) then
+
+            -- First pass anonymization
+            local loInstancesAnonMeta, loStudyIDAnon
+            local lFlagFirstCall = true
+            for i, loSeriesID in ipairs(loSeriesIDs) do 
+                local loInstancesAnonMetaTemp, loStudyIDAnonTemp , ldPatientNameAnonTemp
+                if false then
+                    -- If you set the above to true, be sure to uncomment the Lua routine
+                    loInstancesAnonMetaTemp, loStudyIDAnonTemp, ldPatientNameAnonTemp = 
+                       AnonymizeInstances('Series', loSeriesID, lFlagFirstCall, 
+                                           lSQLpid[lPatientIDModifier],ldPatientIDAnon[lPatientIDModifier],
+                                           lSQLsiuid[lPatientIDModifier], ldStudyInstanceUIDAnon[lPatientIDModifier], 
+                                           lPatientIDModifier)
+                else
+                    local lPostData = {}
+                    if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
+                    if gAddressList then lPostData['AddressList'] = gAddressList end
+                    lPostData['Level'] = 'Series'
+                    lPostData['LevelID'] =loSeriesID 
+                    lPostData['FlagFirstCall'] = lFlagFirstCall
+                    if gKeptUID then lPostData['KeptUID'] = gKeptUID end
+                    if ldPatientIDAnon[lPatientIDModifier] then lPostData['PatientIDAnon'] = ldPatientIDAnon[lPatientIDModifier] end
+                    if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+                    if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
+                    if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
+                    lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
+                    lPostData['SQLsiuid'] = lSQLsiuid[lPatientIDModifier]
+                    if ldStudyInstanceUIDAnon[lPatientIDModifier] then lPostData['StudyInstanceUIDAnon'] = ldStudyInstanceUIDAnon[lPatientIDModifier] end
+                    if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
+                    if gUIDMap then lPostData['UIDMap'] = gUIDMap end
+                    local lResult = ParseJson(RestApiPost('/anonymize_instances_lua', DumpJson(lPostData,false)))
+                    if lResult['status'] then error('Problem with anonymization ' .. lResult['error_text']) end
+                    if lResult['AddressConstructor'] then gAddressConstructor  = lResult['AddressConstructor'] end
+                    if lResult['AddressList'] then gAddressList  = lResult['AddressList'] end
+                    loInstancesAnonMetaTemp = lResult['InstancesAnonMeta']
+                    if lResult['KeptUID'] then gKeptUID  = lResult['KeptUID'] end
+                    if lResult['PatientNameAnon'] then ldPatientNameAnonTemp = lResult['PatientNameAnon'] end
+                    if lResult['PatientNameBase'] then gPatientNameBase  = lResult['PatientNameBase'] end
+                    if lResult['PatientNameIDChar'] then gPatientNameIDChar  = lResult['PatientNameIDChar'] end
+                    loStudyIDAnonTemp = lResult['StudyIDAnon']
+                    if lResult['TopLevelTagToKeep'] then gTopLevelTagToKeep  = lResult['TopLevelTagToKeep'] end
+                    if lResult['UIDMap'] then gUIDMap = lResult['UIDMap'] end
+                end
+                if ldPatientNameAnonTemp then ldPatientNameAnonDict[ldPatientNameAnonTemp] = true end
+                if lFlagFirstCall then
+                    loInstancesAnonMeta = loInstancesAnonMetaTemp
+                    loStudyIDAnon = loStudyIDAnonTemp
+                    -- We call "Save" again just to read in the newly saved IDs (they were saved inside the anonymize routine)
+                    local lStudyInstanceUIDModifier = lPatientIDModifier
+                    local lSQLpidTemp, ldPatientIDAnonTemp, lSQLsiuidTemp, ldStudyInstanceUIDAnonTemp
+                    -- local lFlagNewPatientIDTemp, lSQLpidTemp, ldPatientIDAnonTemp = SavePatientIDsToDB(aoStudyMeta,lPatientIDModifier)
+                    local lPostData = {}
+                    lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+                    if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+                    local lResults
+                    lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
+                    if lResults['status'] and  lResults['status'] > 0 then
+--                         gSQLConn:rollback()
+--                         CloseSQL()
+                        error(lResults['error_text'])
+                    end
+                    local lFlagNewPatientIDTemp = lResults['FlagPatientNewID']
+                    local lSQLpidTemp = lResults['SQLpid']
+                    local ldPatientIDAnonTemp = lResults['PatientIDAnon']
+                    if lSQLpid[lPatientIDModifier] ~= lSQLpidTemp then
+                        error('Unexpected mismatch when reading SQLpid')
+                    end
+                    if not ldPatientIDAnon[lPatientIDModifier] then
+                        ldPatientIDAnon[lPatientIDModifier] = ldPatientIDAnonTemp
+                    else
+                        if lFlagNewPatientIDTemp or (ldPatientIDAnon[lPatientIDModifier] ~= ldPatientIDAnonTemp) then
+                            error('Unexpected mismatch when reading dPatientIDAnon')
+                        end
+                    end
+                    -- local lFlagNewStudyInstanceUIDTemp, lSQLsiuidTemp, ldStudyInstanceUIDAnonTemp = SaveStudyInstanceUIDToDB(aoStudyMeta,lSQLpidTemp,lStudyInstanceUIDModifier)
+                    local lPostData = {}
+                    lPostData['OrthancStudyID'] = aoStudyMeta['ID']
+                    lPostData['SQLpid'] = lSQLpidTemp
+                    if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
+                    local lResults
+                    lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
+                    if lResults['status'] then error(lResults['error_text']) end
+                    local lFlagNewStudyInstanceUIDTemp = lResults['FlagNewStudyInstanceUID']
+                    local lSQLsiuidTemp = lResults['SQLsiuid']
+                    local ldStudyInstanceUIDAnonTemp = lResults['StudyInstanceUIDAnon']
+                    if lSQLsiuid[lPatientIDModifier] ~= lSQLsiuidTemp then
+                        error('Unexpected mismatch when reading SQLsiuid')
+                    end
+                    if not ldStudyInstanceUIDAnon[lPatientIDModifier] then
+                        ldStudyInstanceUIDAnon[lPatientIDModifier] = ldStudyInstanceUIDAnonTemp
+                    else
+                        if lFlagNewStudyInstanceUIDTemp or (ldStudyInstanceUIDAnon[lPatientIDModifier] ~= ldStudyInstanceUIDAnonTemp) then
+                            error('Unexpected mismatch when reading dStudyInstanceUIDAnon')
+                        end
+                    end
+                else
+                    -- Add instances to list of instances already anonymized
+                    for j=1,#loInstancesAnonMetaTemp do
+                        loInstancesAnonMeta[#loInstancesAnonMeta+1] = loInstancesAnonMetaTemp[j]
+                    end
+                    -- StudyIDAnon should not have changed
+                    if loStudyIDAnon ~= loStudyIDAnonTemp then
+                        error("Unexpected change in IDAnon for same modifier")
+                    end
+                end
+                lFlagFirstCall = false
+            end -- loop over series belonging to the current modifier
+
+            -- Set up old-->new UID map
+            local lFlagRemapSOPInstanceUID = true
+            local lFlagRemapKeptUID = true
+            -- gUIDMap, gUIDType = MapUIDOldToNew(loStudyIDAnon,lFlagRemapSOPInstanceUID,lFlagRemapKeptUID)
+            local lPostData = {}
+            lPostData['StudyIDNew'] = loStudyIDAnon
+            lPostData['FlagRemapSOPInstanceUID'] = lFlagRemapSOPInstanceUID
+            lPostData['FlagRemapKeptUID'] = lFlagRemapKeptUID
+            lPostData['KeptUID'] = gKeptUID
+            local lResults = ParseJson(RestApiPost('/map_uid_old_to_new_lua', DumpJson(lPostData), false))
+            gUIDMap = lResults['UIDMap']
+            gUIDType = lResults['UIDType']
+
+            -- Set up replacements for AccessionNumber and StudyID
+            local lReplaceRoot = {}
+            lReplaceRoot['AccessionNumber'] = string.sub(loStudyIDAnon,1,8) .. string.sub(loStudyIDAnon,10,17)
+            lReplaceRoot['StudyID'] = string.sub(loStudyIDAnon,19,26) .. string.sub(loStudyIDAnon,28,35)
+    
+            -- Check for existing lShiftEpoch
+            -- local lShiftEpoch = LoadShiftEpochFromDB(lSQLpid[lPatientIDModifier])
+            local lPostData = {}
+            lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
+            local lStatus = ParseJson(RestApiPost('/load_shift_epoch_from_db_lua', DumpJson(lPostData), false))
+            if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
+            local lShiftEpoch = lStatus['ShiftEpoch']
+
+            -- ------------------------------------------------
+            -- Compute lShiftEpoch
+            local lSaveShiftEpoch = false
+            if not lShiftEpoch then 
+                -- Compute lShiftEpoch (used to shift earliest date to Jan 01 same year)
+                -- lShiftEpoch = ComputeShiftEpochFromEarliestDate(loInstancesAnonMeta)
+                -- Compute random shift up to one year
+                math.randomseed(os.time())
+                lShiftEpoch = math.floor(math.floor(math.random() * 365.0) * 24.0 * 3600.0)
+                lSaveShiftEpoch = true
+            end
+
+            -- For some cases, we keep the dates, so lShiftEpoch=0
+            local lFlagKeepOriginalDates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES') == 'true'
+            if lFlagKeepOriginalDates then
+                local currentTime = os.time
+                lShiftEpoch = 0
+            end
+
+            if lSaveShiftEpoch then
+                -- SaveShiftEpochToDB(lShiftEpoch,lSQLpid[lPatientIDModifier])
+                local lPostData = {}
+                lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
+                lPostData['ShiftEpoch'] = lShiftEpoch
+                local lStatus = ParseJson(RestApiPost('/save_shift_epoch_to_db_lua', DumpJson(lPostData), false))
+                if lStatus['status'] and lStatus['status'] > 0 then
+                    error('Problem saving ShiftEpoch to DB')
+                end
+            end
+
+            -- ------------------------------------------------
+            -- Second pass anonymization creates files modified by lShiftEpoch
+            -- Deletes First pass anonymized files following lShiftEpoch modification
+            local lPostData = {}
+            lPostData['InstancesMeta'] = loInstancesAnonMeta
+            lPostData['ShiftEpoch'] = lShiftEpoch
+            lPostData['ReplaceRoot'] = lReplaceRoot
+            lPostData['UIDMap'] = gUIDMap
+            lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep
+            lPostData['AddressList'] = gAddressList
+            lPostData['KeptUID'] = gKeptUID
+            -- local loInstanceIDNew = ShiftDateTimePatAgeOfInstances(loInstancesAnonMeta, lShiftEpoch, lReplaceRoot)
+            local lResults = ParseJson(RestApiPost('/shift_date_time_patage_of_instances_lua', DumpJson(lPostData), false))
+            if lResults['status'] ~= 0 then
+                error('Problem calling python shift date time patage')
+            end
+            loInstanceIDNew = lResults['InstanceIDNew']
+
+            -- Delete the original instance
+            for i, loInstanceAnonMeta in pairs(loInstancesAnonMeta) do
+                loInstanceID = (loInstanceAnonMeta['ID'])
+                RestApiDelete('/instances/' .. loInstanceID, false)
+                --Delete(loInstanceID)
+            end -- loop over loInstancesAnonMeta
+    
+            -- Send to receiving modality
+            local lPostData = {}
+            lPostData['orthanc_instance_ids'] = {}
+            for i, loInstanceID in pairs(loInstanceIDNew) do
+                table.insert(lPostData['orthanc_instance_ids'], loInstanceID)
+            end
+            local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
+            if not lResults then
+               error('Problem calling send_instances_to_remote_filter_lua')
+            end 
+            -- for i, loInstanceID in pairs(loInstanceIDNew) do
+            for loInstanceID, lFlagSendToRemote in pairs(lResults) do
+                -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
+                if lFlagSendToRemote then
+                    local dumby=3
+                    if not lFlagForceAnon then
+                        -- RestApiPost('/modalities/' .. os.getenv('LUA_ANON_ORTHANC') .. '/store', loInstanceID, false)
+                        lFlagImagesSent = true
+                    end
+                else
+                    RestApiDelete('/instances/' .. loInstanceID, false)
+                    lFlagNonOriginalDetected = true
+                end
+            end
+
+        else -- existing patient/study combo
+
+           if gVerbose then print(string.rep(' ',gIndent) .. 'Skipping re-anon of existing patient/study') end
+
+        end -- endif new patient or new study
+
+        if lFlagNonOriginalDetected then
+            if gVerbose then print('Some non-original images were not sent') end
+        end
+
+--        CloseSQL()
+        
+    end -- loop over sets of Orthanc series with the same modifier
+
+    if lFlagImagesSent and gVerbose then
+        print(string.rep(' ',gIndent) .. 'Images sent to remote modalities') 
+    end
+    
+    -- UpdateLookupHTML()
+    if gVerbose then print(string.rep(' ',gIndent) .. 'Updating lookup table') end
+    RestApiGet('/update_lookup_table_html_lua', false)
+    local ldPatientNameAnon = '.'
+    if next(ldPatientNameAnonDict) then
+        ldPatientNameAnon = ':'
+        for ldPatientNameAnonTemp, _ in pairs(ldPatientNameAnonDict) do
+            if ldPatientNameAnon == ':' then
+                ldPatientNameAnon = ldPatientNameAnon .. ' ' .. ldPatientNameAnonTemp
+            else
+                ldPatientNameAnon = ldPatientNameAnon .. ', ' .. ldPatientNameAnonTemp
+            end
+        end
+    end
+    SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete ' .. ldPatientNameAnon)
+
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+
+end
+
+-- ======================================================
+function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Anonymizing ' .. aoStudyID) end
+    if gVerbose and gFlagForceAnon then print(string.rep(' ', gIndent) .. 'Forcing anonymization') end
+    local lTime0 = os.time()
+    local loSystemMeta = ParseJson(RestApiGet('/system', false))
+    local loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+    if (not loStudyMeta) then
+        if gVerbose then print('No meta in response') end
+        return
+    end
+    if string.find(loStudyMeta['PatientMainDicomTags']['PatientName'], loSystemMeta['Name']) then 
+        if gVerbose then print('Appears to be already anonymized (name match)') end
+        return
+    end
+
+    local lFlagImagesSent = false
+    if (not loStudyMeta['ModifiedFrom']) and (not loStudyMeta['AnonymizedFrom']) and (not loStudyMeta['ModifiedFrom']) then
+
+        -- Check that previously anonymized studies are not on Orthanc
+        if not gFlagForceAnon then
+            for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
+                local loOtherStudyMeta = ParseJson(RestApiGet('/studies/' .. loOtherStudyID, false))
+                if (loOtherStudyMeta['AnonymizedFrom'] == aoStudyID) or (loOtherStudyMeta['ModifiedFrom'] == aoStudyID) then
+                   if gVerbose then print('already anonymized') end
+                   gIndent = gIndent - 3
+                   if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+                   if gIndent > 0 then gIndent = gIndent - 3 end
+                   return
+                end 
+            end
+        end
+
+        -- Filter by original/primary and other status
+        local lFlagPreScreenSendToRemote = os.getenv('LUA_FLAG_PRESCREEN_ORIGINAL_PRIMARY') == 'true'
+        if lFlagPreScreenSendToRemote then
+            local lFlagDeleted, lNSeriesStart, lNSeriesDeleted
+            -- lFlagDeleted, lNSeriesStart, lNSeriesDeleted = PreScreenSendToRemote(aoStudyID) 
+            lResults = ParseJson(RestApiPost('/prescreen_send_to_remote_lua', DumpJson(aoStudyID), false))
+            lFlagDeleted = lResults['FlagDeleted']
+            lNSeriesStart = lResults['NSeriesStart']
+            lNSeriesDeleted = lResults['NSeriesDeleted']
+            if lFlagDeleted then
+                loStudyMeta = nil
+                for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
+                    if (loOtherStudyID == aoStudyID) then
+                        loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+                    end
+                end
+            end
+            if not loStudyMeta then
+                gIndent = gIndent - 3
+                if gVerbose then 
+                    print(string.rep(' ', gIndent) .. 'All series deleted by prefilter. Aborting anonymization.')
+                    print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0)
+                end
+                if gIndent > 0 then gIndent = gIndent - 3 end
+                return
+            end
+        end
+
+        -- Filter by modality
+        local lFlagPreScreenByModality = os.getenv('LUA_FLAG_PRESCREEN_BY_MODALITY') == 'true'
+        if lFlagPreScreenByModality then
+            local lFlagDeleted, lNSeriesStart, lNSeriesDeleted
+            -- lFlagDeleted, lNSeriesStart, lNSeriesDeleted = PreScreenSeriesByModality(aoStudyID) 
+            lResults = ParseJson(RestApiPost('/prescreen_send_to_remote_lua', DumpJson(aoStudyID), false))
+            lFlagDeleted = lResults['FlagDeleted']
+            lNSeriesStart = lResults['NSeriesStart']
+            lNSeriesDeleted = lResults['NSeriesDeleted']
+            if lFlagDeleted then
+                loStudyMeta = nil
+                for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
+                    if (loOtherStudyID == aoStudyID) then
+                        loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+                    end
+                end
+            end
+            if not loStudyMeta then
+                gIndent = gIndent - 3
+                if gVerbose then 
+                    print(string.rep(' ', gIndent) .. 'All series deleted by modality. Aborting anonymization.')
+                    print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0)
+                end
+                if gIndent > 0 then gIndent = gIndent - 3 end
+                return
+            end
+        end
+
+        local lFlagAnonymizeBySeries = os.getenv('LUA_FLAG_ANON_BY_SERIES') == 'true'
+        if lFlagAnonymizeBySeries then
+            local lFlagSplit2DFromCViewTomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO') == 'true'
+            if lFlagSplit2DFromCViewTomo then
+                -- local lFlagComplete = CheckSplit2DFromCViewTomo(aoStudyID)
+                lFlagComplete = ParseJson(RestApiPost('/check_split_2d_from_cview_tomo_lua', DumpJson(aoStudyID), false))
+                if not lFlagComplete then return end
+            end
+            local lPostData = {}
+            lPostData['StudyID'] = aoStudyID
+            if loStudyMeta then lPostData['StudyMeta'] = loStudyMeta end
+            if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
+            if gAddressList then lPostData['AddressList'] = gAddressList end
+            if gFlagForceAnon then lPostData['FlagForceAnon'] = gFlagForceAnon end
+            if gKeptUID then lPostData['KeptUID'] = gKeptUID end
+            if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
+            if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
+            if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
+            if gUIDMap then lPostData['UIDMap'] = gUIDMap end
+            local lStatus = ParseJson(RestApiPost('/anonymize_study_by_series_lua', DumpJson(lPostData), false))
+            if lStatus['status'] ~= 0 then
+                error(lStatus['error_text'])
+            end
+            -- AnonymizeStudyBySeries(aoStudyID, loStudyMeta)
+            if gIndent > 0 then gIndent = gIndent - 3 end
+            if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+            if gIndent > 0 then gIndent = gIndent - 3 end
+            return
+        end
+
+--         if gSQLOpen then
+--             if gSQLConn then
+--                 CloseSQL()
 --             end
--- 
---             -- For some cases, we keep the dates, so lShiftEpoch=0
---             local lFlagKeepOriginalDates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES') == 'true'
---             if lFlagKeepOriginalDates then
---                 local currentTime = os.time
---                 lShiftEpoch = 0
---             end
--- 
---             if lSaveShiftEpoch then
---                 -- SaveShiftEpochToDB(lShiftEpoch,lSQLpid[lPatientIDModifier])
---                 local lPostData = {}
---                 lPostData['SQLpid'] = lSQLpid[lPatientIDModifier]
---                 lPostData['ShiftEpoch'] = lShiftEpoch
---                 local lStatus = ParseJson(RestApiPost('/save_shift_epoch_to_db_lua', DumpJson(lPostData), false))
---                 if lStatus['status'] and lStatus['status'] > 0 then
---                     error('Problem saving ShiftEpoch to DB')
---                 end
---             end
--- 
---             -- ------------------------------------------------
---             -- Second pass anonymization creates files modified by lShiftEpoch
---             -- Deletes First pass anonymized files following lShiftEpoch modification
---             local lPostData = {}
---             lPostData['InstancesMeta'] = loInstancesAnonMeta
---             lPostData['ShiftEpoch'] = lShiftEpoch
---             lPostData['ReplaceRoot'] = lReplaceRoot
---             lPostData['UIDMap'] = gUIDMap
---             lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep
---             lPostData['AddressList'] = gAddressList
---             lPostData['KeptUID'] = gKeptUID
---             -- local loInstanceIDNew = ShiftDateTimePatAgeOfInstances(loInstancesAnonMeta, lShiftEpoch, lReplaceRoot)
---             local lResults = ParseJson(RestApiPost('/shift_date_time_patage_of_instances_lua', DumpJson(lPostData), false))
---             if lResults['status'] ~= 0 then
---                 error('Problem calling python shift date time patage')
---             end
---             loInstanceIDNew = lResults['InstanceIDNew']
--- 
---             -- Delete the original instance
---             for i, loInstanceAnonMeta in pairs(loInstancesAnonMeta) do
---                 loInstanceID = (loInstanceAnonMeta['ID'])
---                 RestApiDelete('/instances/' .. loInstanceID, false)
---                 --Delete(loInstanceID)
---             end -- loop over loInstancesAnonMeta
---     
---             -- Send to receiving modality
---             local lPostData = {}
---             lPostData['orthanc_instance_ids'] = {}
---             for i, loInstanceID in pairs(loInstanceIDNew) do
---                 table.insert(lPostData['orthanc_instance_ids'], loInstanceID)
---             end
---             local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
---             if not lResults then
---                error('Problem calling send_instances_to_remote_filter_lua')
---             end 
---             -- for i, loInstanceID in pairs(loInstanceIDNew) do
---             for loInstanceID, lFlagSendToRemote in pairs(lResults) do
---                 -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
---                 if lFlagSendToRemote then
---                     local dumby=3
---                     if not lFlagForceAnon then
---                         -- RestApiPost('/modalities/' .. os.getenv('LUA_ANON_ORTHANC') .. '/store', loInstanceID, false)
---                         lFlagImagesSent = true
---                     end
---                 else
---                     RestApiDelete('/instances/' .. loInstanceID, false)
---                     lFlagNonOriginalDetected = true
---                 end
---             end
--- 
---         else -- existing patient/study combo
--- 
---            if gVerbose then print(string.rep(' ',gIndent) .. 'Skipping re-anon of existing patient/study') end
--- 
---         end -- endif new patient or new study
--- 
---         if lFlagNonOriginalDetected then
---             if gVerbose then print('Some non-original images were not sent') end
 --         end
--- 
--- --        CloseSQL()
---         
---     end -- loop over sets of Orthanc series with the same modifier
--- 
---     if lFlagImagesSent and gVerbose then
---         print(string.rep(' ',gIndent) .. 'Images sent to remote modalities') 
---     end
---     
---     -- UpdateLookupHTML()
---     if gVerbose then print(string.rep(' ',gIndent) .. 'Updating lookup table') end
---     RestApiGet('/update_lookup_table_html_lua', false)
---     local ldPatientNameAnon = '.'
---     if next(ldPatientNameAnonDict) then
---         ldPatientNameAnon = ':'
---         for ldPatientNameAnonTemp, _ in pairs(ldPatientNameAnonDict) do
---             if ldPatientNameAnon == ':' then
---                 ldPatientNameAnon = ldPatientNameAnon .. ' ' .. ldPatientNameAnonTemp
---             else
---                 ldPatientNameAnon = ldPatientNameAnon .. ', ' .. ldPatientNameAnonTemp
+--         gSQLOpen = false
+--         OpenSQL()
+
+        -- We modify the incoming patientIDs based on descriptions
+        -- If "screen" appears in the description, the modifier is 's' else 'd' for diagnostic
+        -- This has the effect of generating possibly to anonymous subjects for each incoming subject
+        -- Comment out the call to the routine if you want normal use of PatientIDs
+        local lPatientIDModifier = ''
+        local lFlagSplitScreenFromDiagnostic = os.getenv('LUA_FLAG_SPLIT_SCREEN_DIAG') == 'true'
+        -- if lFlagSplitScreenFromDiagnostic then lPatientIDModifier = SetScreenOrDiagnostic(aoStudyID) end
+        if lFlagSplitScreenFromDiagnostic then lPatientIDModifier = RestApiGet('/studies/' .. aoStudyID .. '/set_screen_or_diagnostic', false) end
+        local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
+        if lFlagEveryAccessionAPatient then lPatientIDModifier = '_' .. loStudyMeta['MainDicomTags']['AccessionNumber'] end
+
+        -- Check to see if this subject was previously anonymized
+        -- StudyInstanceUID is only modified when anonymizing at the series level
+        local lStudyInstanceUIDModifier = ''
+        local lSQLpid, ldPatientIDAnon, lSQLsiuid, ldStudyInstanceUIDAnon
+        -- local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(loStudyMeta,lPatientIDModifier)
+        local lPostData = {}
+        lPostData['OrthancStudyID'] = loStudyMeta['ID']
+        if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+        local lResults
+        lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
+        if lResults['status'] and lResults['status'] > 0 then
+--             gSQLConn:rollback()
+--             CloseSQL()
+            error(lResults['error_text'])
+        end
+        local lFlagNewPatientID = lResults['FlagPatientNewID']
+        local lSQLpid = lResults['SQLpid']
+        local ldPatientIDAnon = lResults['PatientIDAnon']
+        -- local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(loStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
+        local lPostData = {}
+        lPostData['OrthancStudyID'] = loStudyMeta['ID']
+        lPostData['SQLpid'] = lSQLpid
+        if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
+        local lResults
+        lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
+        if lResults['status'] then error(lResults['error_text']) end
+        local lFlagNewStudyInstanceUID = lResults['FlagNewStudyInstanceUID']
+        local lSQLsiuid = lResults['SQLsiuid']
+        local ldStudyInstanceUIDAnon = lResults['StudyInstanceUIDAnon']
+
+        -- We're not going to bother anonymizing unless either a new patient or study
+        local lFlagNonOriginalDetected = false
+        local lFlagForceAnon = false or gFlagForceAnon
+        if lFlagForceAnon or (lFlagNewPatientID or lFlagNewStudyInstanceUID) then
+
+            -- First pass anonymization
+            local loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon
+            local lFlagFirstCall = true
+            if false then
+                -- If you set the above to true, be sure to uncomment the Lua routine
+                loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon = AnonymizeInstances('Study', aoStudyID, lFlagFirstCall, 
+                                                                                           lSQLpid,ldPatientIDAnon,
+                                                                                           lSQLsiuid,ldStudyInstanceUIDAnon, lPatientIDModifier)
+            else
+                local lPostData = {}
+                if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
+                if gAddressList then lPostData['AddressList'] = gAddressList end
+                lPostData['FlagFirstCall'] = lFlagFirstCall
+                if gKeptUID then lPostData['KeptUID'] = gKeptUID end
+                lPostData['Level'] = 'Study'
+                lPostData['LevelID'] = aoStudyID
+                if ldPatientIDAnon then lPostData['PatientIDAnon'] = ldPatientIDAnon end
+                if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
+                if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
+                if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
+                lPostData['SQLpid'] = lSQLpid
+                lPostData['SQLsiuid'] = lSQLsiuid
+                if ldStudyInstanceUIDAnon then lPostData['StudyInstanceUIDAnon'] = ldStudyInstanceUIDAnon end
+                if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
+                if gUIDMap then lPostData['UIDMap'] = gUIDMap end
+                local lResult = ParseJson(RestApiPost('/anonymize_instances_lua', DumpJson(lPostData,false)))
+                if lResult['status'] then error('Problem with anonymization ' .. lResult['error_text']) end
+                if lResult['AddressConstructor'] then gAddressConstructor = lResult['AddressConstructor'] end
+                if lResult['AddressList'] then gAddressList  = lResult['AddressList'] end
+                loInstancesAnonMeta = lResult['InstancesAnonMeta']
+                if lResult['KeptUID'] then gKeptUID = lResult['KeptUID'] end
+                if lResult['PatientNameAnon'] then ldPatientNameAnon = lResult['PatientNameAnon'] end
+                if lResult['PatientNameBase'] then gPatientNameBase  = lResult['PatientNameBase'] end
+                if lResult['PatientNameIDChar'] then gPatientNameIDChar  = lResult['PatientNameIDChar'] end
+                loStudyIDAnon = lResult['StudyIDAnon']
+                if lResult['TopLevelTagToKeep'] then gTopLevelTagToKeep  = lResult['TopLevelTagToKeep'] end
+                if lResult['UIDMap'] then gUIDMap = lResult['UIDMap'] end
+            end
+
+--             print('post anon -----------------------------------')
+--             if gAddressConstructor then
+--                 print('gAddressConstructor')
+--                 print(DumpJson(gAddressConstructor))
 --             end
---         end
---     end
---     SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete ' .. ldPatientNameAnon)
--- 
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
--- 
--- end
--- 
--- -- ======================================================
--- function OnStableStudyMain(aoStudyID, aTags, aoStudyMeta)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Anonymizing ' .. aoStudyID) end
---     if gVerbose and gFlagForceAnon then print(string.rep(' ', gIndent) .. 'Forcing anonymization') end
---     local lTime0 = os.time()
---     local loSystemMeta = ParseJson(RestApiGet('/system', false))
---     local loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
---     if (not loStudyMeta) then
---         if gVerbose then print('No meta in response') end
---         return
---     end
---     if string.find(loStudyMeta['PatientMainDicomTags']['PatientName'], loSystemMeta['Name']) then 
---         if gVerbose then print('Appears to be already anonymized (name match)') end
---         return
---     end
--- 
---     local lFlagImagesSent = false
---     if (not loStudyMeta['ModifiedFrom']) and (not loStudyMeta['AnonymizedFrom']) and (not loStudyMeta['ModifiedFrom']) then
--- 
---         -- Check that previously anonymized studies are not on Orthanc
---         if not gFlagForceAnon then
---             for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
---                 local loOtherStudyMeta = ParseJson(RestApiGet('/studies/' .. loOtherStudyID, false))
---                 if (loOtherStudyMeta['AnonymizedFrom'] == aoStudyID) or (loOtherStudyMeta['ModifiedFrom'] == aoStudyID) then
---                    if gVerbose then print('already anonymized') end
---                    gIndent = gIndent - 3
---                    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---                    if gIndent > 0 then gIndent = gIndent - 3 end
---                    return
---                 end 
+--             if gAddressList then
+--                 print('gAddressList')
+--                 print(DumpJson(gAddressList))
 --             end
---         end
--- 
---         -- Filter by original/primary and other status
---         local lFlagPreScreenSendToRemote = os.getenv('LUA_FLAG_PRESCREEN_ORIGINAL_PRIMARY') == 'true'
---         if lFlagPreScreenSendToRemote then
---             local lFlagDeleted, lNSeriesStart, lNSeriesDeleted
---             -- lFlagDeleted, lNSeriesStart, lNSeriesDeleted = PreScreenSendToRemote(aoStudyID) 
---             lResults = ParseJson(RestApiPost('/prescreen_send_to_remote_lua', DumpJson(aoStudyID), false))
---             lFlagDeleted = lResults['FlagDeleted']
---             lNSeriesStart = lResults['NSeriesStart']
---             lNSeriesDeleted = lResults['NSeriesDeleted']
---             if lFlagDeleted then
---                 loStudyMeta = nil
---                 for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
---                     if (loOtherStudyID == aoStudyID) then
---                         loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
---                     end
---                 end
+--             if gKeptUID then
+--                 print('gKeptUID')
+--                 print(DumpJson(gKeptUID))
 --             end
---             if not loStudyMeta then
---                 gIndent = gIndent - 3
---                 if gVerbose then 
---                     print(string.rep(' ', gIndent) .. 'All series deleted by prefilter. Aborting anonymization.')
---                     print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0)
---                 end
---                 if gIndent > 0 then gIndent = gIndent - 3 end
---                 return
---             end
---         end
--- 
---         -- Filter by modality
---         local lFlagPreScreenByModality = os.getenv('LUA_FLAG_PRESCREEN_BY_MODALITY') == 'true'
---         if lFlagPreScreenByModality then
---             local lFlagDeleted, lNSeriesStart, lNSeriesDeleted
---             -- lFlagDeleted, lNSeriesStart, lNSeriesDeleted = PreScreenSeriesByModality(aoStudyID) 
---             lResults = ParseJson(RestApiPost('/prescreen_send_to_remote_lua', DumpJson(aoStudyID), false))
---             lFlagDeleted = lResults['FlagDeleted']
---             lNSeriesStart = lResults['NSeriesStart']
---             lNSeriesDeleted = lResults['NSeriesDeleted']
---             if lFlagDeleted then
---                 loStudyMeta = nil
---                 for lIOtherStudyID, loOtherStudyID in pairs(ParseJson(RestApiGet('/studies', false))) do
---                     if (loOtherStudyID == aoStudyID) then
---                         loStudyMeta = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
---                     end
---                 end
---             end
---             if not loStudyMeta then
---                 gIndent = gIndent - 3
---                 if gVerbose then 
---                     print(string.rep(' ', gIndent) .. 'All series deleted by modality. Aborting anonymization.')
---                     print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0)
---                 end
---                 if gIndent > 0 then gIndent = gIndent - 3 end
---                 return
---             end
---         end
--- 
---         local lFlagAnonymizeBySeries = os.getenv('LUA_FLAG_ANON_BY_SERIES') == 'true'
---         if lFlagAnonymizeBySeries then
---             local lFlagSplit2DFromCViewTomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO') == 'true'
---             if lFlagSplit2DFromCViewTomo then
---                 -- local lFlagComplete = CheckSplit2DFromCViewTomo(aoStudyID)
---                 lFlagComplete = ParseJson(RestApiPost('/check_split_2d_from_cview_tomo_lua', DumpJson(aoStudyID), false))
---                 if not lFlagComplete then return end
---             end
---             local lPostData = {}
---             lPostData['StudyID'] = aoStudyID
---             if loStudyMeta then lPostData['StudyMeta'] = loStudyMeta end
---             if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
---             if gAddressList then lPostData['AddressList'] = gAddressList end
---             if gFlagForceAnon then lPostData['FlagForceAnon'] = gFlagForceAnon end
---             if gKeptUID then lPostData['KeptUID'] = gKeptUID end
---             if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
---             if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
---             if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
---             if gUIDMap then lPostData['UIDMap'] = gUIDMap end
---             local lStatus = ParseJson(RestApiPost('/anonymize_study_by_series_lua', DumpJson(lPostData), false))
---             if lStatus['status'] ~= 0 then
---                 error(lStatus['error_text'])
---             end
---             -- AnonymizeStudyBySeries(aoStudyID, loStudyMeta)
---             if gIndent > 0 then gIndent = gIndent - 3 end
---             if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---             if gIndent > 0 then gIndent = gIndent - 3 end
---             return
---         end
--- 
--- --         if gSQLOpen then
--- --             if gSQLConn then
--- --                 CloseSQL()
--- --             end
--- --         end
--- --         gSQLOpen = false
--- --         OpenSQL()
--- 
---         -- We modify the incoming patientIDs based on descriptions
---         -- If "screen" appears in the description, the modifier is 's' else 'd' for diagnostic
---         -- This has the effect of generating possibly to anonymous subjects for each incoming subject
---         -- Comment out the call to the routine if you want normal use of PatientIDs
---         local lPatientIDModifier = ''
---         local lFlagSplitScreenFromDiagnostic = os.getenv('LUA_FLAG_SPLIT_SCREEN_DIAG') == 'true'
---         -- if lFlagSplitScreenFromDiagnostic then lPatientIDModifier = SetScreenOrDiagnostic(aoStudyID) end
---         if lFlagSplitScreenFromDiagnostic then lPatientIDModifier = RestApiGet('/studies/' .. aoStudyID .. '/set_screen_or_diagnostic', false) end
---         local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
---         if lFlagEveryAccessionAPatient then lPatientIDModifier = '_' .. loStudyMeta['MainDicomTags']['AccessionNumber'] end
--- 
---         -- Check to see if this subject was previously anonymized
---         -- StudyInstanceUID is only modified when anonymizing at the series level
---         local lStudyInstanceUIDModifier = ''
---         local lSQLpid, ldPatientIDAnon, lSQLsiuid, ldStudyInstanceUIDAnon
---         -- local lFlagNewPatientID, lSQLpid, ldPatientIDAnon = SavePatientIDsToDB(loStudyMeta,lPatientIDModifier)
---         local lPostData = {}
---         lPostData['OrthancStudyID'] = loStudyMeta['ID']
---         if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
---         local lResults
---         lResults = ParseJson(RestApiPost('/save_patient_ids_to_db_lua', DumpJson(lPostData), false))
---         if lResults['status'] and lResults['status'] > 0 then
--- --             gSQLConn:rollback()
--- --             CloseSQL()
---             error(lResults['error_text'])
---         end
---         local lFlagNewPatientID = lResults['FlagPatientNewID']
---         local lSQLpid = lResults['SQLpid']
---         local ldPatientIDAnon = lResults['PatientIDAnon']
---         -- local lFlagNewStudyInstanceUID, lSQLsiuid, ldStudyInstanceUIDAnon = SaveStudyInstanceUIDToDB(loStudyMeta,lSQLpid,lStudyInstanceUIDModifier)
---         local lPostData = {}
---         lPostData['OrthancStudyID'] = loStudyMeta['ID']
---         lPostData['SQLpid'] = lSQLpid
---         if lStudyInstanceUIDModifier then lPostData['StudyInstanceUIDModifier'] = lStudyInstanceUIDModifier end
---         local lResults
---         lResults = ParseJson(RestApiPost('/save_study_instance_uid_to_db_lua', DumpJson(lPostData), false))
---         if lResults['status'] then error(lResults['error_text']) end
---         local lFlagNewStudyInstanceUID = lResults['FlagNewStudyInstanceUID']
---         local lSQLsiuid = lResults['SQLsiuid']
---         local ldStudyInstanceUIDAnon = lResults['StudyInstanceUIDAnon']
--- 
---         -- We're not going to bother anonymizing unless either a new patient or study
---         local lFlagNonOriginalDetected = false
---         local lFlagForceAnon = false or gFlagForceAnon
---         if lFlagForceAnon or (lFlagNewPatientID or lFlagNewStudyInstanceUID) then
--- 
---             -- First pass anonymization
---             local loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon
---             local lFlagFirstCall = true
---             if false then
---                 -- If you set the above to true, be sure to uncomment the Lua routine
---                 loInstancesAnonMeta, loStudyIDAnon, ldPatientNameAnon = AnonymizeInstances('Study', aoStudyID, lFlagFirstCall, 
---                                                                                            lSQLpid,ldPatientIDAnon,
---                                                                                            lSQLsiuid,ldStudyInstanceUIDAnon, lPatientIDModifier)
---             else
---                 local lPostData = {}
---                 if gAddressConstructor then lPostData['AddressConstructor'] = gAddressConstructor end
---                 if gAddressList then lPostData['AddressList'] = gAddressList end
---                 lPostData['FlagFirstCall'] = lFlagFirstCall
---                 if gKeptUID then lPostData['KeptUID'] = gKeptUID end
---                 lPostData['Level'] = 'Study'
---                 lPostData['LevelID'] = aoStudyID
---                 if ldPatientIDAnon then lPostData['PatientIDAnon'] = ldPatientIDAnon end
---                 if lPatientIDModifier then lPostData['PatientIDModifier'] = lPatientIDModifier end
---                 if gPatientNameBase then lPostData['PatientNameBase'] = gPatientNameBase end
---                 if gPatientNameIDChar then lPostData['PatientNameIDChar'] = gPatientNameIDChar end
---                 lPostData['SQLpid'] = lSQLpid
---                 lPostData['SQLsiuid'] = lSQLsiuid
---                 if ldStudyInstanceUIDAnon then lPostData['StudyInstanceUIDAnon'] = ldStudyInstanceUIDAnon end
---                 if gTopLevelTagToKeep then lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep end
---                 if gUIDMap then lPostData['UIDMap'] = gUIDMap end
---                 local lResult = ParseJson(RestApiPost('/anonymize_instances_lua', DumpJson(lPostData,false)))
---                 if lResult['status'] then error('Problem with anonymization ' .. lResult['error_text']) end
---                 if lResult['AddressConstructor'] then gAddressConstructor = lResult['AddressConstructor'] end
---                 if lResult['AddressList'] then gAddressList  = lResult['AddressList'] end
---                 loInstancesAnonMeta = lResult['InstancesAnonMeta']
---                 if lResult['KeptUID'] then gKeptUID = lResult['KeptUID'] end
---                 if lResult['PatientNameAnon'] then ldPatientNameAnon = lResult['PatientNameAnon'] end
---                 if lResult['PatientNameBase'] then gPatientNameBase  = lResult['PatientNameBase'] end
---                 if lResult['PatientNameIDChar'] then gPatientNameIDChar  = lResult['PatientNameIDChar'] end
---                 loStudyIDAnon = lResult['StudyIDAnon']
---                 if lResult['TopLevelTagToKeep'] then gTopLevelTagToKeep  = lResult['TopLevelTagToKeep'] end
---                 if lResult['UIDMap'] then gUIDMap = lResult['UIDMap'] end
---             end
--- 
--- --             print('post anon -----------------------------------')
--- --             if gAddressConstructor then
--- --                 print('gAddressConstructor')
--- --                 print(DumpJson(gAddressConstructor))
--- --             end
--- --             if gAddressList then
--- --                 print('gAddressList')
--- --                 print(DumpJson(gAddressList))
--- --             end
--- --             if gKeptUID then
--- --                 print('gKeptUID')
--- --                 print(DumpJson(gKeptUID))
--- --             end
--- --             if ldPatientNameAnon then
--- --                 print('ldPatientNameAnon')
--- --                 print(ldPatientNameAnon)
--- --             end
--- --             if gPatientNameBase then
--- --                 print('gPatientNameBase')
--- --                 print(gPatientNameBase)
--- --             end
--- --             if gPatientNameIDChar then
--- --                 print('gPatientNameIDChar')
--- --                 print(gPatientNameIDChar)
--- --             end
--- --             if gTopLevelTagToKeep then
--- --                 print('gTopLevelTagToKeep')
--- --                 print(DumpJson(gTopLevelTagToKeep))
--- --             end
--- --             if gUIDMap then
--- --                 print('gUIDMap')
--- --                 print(DumpJson(gUIDMap))
--- --             end
--- 
---             -- Set up old-->new UID map
---             local lFlagRemapSOPInstanceUID = true
---             local lFlagRemapKeptUID = true
---             -- gUIDMap, gUIDType = MapUIDOldToNew(loStudyIDAnon,lFlagRemapSOPInstanceUID,lFlagRemapKeptUID)
---             local lPostData = {}
---             lPostData['StudyIDNew'] = loStudyIDAnon
---             lPostData['FlagRemapSOPInstanceUID'] = lFlagRemapSOPInstanceUID
---             lPostData['FlagRemapKeptUID'] = lFlagRemapKeptUID
---             lPostData['KeptUID'] = gKeptUID
---             local lResults = ParseJson(RestApiPost('/map_uid_old_to_new_lua', DumpJson(lPostData), false))
---             gUIDMap = lResults['UIDMap']
---             gUIDType = lResults['UIDType']
--- --             print('----------------map gen')
--- --             if gUIDMap then
--- --                 print('gUIDMap')
--- --                 print(DumpJson(gUIDMap))
--- --             end
--- --             if gUIDType then
--- --                 print('gUIDType')
--- --                 print(DumpJson(gUIDType))
--- --             end
---             
---             -- Set up replacements for AccessionNumber and StudyID
---             local lReplaceRoot = {}
---             lReplaceRoot['AccessionNumber'] = string.sub(loStudyIDAnon,1,8) .. string.sub(loStudyIDAnon,10,17)
---             lReplaceRoot['StudyID'] = string.sub(loStudyIDAnon,19,26) .. string.sub(loStudyIDAnon,28,35)
---     
---             -- Check for existing lShiftEpoch
---             -- local lShiftEpoch = LoadShiftEpochFromDB(lSQLpid)
---             local lPostData = {}
---             lPostData['SQLpid'] = lSQLpid
---             local lStatus = ParseJson(RestApiPost('/load_shift_epoch_from_db_lua', DumpJson(lPostData), false))
---             if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
---             local lShiftEpoch = lStatus['ShiftEpoch']
--- 
---             -- Compute lShiftEpoch
---             if not lShiftEpoch then 
---                 -- Compute lShiftEpoch (used to shift earliest date to Jan 01 same year)
---                 -- lShiftEpoch = ComputeShiftEpochFromEarliestDate(loInstancesAnonMeta)
---                 -- Compute random shift up to one year
---                 math.randomseed(os.time())
---                 lShiftEpoch = math.floor(math.floor(math.random() * 365.0) * 24.0 * 3600.0)
---                 -- SaveShiftEpochToDB(lShiftEpoch,lSQLpid)
---                 local lPostData = {}
---                 lPostData['SQLpid'] = lSQLpid
---                 lPostData['ShiftEpoch'] = lShiftEpoch
---                 local lStatus = ParseJson(RestApiPost('/save_shift_epoch_to_db_lua', DumpJson(lPostData), false))
---                 if lStatus['status'] and lStatus['status'] > 0 then
---                     error('Problem saving ShiftEpoch to DB')
---                 end
---             end
--- 
---             -- For some cases, we keep the dates, so lShiftEpoch=0
---             local lFlagKeepOriginalDates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES') == 'true'
---             if lFlagKeepOriginalDates then
---                 local currentTime = os.time
---                 lShiftEpoch = 0
---             end
--- 
---             -- Second pass anonymization creates files modified by lShiftEpoch
---             -- Deletes First pass anonymized files following lShiftEpoch modification
---             local lPostData = {}
---             lPostData['InstancesMeta'] = loInstancesAnonMeta
---             lPostData['ShiftEpoch'] = lShiftEpoch
---             lPostData['ReplaceRoot'] = lReplaceRoot
---             lPostData['UIDMap'] = gUIDMap
---             lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep
---             lPostData['AddressList'] = gAddressList
---             lPostData['KeptUID'] = gKeptUID
---             -- local loInstanceIDNew = ShiftDateTimePatAgeOfInstances(loInstancesAnonMeta, lShiftEpoch, lReplaceRoot)
---             local lResults = ParseJson(RestApiPost('/shift_date_time_patage_of_instances_lua', DumpJson(lPostData), false))
---             if lResults['status'] ~= 0 then
---                 error('Problem calling python shift date time patage')
---             end
---             loInstanceIDNew = lResults['InstanceIDNew']
---     
---             -- Delete the original instance
---             for i, loInstanceAnonMeta in pairs(loInstancesAnonMeta) do
---                 loInstanceID = (loInstanceAnonMeta['ID'])
---                 RestApiDelete('/instances/' .. loInstanceID, false)
---                 --Delete(loInstanceID)
---             end -- loop over loInstancesAnonMeta
---     
---             -- Send to receiving modality
---             local lPostData = {}
---             lPostData['orthanc_instance_ids'] = {}
---             for i, loInstanceID in pairs(loInstanceIDNew) do
---                 table.insert(lPostData['orthanc_instance_ids'], loInstanceID)
---             end
---             local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
---             if not lResults then
---                error('Problem calling send_instances_to_remote_filter_lua')
---             end 
---             -- for i, loInstanceID in pairs(loInstanceIDNew) do
---             for loInstanceID, lFlagSendToRemote in pairs(lResults) do
---                 -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
---                 if lFlagSendToRemote then
---                     local dumby=3
---                     if not lFlagForceAnon then
---                         -- RestApiPost('/modalities/' .. os.getenv('LUA_ANON_ORTHANC') .. '/store', loInstanceID, false)
---                         lFlagImagesSent = true
---                     end
---                 else
---                     RestApiDelete('/instances/' .. loInstanceID, false)
---                     lFlagNonOriginalDetected = true
---                 end
---             end
--- 
---             if gVerbose then print(string.rep(' ',gIndent) .. 'Updating lookup table') end
---             RestApiGet('/update_lookup_table_html_lua', false)
---             -- UpdateLookupHTML()
 --             if ldPatientNameAnon then
---                 SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete:' .. ldPatientNameAnon)
---             else
---                 SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete.')
+--                 print('ldPatientNameAnon')
+--                 print(ldPatientNameAnon)
 --             end
--- 
---         else -- existing patient/study combo
--- 
---            if gVerbose then print(string.rep(' ', gIndent) .. 'Skipping re-anon of existing patient/study') end
--- 
---         end -- endif new patient or new study
--- 
---         if lFlagNonOriginalDetected then
---             if gVerbose then print('Some non-original images were not sent') end
---         end
--- 
---         -- CloseSQL()
---         
---     end -- endif no nonanonymized data detected
--- 
---     if lFlagImagesSent and gVerbose then
---         print(string.rep(' ',gIndent) .. 'Images sent to remote modalities') 
---     end
--- 
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
--- 
--- end
--- 
+--             if gPatientNameBase then
+--                 print('gPatientNameBase')
+--                 print(gPatientNameBase)
+--             end
+--             if gPatientNameIDChar then
+--                 print('gPatientNameIDChar')
+--                 print(gPatientNameIDChar)
+--             end
+--             if gTopLevelTagToKeep then
+--                 print('gTopLevelTagToKeep')
+--                 print(DumpJson(gTopLevelTagToKeep))
+--             end
+--             if gUIDMap then
+--                 print('gUIDMap')
+--                 print(DumpJson(gUIDMap))
+--             end
+
+            -- Set up old-->new UID map
+            local lFlagRemapSOPInstanceUID = true
+            local lFlagRemapKeptUID = true
+            -- gUIDMap, gUIDType = MapUIDOldToNew(loStudyIDAnon,lFlagRemapSOPInstanceUID,lFlagRemapKeptUID)
+            local lPostData = {}
+            lPostData['StudyIDNew'] = loStudyIDAnon
+            lPostData['FlagRemapSOPInstanceUID'] = lFlagRemapSOPInstanceUID
+            lPostData['FlagRemapKeptUID'] = lFlagRemapKeptUID
+            lPostData['KeptUID'] = gKeptUID
+            local lResults = ParseJson(RestApiPost('/map_uid_old_to_new_lua', DumpJson(lPostData), false))
+            gUIDMap = lResults['UIDMap']
+            gUIDType = lResults['UIDType']
+--             print('----------------map gen')
+--             if gUIDMap then
+--                 print('gUIDMap')
+--                 print(DumpJson(gUIDMap))
+--             end
+--             if gUIDType then
+--                 print('gUIDType')
+--                 print(DumpJson(gUIDType))
+--             end
+            
+            -- Set up replacements for AccessionNumber and StudyID
+            local lReplaceRoot = {}
+            lReplaceRoot['AccessionNumber'] = string.sub(loStudyIDAnon,1,8) .. string.sub(loStudyIDAnon,10,17)
+            lReplaceRoot['StudyID'] = string.sub(loStudyIDAnon,19,26) .. string.sub(loStudyIDAnon,28,35)
+    
+            -- Check for existing lShiftEpoch
+            -- local lShiftEpoch = LoadShiftEpochFromDB(lSQLpid)
+            local lPostData = {}
+            lPostData['SQLpid'] = lSQLpid
+            local lStatus = ParseJson(RestApiPost('/load_shift_epoch_from_db_lua', DumpJson(lPostData), false))
+            if lStatus['status'] and lStatus['status'] > 0 then error(lStatus['error_text']) end
+            local lShiftEpoch = lStatus['ShiftEpoch']
+
+            -- Compute lShiftEpoch
+            if not lShiftEpoch then 
+                -- Compute lShiftEpoch (used to shift earliest date to Jan 01 same year)
+                -- lShiftEpoch = ComputeShiftEpochFromEarliestDate(loInstancesAnonMeta)
+                -- Compute random shift up to one year
+                math.randomseed(os.time())
+                lShiftEpoch = math.floor(math.floor(math.random() * 365.0) * 24.0 * 3600.0)
+                -- SaveShiftEpochToDB(lShiftEpoch,lSQLpid)
+                local lPostData = {}
+                lPostData['SQLpid'] = lSQLpid
+                lPostData['ShiftEpoch'] = lShiftEpoch
+                local lStatus = ParseJson(RestApiPost('/save_shift_epoch_to_db_lua', DumpJson(lPostData), false))
+                if lStatus['status'] and lStatus['status'] > 0 then
+                    error('Problem saving ShiftEpoch to DB')
+                end
+            end
+
+            -- For some cases, we keep the dates, so lShiftEpoch=0
+            local lFlagKeepOriginalDates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES') == 'true'
+            if lFlagKeepOriginalDates then
+                local currentTime = os.time
+                lShiftEpoch = 0
+            end
+
+            -- Second pass anonymization creates files modified by lShiftEpoch
+            -- Deletes First pass anonymized files following lShiftEpoch modification
+            local lPostData = {}
+            lPostData['InstancesMeta'] = loInstancesAnonMeta
+            lPostData['ShiftEpoch'] = lShiftEpoch
+            lPostData['ReplaceRoot'] = lReplaceRoot
+            lPostData['UIDMap'] = gUIDMap
+            lPostData['TopLevelTagToKeep'] = gTopLevelTagToKeep
+            lPostData['AddressList'] = gAddressList
+            lPostData['KeptUID'] = gKeptUID
+            -- local loInstanceIDNew = ShiftDateTimePatAgeOfInstances(loInstancesAnonMeta, lShiftEpoch, lReplaceRoot)
+            local lResults = ParseJson(RestApiPost('/shift_date_time_patage_of_instances_lua', DumpJson(lPostData), false))
+            if lResults['status'] ~= 0 then
+                error('Problem calling python shift date time patage')
+            end
+            loInstanceIDNew = lResults['InstanceIDNew']
+    
+            -- Delete the original instance
+            for i, loInstanceAnonMeta in pairs(loInstancesAnonMeta) do
+                loInstanceID = (loInstanceAnonMeta['ID'])
+                RestApiDelete('/instances/' .. loInstanceID, false)
+                --Delete(loInstanceID)
+            end -- loop over loInstancesAnonMeta
+    
+            -- Send to receiving modality
+            local lPostData = {}
+            lPostData['orthanc_instance_ids'] = {}
+            for i, loInstanceID in pairs(loInstanceIDNew) do
+                table.insert(lPostData['orthanc_instance_ids'], loInstanceID)
+            end
+            local lResults = ParseJson(RestApiPost('/send_instances_to_remote_filter_lua', DumpJson(lPostData), false))
+            if not lResults then
+               error('Problem calling send_instances_to_remote_filter_lua')
+            end 
+            -- for i, loInstanceID in pairs(loInstanceIDNew) do
+            for loInstanceID, lFlagSendToRemote in pairs(lResults) do
+                -- local lFlagSendToRemote = SendToRemoteFilter(loInstanceID)
+                if lFlagSendToRemote then
+                    local dumby=3
+                    if not lFlagForceAnon then
+                        -- RestApiPost('/modalities/' .. os.getenv('LUA_ANON_ORTHANC') .. '/store', loInstanceID, false)
+                        lFlagImagesSent = true
+                    end
+                else
+                    RestApiDelete('/instances/' .. loInstanceID, false)
+                    lFlagNonOriginalDetected = true
+                end
+            end
+
+            if gVerbose then print(string.rep(' ',gIndent) .. 'Updating lookup table') end
+            RestApiGet('/update_lookup_table_html_lua', false)
+            -- UpdateLookupHTML()
+            if ldPatientNameAnon then
+                SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete:' .. ldPatientNameAnon)
+            else
+                SendEmailUpdate(os.getenv('ORTHANC__NAME') .. ' Anon Complete', 'Anonymization complete.')
+            end
+
+        else -- existing patient/study combo
+
+           if gVerbose then print(string.rep(' ', gIndent) .. 'Skipping re-anon of existing patient/study') end
+
+        end -- endif new patient or new study
+
+        if lFlagNonOriginalDetected then
+            if gVerbose then print('Some non-original images were not sent') end
+        end
+
+        -- CloseSQL()
+        
+    end -- endif no nonanonymized data detected
+
+    if lFlagImagesSent and gVerbose then
+        print(string.rep(' ',gIndent) .. 'Images sent to remote modalities') 
+    end
+
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+
+end
+
 -- -- ======================================================
 -- function OnStableStudy(aoStudyID, aTags, aoStudyMeta)
 -- 
@@ -4351,75 +4353,75 @@ end
 -- 
 -- end
 
--- -- ======================================================
--- -- Use of this seems limited to the Illumeo testing scenario.
--- -- Probably not necessary to convert this to python.
--- function ReAnonymizeStudy(aoStudyID)
--- 
---     gIndent=0
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Reanon ' .. aoStudyID) end
---     local lTime0 = os.time()
---     local loStudyMetadata = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
---     local lSIUID = loStudyMetadata['MainDicomTags']['StudyInstanceUID']
--- 
---     local lFlagSQLAlreadyOpen = gSQLOpen
---     if not lFlagSQLAlreadyOpen then OpenSQL() end
---     -- ConfirmLookupTablesSQL()
---     local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql_lua', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
---     if lStatus['error_text'] then
---         error(lStatus['error_text'])
---     end
--- 
---     local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
---     -- Check for associated anonymized ID
---     lSQLQuery = string.format(
---                 [[SELECT value 
---                   FROM studyinstanceuid_anon
---                   WHERE siuid in (SELECT siuid
---                                   FROM studyinstanceuid
---                                   WHERE value='%s')]],
---                 gSQLConn:escape(lSIUID))
---     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
---     if not lSQLStatus then 
---         CloseSQL()
---         error("Problem querying pid, parent_pid")
---     end
---     local lFlagReAnon = true
---     if lSQLCursor then
---         if lSQLCursor:numrows() > 0 then
---             lSQLRow = lSQLCursor:fetch({}, "a")
---             while lSQLRow do
---                 local loStudyIDAnon = ParseJson(RestApiPost('/tools/lookup', lSQLRow.value, false))
---                 if loStudyIDAnon then
---                     if #loStudyIDAnon > 0 then
---                         -- Check for existence of study on Orthanc
---                         if RestApiGet('/studies/' .. loStudyIDAnon[1]['ID'], false) then
---                             lFlagReAnon = false
---                         end
---                     end
---                 end
---                 lSQLRow = lSQLCursor:fetch({}, "a")
---             end
---         end
---     end
---     if not lFlagReAnon then
---         if gVerbose then print(string.rep(' ', gIndent) .. 'Anon study exists on Orthanc.  Skipping.') end
---     else
---         gFlagForceAnon = true
---         SendEmailUpdate('IllumeoPhi Triggered Re-Anon', 'Manual re-anonymization triggered.  Look for update upon success.')
---         local tags = {} 
---         OnStableStudyMain(aoStudyID, tags, loStudyMetadata)           
---         gFlagForceAnon = false
---     end
---     if not lFlagSQLAlreadyOpen then CloseSQL() end
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     gIndent = nil
--- 
--- end
---    
+-- ======================================================
+-- Use of this seems limited to the Illumeo testing scenario.
+-- Probably not necessary to convert this to python.
+function ReAnonymizeStudy(aoStudyID)
+
+    gIndent=0
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Reanon ' .. aoStudyID) end
+    local lTime0 = os.time()
+    local loStudyMetadata = ParseJson(RestApiGet('/studies/' .. aoStudyID, false))
+    local lSIUID = loStudyMetadata['MainDicomTags']['StudyInstanceUID']
+
+    local lFlagSQLAlreadyOpen = gSQLOpen
+    if not lFlagSQLAlreadyOpen then OpenSQL() end
+    -- ConfirmLookupTablesSQL()
+    local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql_lua', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
+    if lStatus['error_text'] then
+        error(lStatus['error_text'])
+    end
+
+    local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
+    -- Check for associated anonymized ID
+    lSQLQuery = string.format(
+                [[SELECT value 
+                  FROM studyinstanceuid_anon
+                  WHERE siuid in (SELECT siuid
+                                  FROM studyinstanceuid
+                                  WHERE value='%s')]],
+                gSQLConn:escape(lSIUID))
+    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+    if not lSQLStatus then 
+        CloseSQL()
+        error("Problem querying pid, parent_pid")
+    end
+    local lFlagReAnon = true
+    if lSQLCursor then
+        if lSQLCursor:numrows() > 0 then
+            lSQLRow = lSQLCursor:fetch({}, "a")
+            while lSQLRow do
+                local loStudyIDAnon = ParseJson(RestApiPost('/tools/lookup', lSQLRow.value, false))
+                if loStudyIDAnon then
+                    if #loStudyIDAnon > 0 then
+                        -- Check for existence of study on Orthanc
+                        if RestApiGet('/studies/' .. loStudyIDAnon[1]['ID'], false) then
+                            lFlagReAnon = false
+                        end
+                    end
+                end
+                lSQLRow = lSQLCursor:fetch({}, "a")
+            end
+        end
+    end
+    if not lFlagReAnon then
+        if gVerbose then print(string.rep(' ', gIndent) .. 'Anon study exists on Orthanc.  Skipping.') end
+    else
+        gFlagForceAnon = true
+        SendEmailUpdate('IllumeoPhi Triggered Re-Anon', 'Manual re-anonymization triggered.  Look for update upon success.')
+        local tags = {} 
+        OnStableStudyMain(aoStudyID, tags, loStudyMetadata)           
+        gFlagForceAnon = false
+    end
+    if not lFlagSQLAlreadyOpen then CloseSQL() end
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    gIndent = nil
+
+end
+   
 -- -- ======================================================
 -- Replaced with /jsanon link in python mod_rest_api.py
 -- function AnonymizeStudy(aoStudyID)
@@ -4438,287 +4440,287 @@ end
 --     gIndent = nil
 -- 
 -- end
--- 
--- -- ======================================================
--- function LoadPHI2AnonMap()
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     local lFlagSQLAlreadyOpen = gSQLOpen
---     if not lFlagSQLAlreadyOpen then OpenSQL() end
---     -- ConfirmLookupTablesSQL()
---     local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql_lua', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
---     if lStatus['error_text'] then
---         error(lStatus['error_text'])
---     end
--- 
---     local lPatientMap = {}
---     local lPatientReverseMap = {}
---     lPatientReverseMap['Primary'] = {}
---     lPatientReverseMap['Secondary'] = {}
---     lPatientReverseMap['Both'] = {}
--- 
---     local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
--- 
---     -- Check for siuid2patientname_anon
---     lSQLQuery = [[SELECT table_name 
---                   FROM information_schema.tables 
---                   WHERE table_name='siuid2patientname_anon']]
---     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
---     local lFlagSIUID2Anon
---     if not lSQLStatus then
---         lFlagSIUID2Anon = false
---     else
---         lFlagSIUID2Anon = true
---     end
--- 
---     -- Get PatientID 
---     lSQLQuery = [[SELECT pid,value 
---                   FROM patientid 
---                   WHERE parent_pid is NULL]]
---     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
---     if not lSQLStatus then 
---         CloseSQL()
---         error("Problem querying pid, value")
---     end
---     if lSQLCursor:numrows() > 0 then
---         lSQLRow = lSQLCursor:fetch({}, "a")
---         while lSQLRow do
---             lPatientMap[lSQLRow.pid] = {}
---             lPatientMap[lSQLRow.pid]['PatientID'] = lSQLRow.value
---             lPatientMap[lSQLRow.pid]['OtherPatientIDs'] = {}
---             lPatientMap[lSQLRow.pid]['StudyInstanceUIDMap'] = {}
---             if lFlagSIUID2Anon then
---                 lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'] = {}
---             end
---             lPatientReverseMap['Primary'][lSQLRow.value] = lSQLRow.pid
---             lPatientReverseMap['Both'][lSQLRow.value] = lSQLRow.pid
---             lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
---         end
---     end
---     lSQLQuery = [[SELECT parent_pid,value 
---                   FROM patientid 
---                   WHERE parent_pid is not NULL]]
---     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
---     if not lSQLStatus then 
---         CloseSQL()
---         error("Problem querying pid, parent_pid")
---     end
---     if lSQLCursor:numrows() > 0 then
---         lSQLRow = lSQLCursor:fetch({}, "a")
---         while lSQLRow do
---             if lPatientMap[lSQLRow.parent_pid] then
---                 table.insert(lPatientMap[lSQLRow.parent_pid]['OtherPatientIDs'],
---                              lSQLRow.value)
---                 lPatientReverseMap['Secondary'][lSQLRow.value] = lSQLRow.parent_pid
---                 lPatientReverseMap['Both'][lSQLRow.value] = lSQLRow.parent_pid
---             end
---             lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
---         end
---     end
--- 
---     lSQLQuery = [[SELECT value, pid 
---                   FROM patientid_anon]]
---     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
---     if not lSQLStatus then 
---         CloseSQL()
---         error("Problem querying patientid_anon")
---     end
---     if lSQLCursor:numrows() > 0 then
---         lSQLRow = lSQLCursor:fetch({}, "a")
---         while lSQLRow do
---             if lPatientMap[lSQLRow.pid] then
---                 lPatientMap[lSQLRow.pid]['PatientIDAnon'] = lSQLRow.value
---             end
---             lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
---         end
---     end
--- 
---     -- Get shift epoch
---     lSQLQuery = [[SELECT value, pid 
---                   FROM shiftepoch]]
---     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
---     if not lSQLStatus then 
---         CloseSQL()
---         error("Problem querying shiftepoch")
---     end
---     if lSQLCursor:numrows() > 0 then
---         lSQLRow = lSQLCursor:fetch({}, "a")
---         while lSQLRow do
---             if lPatientMap[lSQLRow.pid] then
---                 lPatientMap[lSQLRow.pid]['ShiftEpoch'] = lSQLRow.value
---             end
---             lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
---         end
---     end
--- 
---     -- Get internal number
---     lSQLQuery = [[SELECT value, pid FROM internalnumber]]
---     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
---     if not lSQLStatus then 
---         CloseSQL()
---         error("Problem querying pid, parent_pid")
---     end
---     if lSQLCursor:numrows() > 0 then
---         lSQLRow = lSQLCursor:fetch({}, "a")
---         while lSQLRow do
---             if lPatientMap[lSQLRow.pid] then
---                 lPatientMap[lSQLRow.pid]['InternalNumber'] = lSQLRow.value
---             end
---             lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
---         end
---     end
--- 
---     -- Gather study info
---     lSQLQuery = [[SELECT sphi.pid, sphi.value AS phivalue, sanon.value AS anonvalue  
---                   FROM studyinstanceuid sphi 
---                       INNER JOIN studyinstanceuid_anon sanon 
---                       ON sanon.siuid = sphi.siuid]]
---     lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
---     if not lSQLStatus then 
---         CloseSQL()
---         error("Problem querying studyinstanceuid")
---     end
---     if lSQLCursor:numrows() > 0 then
---         lSQLRow = lSQLCursor:fetch({}, "a")
---         while lSQLRow do
---             if lPatientMap[lSQLRow.pid] then
---                 lPatientMap[lSQLRow.pid]['StudyInstanceUIDMap'][lSQLRow.phivalue] = lSQLRow.anonvalue
---             end
---             lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
---         end
---     end
--- 
---     if lFlagSIUID2Anon then
--- 
---         -- Gather patientname_anon info
---         lSQLQuery = [[SELECT sphi.pid, sphi.value AS phivalue, sanon.patientname_anon AS anonvalue  
---                       FROM studyinstanceuid sphi 
---                           INNER JOIN siuid2patientname_anon sanon 
---                           ON sanon.siuid = sphi.siuid]]
---         lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
---         if not lSQLStatus then 
---             CloseSQL()
---             error("Problem querying studyinstanceuid")
---         end
---         if lSQLCursor:numrows() > 0 then
---             lSQLRow = lSQLCursor:fetch({}, "a")
---             while lSQLRow do
---                 if lPatientMap[lSQLRow.pid] then
---                     if not lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'][lSQLRow.phivalue] then
---                         lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'][lSQLRow.phivalue] = {}
---                     end
---                     lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'][lSQLRow.phivalue][lSQLRow.anonvalue] = true
---                 end
---                 lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
---             end
---         end
--- 
---     end
--- 
---     if not lFlagSQLAlreadyOpen then CloseSQL() end
--- 
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
---     return lPatientMap, lPatientReverseMap, lFlagSIUID2Anon
--- 
--- end
--- 
--- -- ======================================================
--- function NowOnOrthanc()
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     local lFlagSQLAlreadyOpen = gSQLOpen
---     if not lFlagSQLAlreadyOpen then OpenSQL() end
---     -- ConfirmLookupTablesSQL()
---     local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql_lua', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
---     if lStatus['error_text'] then
---         error(lStatus['error_text'])
---     end
--- 
---     local lPatients = ParseJson(RestApiGet('/patients', false))
---     local lPatientIDModifier = ''
--- 
---     local lFlagSplitScreenFromDiagnostic = os.getenv('LUA_FLAG_SPLIT_SCREEN_DIAG') == 'true'
---     local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
---     
---     local loSystemMeta = ParseJson(RestApiGet('/system', false))
--- 
---     local lNowOnOrthanc = {}
---     lNowOnOrthanc['ByPatientID'] = {}
---     lNowOnOrthanc['StudyInstanceUID2PatientID'] = {}
---     lNowOnOrthanc['PatientID2oPatientID'] = {}
---     lNowOnOrthanc['StudyUID2oStudyUID'] = {}
---     local lPatientIDTemp, lPatientID, lPatientIDModified
---     local lNumPatients = 0
---     for i, loPatientID in pairs(lPatients) do lNumPatients = lNumPatients+1 end
---     for i, loPatientID in pairs(lPatients) do
---         local lRowOfData = {}
---         -- local loPatientMeta = ParseJson(RestApiGet('/patients/' .. loPatientID .. '/shared-tags?simplify', false))
---         local loPatientMeta = ParseJson(RestApiGet('/patients/' .. loPatientID, false))
---         -- if gVerbose then print(string.rep(' ', gIndent+3) .. 'Orthanc patient query') end
---         -- local lPatientName = loPatientMeta['PatientName'] or ''
---         -- lPatientIDTemp = loPatientMeta['PatientID']
---         local lPatientName = loPatientMeta['MainDicomTags']['PatientName'] or ''
---         lPatientIDTemp = loPatientMeta['MainDicomTags']['PatientID']
---         lPatientID = lPatientIDTemp
---         -- Get PatientID from database
---         local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
---         lSQLQuery = string.format(
---                 [[SELECT value FROM patientid WHERE pid IN (SELECT parent_pid FROM patientid WHERE value = '%s')]], 
---                 gSQLConn:escape(lPatientIDTemp))
---         lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
---         if not lSQLStatus then 
---             CloseSQL()
---             error("Problem querying pid, value")
---         end
---         if lSQLCursor:numrows() > 0 then
---             lSQLRow = lSQLCursor:fetch({}, "a")
---             while lSQLRow do
---                 lPatientID = lSQLRow.value
---                 break
---             end
---         end
---         lRowOfData['PatientName'] = lPatientName
---         local loStudiesMeta = ParseJson(RestApiGet('/patients/' .. loPatientID .. '/studies', false))
---         lRowOfData['StudyDate'] = {}
---         lRowOfData['AccessionNumber'] = {}
---         lRowOfData['StudyInstanceUID'] = {}
---         local lAccessionNumber = {}
---         for j, loStudyMeta in pairs(loStudiesMeta) do
---             oStudyID = loStudyMeta['ID'] or ''
---             lPatientIDModifier = ''
---             if lFlagSplitScreenFromDiagnostic and (string.find(string.lower(lPatientName), string.lower(loSystemMeta['Name'])) == nil) then
---                 -- lPatientIDModifier = SetScreenOrDiagnostic(oStudyID)
---                 lPatientIDModifier = RestApiGet('/studies/' .. oStudyID .. '/set_screen_or_diagnostic', false)
---             end
---             if lFlagEveryAccessionAPatient and (string.find(string.lower(lPatientName), string.lower(loSystemMeta['Name'])) == nil) then 
---                 lPatientIDModifier = '_' .. loStudyMeta['MainDicomTags']['AccessionNumber']
---             end
---             lPatientIDModified = lPatientID .. lPatientIDModifier
---             lNowOnOrthanc['PatientID2oPatientID'][lPatientIDModified] = loPatientID
---             lRowOfData['StudyDate'][j] = loStudyMeta['MainDicomTags']['StudyDate'] or ''
---             lRowOfData['AccessionNumber'][j] = loStudyMeta['MainDicomTags']['AccessionNumber'] or ''
---             lRowOfData['StudyInstanceUID'][j] = loStudyMeta['MainDicomTags']['StudyInstanceUID']
---             lNowOnOrthanc['StudyInstanceUID2PatientID'][lRowOfData['StudyInstanceUID'][j]] = lPatientIDModified
---             lNowOnOrthanc['StudyUID2oStudyUID'][lRowOfData['StudyInstanceUID'][j]] = oStudyID
---         end
---         lNowOnOrthanc['ByPatientID'][lPatientIDModified] = lRowOfData
---     end
--- 
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
---     return lNowOnOrthanc
--- 
--- end
--- 
+
+-- ======================================================
+function LoadPHI2AnonMap()
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    local lFlagSQLAlreadyOpen = gSQLOpen
+    if not lFlagSQLAlreadyOpen then OpenSQL() end
+    -- ConfirmLookupTablesSQL()
+    local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql_lua', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
+    if lStatus['error_text'] then
+        error(lStatus['error_text'])
+    end
+
+    local lPatientMap = {}
+    local lPatientReverseMap = {}
+    lPatientReverseMap['Primary'] = {}
+    lPatientReverseMap['Secondary'] = {}
+    lPatientReverseMap['Both'] = {}
+
+    local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
+
+    -- Check for siuid2patientname_anon
+    lSQLQuery = [[SELECT table_name 
+                  FROM information_schema.tables 
+                  WHERE table_name='siuid2patientname_anon']]
+    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+    local lFlagSIUID2Anon
+    if not lSQLStatus then
+        lFlagSIUID2Anon = false
+    else
+        lFlagSIUID2Anon = true
+    end
+
+    -- Get PatientID 
+    lSQLQuery = [[SELECT pid,value 
+                  FROM patientid 
+                  WHERE parent_pid is NULL]]
+    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+    if not lSQLStatus then 
+        CloseSQL()
+        error("Problem querying pid, value")
+    end
+    if lSQLCursor:numrows() > 0 then
+        lSQLRow = lSQLCursor:fetch({}, "a")
+        while lSQLRow do
+            lPatientMap[lSQLRow.pid] = {}
+            lPatientMap[lSQLRow.pid]['PatientID'] = lSQLRow.value
+            lPatientMap[lSQLRow.pid]['OtherPatientIDs'] = {}
+            lPatientMap[lSQLRow.pid]['StudyInstanceUIDMap'] = {}
+            if lFlagSIUID2Anon then
+                lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'] = {}
+            end
+            lPatientReverseMap['Primary'][lSQLRow.value] = lSQLRow.pid
+            lPatientReverseMap['Both'][lSQLRow.value] = lSQLRow.pid
+            lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+        end
+    end
+    lSQLQuery = [[SELECT parent_pid,value 
+                  FROM patientid 
+                  WHERE parent_pid is not NULL]]
+    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+    if not lSQLStatus then 
+        CloseSQL()
+        error("Problem querying pid, parent_pid")
+    end
+    if lSQLCursor:numrows() > 0 then
+        lSQLRow = lSQLCursor:fetch({}, "a")
+        while lSQLRow do
+            if lPatientMap[lSQLRow.parent_pid] then
+                table.insert(lPatientMap[lSQLRow.parent_pid]['OtherPatientIDs'],
+                             lSQLRow.value)
+                lPatientReverseMap['Secondary'][lSQLRow.value] = lSQLRow.parent_pid
+                lPatientReverseMap['Both'][lSQLRow.value] = lSQLRow.parent_pid
+            end
+            lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+        end
+    end
+
+    lSQLQuery = [[SELECT value, pid 
+                  FROM patientid_anon]]
+    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+    if not lSQLStatus then 
+        CloseSQL()
+        error("Problem querying patientid_anon")
+    end
+    if lSQLCursor:numrows() > 0 then
+        lSQLRow = lSQLCursor:fetch({}, "a")
+        while lSQLRow do
+            if lPatientMap[lSQLRow.pid] then
+                lPatientMap[lSQLRow.pid]['PatientIDAnon'] = lSQLRow.value
+            end
+            lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+        end
+    end
+
+    -- Get shift epoch
+    lSQLQuery = [[SELECT value, pid 
+                  FROM shiftepoch]]
+    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+    if not lSQLStatus then 
+        CloseSQL()
+        error("Problem querying shiftepoch")
+    end
+    if lSQLCursor:numrows() > 0 then
+        lSQLRow = lSQLCursor:fetch({}, "a")
+        while lSQLRow do
+            if lPatientMap[lSQLRow.pid] then
+                lPatientMap[lSQLRow.pid]['ShiftEpoch'] = lSQLRow.value
+            end
+            lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+        end
+    end
+
+    -- Get internal number
+    lSQLQuery = [[SELECT value, pid FROM internalnumber]]
+    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+    if not lSQLStatus then 
+        CloseSQL()
+        error("Problem querying pid, parent_pid")
+    end
+    if lSQLCursor:numrows() > 0 then
+        lSQLRow = lSQLCursor:fetch({}, "a")
+        while lSQLRow do
+            if lPatientMap[lSQLRow.pid] then
+                lPatientMap[lSQLRow.pid]['InternalNumber'] = lSQLRow.value
+            end
+            lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+        end
+    end
+
+    -- Gather study info
+    lSQLQuery = [[SELECT sphi.pid, sphi.value AS phivalue, sanon.value AS anonvalue  
+                  FROM studyinstanceuid sphi 
+                      INNER JOIN studyinstanceuid_anon sanon 
+                      ON sanon.siuid = sphi.siuid]]
+    lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+    if not lSQLStatus then 
+        CloseSQL()
+        error("Problem querying studyinstanceuid")
+    end
+    if lSQLCursor:numrows() > 0 then
+        lSQLRow = lSQLCursor:fetch({}, "a")
+        while lSQLRow do
+            if lPatientMap[lSQLRow.pid] then
+                lPatientMap[lSQLRow.pid]['StudyInstanceUIDMap'][lSQLRow.phivalue] = lSQLRow.anonvalue
+            end
+            lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+        end
+    end
+
+    if lFlagSIUID2Anon then
+
+        -- Gather patientname_anon info
+        lSQLQuery = [[SELECT sphi.pid, sphi.value AS phivalue, sanon.patientname_anon AS anonvalue  
+                      FROM studyinstanceuid sphi 
+                          INNER JOIN siuid2patientname_anon sanon 
+                          ON sanon.siuid = sphi.siuid]]
+        lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+        if not lSQLStatus then 
+            CloseSQL()
+            error("Problem querying studyinstanceuid")
+        end
+        if lSQLCursor:numrows() > 0 then
+            lSQLRow = lSQLCursor:fetch({}, "a")
+            while lSQLRow do
+                if lPatientMap[lSQLRow.pid] then
+                    if not lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'][lSQLRow.phivalue] then
+                        lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'][lSQLRow.phivalue] = {}
+                    end
+                    lPatientMap[lSQLRow.pid]['SIUID2NameAnonMap'][lSQLRow.phivalue][lSQLRow.anonvalue] = true
+                end
+                lSQLRow = lSQLCursor:fetch(lSQLRow,"a")
+            end
+        end
+
+    end
+
+    if not lFlagSQLAlreadyOpen then CloseSQL() end
+
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+    return lPatientMap, lPatientReverseMap, lFlagSIUID2Anon
+
+end
+
+-- ======================================================
+function NowOnOrthanc()
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    local lFlagSQLAlreadyOpen = gSQLOpen
+    if not lFlagSQLAlreadyOpen then OpenSQL() end
+    -- ConfirmLookupTablesSQL()
+    local lStatus = ParseJson(RestApiGet('/confirm_or_create_lookup_table_sql_lua', false, {['x-remote-user']='lua-ConfirmOrCreate'}))
+    if lStatus['error_text'] then
+        error(lStatus['error_text'])
+    end
+
+    local lPatients = ParseJson(RestApiGet('/patients', false))
+    local lPatientIDModifier = ''
+
+    local lFlagSplitScreenFromDiagnostic = os.getenv('LUA_FLAG_SPLIT_SCREEN_DIAG') == 'true'
+    local lFlagEveryAccessionAPatient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
+    
+    local loSystemMeta = ParseJson(RestApiGet('/system', false))
+
+    local lNowOnOrthanc = {}
+    lNowOnOrthanc['ByPatientID'] = {}
+    lNowOnOrthanc['StudyInstanceUID2PatientID'] = {}
+    lNowOnOrthanc['PatientID2oPatientID'] = {}
+    lNowOnOrthanc['StudyUID2oStudyUID'] = {}
+    local lPatientIDTemp, lPatientID, lPatientIDModified
+    local lNumPatients = 0
+    for i, loPatientID in pairs(lPatients) do lNumPatients = lNumPatients+1 end
+    for i, loPatientID in pairs(lPatients) do
+        local lRowOfData = {}
+        -- local loPatientMeta = ParseJson(RestApiGet('/patients/' .. loPatientID .. '/shared-tags?simplify', false))
+        local loPatientMeta = ParseJson(RestApiGet('/patients/' .. loPatientID, false))
+        -- if gVerbose then print(string.rep(' ', gIndent+3) .. 'Orthanc patient query') end
+        -- local lPatientName = loPatientMeta['PatientName'] or ''
+        -- lPatientIDTemp = loPatientMeta['PatientID']
+        local lPatientName = loPatientMeta['MainDicomTags']['PatientName'] or ''
+        lPatientIDTemp = loPatientMeta['MainDicomTags']['PatientID']
+        lPatientID = lPatientIDTemp
+        -- Get PatientID from database
+        local lSQLStatus, lSQLQuery, lSQLCursor, lSQLRow
+        lSQLQuery = string.format(
+                [[SELECT value FROM patientid WHERE pid IN (SELECT parent_pid FROM patientid WHERE value = '%s')]], 
+                gSQLConn:escape(lPatientIDTemp))
+        lSQLStatus, lSQLCursor = pcall(gSQLConn.execute,gSQLConn,lSQLQuery)
+        if not lSQLStatus then 
+            CloseSQL()
+            error("Problem querying pid, value")
+        end
+        if lSQLCursor:numrows() > 0 then
+            lSQLRow = lSQLCursor:fetch({}, "a")
+            while lSQLRow do
+                lPatientID = lSQLRow.value
+                break
+            end
+        end
+        lRowOfData['PatientName'] = lPatientName
+        local loStudiesMeta = ParseJson(RestApiGet('/patients/' .. loPatientID .. '/studies', false))
+        lRowOfData['StudyDate'] = {}
+        lRowOfData['AccessionNumber'] = {}
+        lRowOfData['StudyInstanceUID'] = {}
+        local lAccessionNumber = {}
+        for j, loStudyMeta in pairs(loStudiesMeta) do
+            oStudyID = loStudyMeta['ID'] or ''
+            lPatientIDModifier = ''
+            if lFlagSplitScreenFromDiagnostic and (string.find(string.lower(lPatientName), string.lower(loSystemMeta['Name'])) == nil) then
+                -- lPatientIDModifier = SetScreenOrDiagnostic(oStudyID)
+                lPatientIDModifier = RestApiGet('/studies/' .. oStudyID .. '/set_screen_or_diagnostic', false)
+            end
+            if lFlagEveryAccessionAPatient and (string.find(string.lower(lPatientName), string.lower(loSystemMeta['Name'])) == nil) then 
+                lPatientIDModifier = '_' .. loStudyMeta['MainDicomTags']['AccessionNumber']
+            end
+            lPatientIDModified = lPatientID .. lPatientIDModifier
+            lNowOnOrthanc['PatientID2oPatientID'][lPatientIDModified] = loPatientID
+            lRowOfData['StudyDate'][j] = loStudyMeta['MainDicomTags']['StudyDate'] or ''
+            lRowOfData['AccessionNumber'][j] = loStudyMeta['MainDicomTags']['AccessionNumber'] or ''
+            lRowOfData['StudyInstanceUID'][j] = loStudyMeta['MainDicomTags']['StudyInstanceUID']
+            lNowOnOrthanc['StudyInstanceUID2PatientID'][lRowOfData['StudyInstanceUID'][j]] = lPatientIDModified
+            lNowOnOrthanc['StudyUID2oStudyUID'][lRowOfData['StudyInstanceUID'][j]] = oStudyID
+        end
+        lNowOnOrthanc['ByPatientID'][lPatientIDModified] = lRowOfData
+    end
+
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+    return lNowOnOrthanc
+
+end
+
 -- -- ======================================================
 -- function LoadLookupTable(aFileLookup,aMakeBackup)
 -- 
@@ -4797,699 +4799,699 @@ end
 --     
 -- end
 -- 
--- -- ======================================================
--- function LoadLookupTableFast(aFileLookup, aMakeBackup)
--- 
---     -- I'm going to hard code the lookup location just in case someone gets the idea to escape the execute statement and wreak havoc
---     local lFileLookup = "/media/html/lookup/master/lookuptable.html"
---     local lTempFile = os.tmpname()
---     -- local lCommand = "sed 's/&nbsp//g' " .. aFileLookup .. " | html2text -nobs -width 2048 | grep \"|\" | sed 's/_//g'" .. " > " .. lTempFile
---     local lCommand = "sed 's/&nbsp//g' " .. lFileLookup .. " | html2text -nobs -width 2048 | grep \"|\" | sed 's/_/ /g'" .. " > " .. lTempFile
---     local lResult = os.execute(lCommand)
---     if lResult == 1 then
---         return nil
---     end
--- 
---     local lLun = io.open(lTempFile,"r")
---     if lLun == nil then
---         return nil
---     end
---     lLun:close()
--- 
---     local lLun = io.open(lFileLookup,"r")
---     if lLun == nil then
---         return nil
---     end
---     lLun:close()
--- 
---     if aMakeBackup then
---         -- local lLun = assert(io.open(aFileLookup,"r"))
---         local lLun = assert(io.open(lFileLookup,"r"))
---         local lFileData = lLun:read("*all")
---         lLun:close()
---         -- local lOut = assert(io.open(aFileLookup .. "." .. os.date("%Y%m%d%H%M%S"),"w"))
---         local lOut = assert(io.open(lFileLookup .. "." .. os.date("%Y%m%d%H%M%S"),"w"))
---         lOut:write(lFileData)
---         lOut:close()
---     end
--- 
---     local lLines = {}
---     for lLine in io.lines(lTempFile) do
---         lLines[#lLines + 1] = lLine
---     end
---     if not os.remove(lTempFile) then
---        return nil
---     end
--- 
---     local lLookupTable = {}
---     local lDataKeys = {}
---     local lIndexCol = 1
---     for lHeader in string.gmatch(string.sub(lLines[1],2,-1),"([^|]*)|") do
---         lDataKeys[lIndexCol] = trim(lHeader)
---         lIndexCol = lIndexCol + 1
---         lLookupTable[trim(lHeader)] = {}
---     end
--- 
---     local lIndexRow = 1
---     for i = 2, #lLines do
---         local lRow = string.sub(lLines[i],2,-1)
---         local lIndexCol = 1
---         for lColumnStripped in string.gmatch(lRow, "([^|]*)|") do
---             local lEntry = nil
---             if string.match(trim(lColumnStripped),",") then
---                 local lIndexEntry = 1
---                 lEntry = {}
---                 local lSingleEntry
---                 for lSingleEntry in string.gmatch(trim(lColumnStripped), "([^,]*)[,%s]*") do
---                     if string.match(lSingleEntry,"[^%s]+") then
---                         lEntry[lIndexEntry] = lSingleEntry
---                         lIndexEntry = lIndexEntry + 1
---                     end
---                 end
---                 if lIndexEntry < 2 then
---                     lEntry = nil
---                 end
---             else
---                 if string.len(trim(lColumnStripped)) > 0 then
---                     lEntry = trim(lColumnStripped)
---                 end
---             end
---             if lEntry then
---                 lLookupTable[lDataKeys[lIndexCol]][lIndexRow] = lEntry
---             else
---                 lLookupTable[lDataKeys[lIndexCol]][lIndexRow] = 'BLANK'
---             end
---             lIndexCol = lIndexCol + 1
---         end
---         lIndexRow = lIndexRow + 1
---     end
--- 
---     return lLookupTable
--- 
--- end
--- 
--- -- ======================================================
--- function FindPACSInLookupTableFromSIUID(aLookupTable,aStudyInstanceUID)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     gIndent = gIndent + 3
---     -- if gVerbose then print(string.rep(' ', gIndent) .. 'Scanning existing lookup table') end
---     local lRow, lFound
---     for lRowTemp, lStudyInstanceUIDs in pairs(aLookupTable['StudyInstanceUID']) do 
---         lFound = false
---         lRow = lRowTemp
---         if type(lStudyInstanceUIDs) == 'table' then
---             for lCol, lStudyInstanceUID in ipairs(lStudyInstanceUIDs) do
---                 lFound = lStudyInstanceUID == aStudyInstanceUID
---                 if lFound then break end
---             end
---         else
---             lFound = lStudyInstanceUIDs == aStudyInstanceUID
---         end
---         if lFound then break end
---     end
---     gIndent = gIndent - 3
---     if gIndent > 0 then gIndent = gIndent - 3 end
---     if not lFound then return nil,nil end
--- 
---     local lPACSData = nil
---     if aLookupTable['Name'][lRow] then
---         local lPatientName = nil
---         if type(aLookupTable['Name'][lRow]) == 'table' then
---             lPatientName = table.concat(aLookupTable['Name'][lRow],',')
---         else
---             lPatientName = aLookupTable['Name'][lRow]
---         end
---         if lPatientName and (lPatientName ~= 'BLANK') then
---             if not lPACSData then lPACSData = {} end
---             lPACSData['0010,0010'] = {}
---             lPACSData['0010,0010']['Value'] = lPatientName
---         end
---     end
---     if aLookupTable['PatientID'][lRow] then
---         local lPatientID = nil
---         if type(aLookupTable['PatientID'][lRow]) == 'table' then
---             lPatientID = table.concat(aLookupTable['PatientID'][lRow],',')
---         else
---             lPatientID = aLookupTable['PatientID'][lRow]
---         end
---         if lPatientID and (lPatientID ~= 'BLANK') then
---             if not lPACSData then lPACSData = {} end
---             lPACSData['0010,0020'] = {}
---             lPACSData['0010,0020']['Value'] = lPatientID
---         end
---     end
---     if aLookupTable['Date'][lRow] then
---         local lStudyDate = nil
---         if type(aLookupTable['Date'][lRow]) == 'table' then
---             lStudyDate = table.concat(aLookupTable['Date'][lRow],',')
---         else
---             lStudyDate = aLookupTable['Date'][lRow]
---         end
---         if lStudyDate and (lStudyDate ~= 'BLANK') then
---             local lAnonDate = nil
---             if aLookupTable['Anon Date'] then
---                 if type(aLookupTable['Anon Date'][lRow]) == 'table' then
---                     lAnonDate = table.concat(aLookupTable['Anon Date'][lRow],',')
---                 else
---                     lAnonDate = aLookupTable['Anon Date'][lRow]
---                 end
---             else
---                 lAnonDate = 'BLANK'
---             end
---             if not lPACSData then lPACSData = {} end
---             lPACSData['0008,0020'] = {}
---             lPACSData['0008,0020']['Value'] = lStudyDate
---             if lAnonDate and (lAnonDate ~= 'BLANK') then
---                 lPACSData['AnonDate'] = lAnonDate
---             end
---         end
---     end
---     if aLookupTable['Accession'][lRow] then
---         local lAccession = nil
---         if type(aLookupTable['Accession'][lRow]) == 'table' then
---             lAccession = table.concat(aLookupTable['Accession'][lRow],',')
---         else
---             lAccession = aLookupTable['Accession'][lRow]
---         end
---         if lAccession and (lAccession ~= 'BLANK') then
---             if not lPACSData then lPACSData = {} end
---             lPACSData['0008,0050'] = {}
---             lPACSData['0008,0050']['Value'] = lAccession
---         end
---     end
--- 
---     if not lPACSData then
---         lFound = nil
---         if gVerbose then print(string.rep(' ', gIndent) .. 'Subject not in lookup table') end
---     else
---         lFound = true
---         -- if gVerbose then print(string.rep(' ', gIndent) .. 'Subject in lookup table') end
---     end
---     gIndent = gIndent - 3
---     if gIndent > 0 then gIndent = gIndent - 3 end
---  
---     return lPACSData, lFound 
--- 
--- end
--- 
--- -- ======================================================
--- function FindPACSInLookupTableFromPatientID(aLookupTable,aPatientID)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     gIndent = gIndent + 3
---     -- if gVerbose then print(string.rep(' ', gIndent) .. 'Scanning existing lookup table') end
---     local lRow, lFound
---     for lRowTemp, lPatientIDs in pairs(aLookupTable['PatientID']) do 
---         lFound = false
---         lRow = lRowTemp
---         if type(lPatientIDs) == 'table' then
---             for lCol, lPatientID in ipairs(lPatientIDs) do
---                 lFound = lPatientID == aPatientID
---                 if lFound then break end
---             end
---         else
---             lFound = lPatientIDs == aPatientID
---         end
---         if lFound then break end
---     end
--- 
---     gIndent = gIndent - 3
---     if gIndent > 0 then gIndent = gIndent - 3 end
---     if not lFound then return nil,nil end
--- 
---     local lPACSData = nil
---     if aLookupTable['Name'][lRow] then
---         local lPatientName = nil
---         if type(aLookupTable['Name'][lRow]) == 'table' then
---             lPatientName = table.concat(aLookupTable['Name'][lRow],',')
---         else
---             lPatientName = aLookupTable['Name'][lRow]
---         end
---         if lPatientName and (lPatientName ~= 'BLANK') then
---             if not lPACSData then lPACSData = {} end
---             lPACSData['0010,0010'] = {}
---             lPACSData['0010,0010']['Value'] = lPatientName
---         end
---     end
---     if aLookupTable['PatientID'][lRow] then
---         local lPatientID = nil
---         if type(aLookupTable['PatientID'][lRow]) == 'table' then
---             lPatientID = table.concat(aLookupTable['PatientID'][lRow],',')
---         else
---             lPatientID = aLookupTable['PatientID'][lRow]
---         end
---         if lPatientID and (lPatientID ~= 'BLANK') then
---             if not lPACSData then lPACSData = {} end
---             lPACSData['0010,0020'] = {}
---             lPACSData['0010,0020']['Value'] = lPatientID
---         end
---     end
---     if aLookupTable['Date'][lRow] then
---         local lStudyDate = nil
---         if type(aLookupTable['Date'][lRow]) == 'table' then
---             lStudyDate = table.concat(aLookupTable['Date'][lRow],',')
---         else
---             lStudyDate = aLookupTable['Date'][lRow]
---         end
---         if lStudyDate and (lStudyDate ~= 'BLANK') then
---             local lAnonDate = nil
---             if aLookupTable['Anon Date'] then
---                 if type(aLookupTable['Anon Date'][lRow]) == 'table' then
---                     lAnonDate = table.concat(aLookupTable['Anon Date'][lRow],',')
---                 else
---                     lAnonDate = aLookupTable['Anon Date'][lRow]
---                 end
---             else
---                 lAnonDate = 'BLANK'
---             end
---             if not lPACSData then lPACSData = {} end
---             lPACSData['0008,0020'] = {}
---             lPACSData['0008,0020']['Value'] = lStudyDate
---             if lAnonDate and (lAnonDate ~= 'BLANK') then
---                 lPACSData['AnonDate'] = lAnonDate
---             end
---         end
---     end
---     if aLookupTable['Accession'][lRow] then
---         local lAccession = nil
---         if type(aLookupTable['Accession'][lRow]) == 'table' then
---             lAccession = table.concat(aLookupTable['Accession'][lRow],',')
---         else
---             lAccession = aLookupTable['Accession'][lRow]
---         end
---         if lAccession and (lAccession ~= 'BLANK') then
---             if not lPACSData then lPACSData = {} end
---             lPACSData['0008,0050'] = {}
---             lPACSData['0008,0050']['Value'] = lAccession
---         end
---     end
--- 
---     if not lPACSData then
---         lFound = nil
---         if gVerbose then print(string.rep(' ', gIndent) .. 'Subject not in lookup table') end
---     else
---         lFound = true
---         if gVerbose then print(string.rep(' ', gIndent) .. 'Subject in lookup table') end
---     end
---  
---     gIndent = gIndent - 3
---     if gIndent > 0 then gIndent = gIndent - 3 end
---     return lPACSData, lFound 
--- 
--- end
--- 
--- -- ======================================================
--- function UpdateLookupHTML()
--- 
---     local lFlagKeepOriginalDates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES') == 'true'
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     local lPatientMap, lPatientReverseMap, lFlagSIUID2Anon
---     lPatientMap, lPatientReverseMap, lFlagSIUID2Anon = LoadPHI2AnonMap()
---     local lNowOnOrthanc = NowOnOrthanc()
--- 
---     -- Check for the main modality that could be queried
---     local lFlagXRefModality=false
---     local lXRefModality=nil
---     if os.getenv('LUA_XREF_MODALITY') then
---         for _, lModality in pairs(ParseJson(RestApiGet('/modalities', false))) do
---             if lModality == os.getenv('LUA_XREF_MODALITY') then
---                 lFlagXRefModality = true
---                 lXRefModality = lModality
---                 break
---             end
---         end  
---     end
---     if lFlagXRefModality then
---         if gVerbose then print(string.rep(' ', gIndent+3) .. 'FlagXRefModality=1') end
---     else
---         if gVerbose then print(string.rep(' ', gIndent+3) .. 'FlagXRefModality=1') end
---     end
--- 
---     -- Check for existing lookup table
---     local lFileLookup = "/media/html/lookup/master/lookuptable.html"
---     local lBackup = true
---     -- local lLookupTable = LoadLookupTable(lFileLookup,lBackup)
---     local lLookupTable = LoadLookupTableFast(lFileLookup,lBackup)
--- 
---     -- Prepare to output the new
---     file_out = io.open(lFileLookup, "w")
---     io.output(file_out)
--- 
---     io.write('<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">\n')
---     io.write('<head>\n')
---     io.write('<link rel="stylesheet" href="style.css" type="text/css" id="" media="print, projection, screen" />\n')
---     io.write('<link rel="stylesheet" href="theme.blue.min.css">\n')
---     io.write('<script type="text/javascript" src="../../../app/libs/jquery.min.js"></script>\n')
---     io.write('<script type="text/javascript" src="jquery.tablesorter.combined.min.js"></script>\n')
---     io.write('<script type="text/javascript">\n')
---     io.write('$(document).ready(function() { \n')
---     io.write('    // call the tablesorter plugin \n')
---     io.write('    $("table").tablesorter({\n')
---     io.write('        theme: "blue",\n')
---     io.write('        widgets: ["zebra", "filter"],\n')
---     io.write('        widgetOptions : {\n')
---     io.write('            filter_columnFilters: true,\n')
---     io.write('            filter_reset: ".reset",\n')
---     io.write('            zebra : [ "normal-row", "alt-row" ]\n')
---     io.write('        },\n')
---     io.write('        sortList : [[2,0]]\n')
---     io.write('    }); \n')
---     io.write('}); \n')
---     io.write('</script>\n')
---     io.write('</head>\n')
---     
---     io.write('<body>\n')
---     io.write('<a href="../../../app/explorer.html">Return to Orthanc home page</a></br>')
---     io.write('Click a column heading to sort.</br>')
---     io.write('Click <a href="updatelookup.html">here</a> to force an update of this table.</br>\n')
---     io.write('<!-- targeted by the "filter_reset" option -->\n')
---     io.write('<button type="button" class="reset">Reset Search</button>\n')
---     io.write('<table class="tablesorter-blue" border=1>\n')
---     io.write('<thead>\n')
---     io.write('<tr>\n')
---     io.write('<th>Name</th>\n')
---     io.write('<th>PatientID</th>\n')
---     io.write('<th>ID</th>\n')
---     if lFlagSIUID2Anon then
---         io.write('<th>Name Anon</th>\n')
---     end
---     io.write('<th>Date</th>\n')
---     io.write('<th>Anon Date</th>\n')
---     io.write('<th>Accession</th>\n')
---     io.write('<th>Alt PatientID</th>\n')
---     io.write('<th>Anon PatientID</th>\n')
---     io.write('<th>StudyInstanceUID</th>\n')
---     io.write('<th>Anon StudyInstanceUID</th>\n')
---     io.write('</tr>\n')
---     io.write('</thead>\n')
---     io.write('<tbody>\n')
---     local lPatientIDShort, lPostData, lPostResult
---     for lPatientID, lPID in pairs(lPatientReverseMap['Primary']) do
--- 
---         local lShiftEpoch
---         if lFlagKeepOriginalDates then
---            lShiftEpoch = 0
---         else 
---            lShiftEpoch = lPatientMap[lPID]['ShiftEpoch']
---         end
---         if string.sub(lPatientID, -3) == 'n2d' then
---             lPatientIDShort = string.sub(lPatientID,1,string.find(lPatientID,'n2d')-1)
---         elseif string.sub(lPatientID, -2) == '2d' then
---             lPatientIDShort = string.sub(lPatientID,1,string.find(lPatientID,'2d')-1)
---         else
---             lPatientIDShort = lPatientID
---         end
--- 
---         local lStudyInstanceUIDPrinted = {}
---         if lNowOnOrthanc['ByPatientID'][lPatientID] then
--- 
---             -- if gVerbose then print(string.rep(' ', gIndent) .. 'Now on orthanc: ' .. lPID) end
---             for j, lDate in pairs(lNowOnOrthanc['ByPatientID'][lPatientID]['StudyDate']) do 
---                 lStudyInstanceUIDPrinted[lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]] = true
---                 io.write('<tr>\n')
---                 io.write('<td>\n')
---                 io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientID] .. '">\n')
---                 io.write(lNowOnOrthanc['ByPatientID'][lPatientID]['PatientName'])
---                 io.write('</a>\n')
---                 io.write('</td>\n')
---                 io.write('<td align="right">' .. lPatientIDShort .. '</td>\n')
---                 io.write('<td align="right">\n')
---                 if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
---                     io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientMap[lPID]['PatientIDAnon']] .. '">\n')
---                 end
---                 io.write(lPatientMap[lPID]['InternalNumber'])
---                 if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
---                     io.write('</a>\n')
---                 end
---                 io.write('</td>\n')
---                 if lFlagSIUID2Anon then
---                     if lPatientMap[lPID]['SIUID2NameAnonMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID']] then
---                         io.write('<td>\n')
---                         for k, _ in pairs(lPatientMap[lPID]['SIUID2NameAnonMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID']]) do
---                             io.write(k .. ', ')
---                         end
---                         io.write('</td>\n')
---                     else
---                         io.write('<td>&nbsp</td>\n')
---                     end
---                 end
---                 io.write('<td align="center">' .. lDate .. '</td>\n')
---                 if lFlagKeepOriginalDates or not lShiftEpoch then
---                     if lFlagKeepOriginalDates then
---                         io.write('<td align="center">' .. lDate .. '</td>\n')
---                     else
---                         io.write('<td align="center">&nbsp</td>\n')
---                     end
---                 else
---                     -- local lNewDateString = hiftDateTimeString(lShiftEpoch, lDate)
---                     local lPostData = {}
---                     lPostData['ShiftEpoch'] = lShiftEpoch
---                     lPostData['YYYYMMDD'] = lDate
---                     local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
---                     local lNewDateString = lResults['NewDateString']
---                     io.write('<td align="center">' .. lNewDateString .. '</td>\n')
---                 end
---                 io.write('<td align="right">' .. lNowOnOrthanc['ByPatientID'][lPatientID]['AccessionNumber'][j] .. '</td>\n')
---                 io.write('<td>\n')
---                 for k, lAltPID in pairs(lPatientMap[lPID]['OtherPatientIDs']) do 
---                     io.write(lAltPID .. ', \n')
---                 end
---                 io.write('</td>\n')
---                 io.write('<td align="center">\n')
---                 if lPatientMap[lPID]['PatientIDAnon'] then
---                     if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
---                         io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientMap[lPID]['PatientIDAnon']] .. '">\n')
---                     end
---                     io.write(lPatientMap[lPID]['PatientIDAnon'])
---                     if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
---                         io.write('</a>\n')
---                     end
---                 else
---                     io.write('&nbsp')
---                 end
---                 io.write('</td>\n')
---                 io.write('<td align="right">\n')
---                 io.write('<a href="../../../app/explorer.html#study?uuid=' .. lNowOnOrthanc['StudyUID2oStudyUID'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]] .. '">\n')
---                 io.write(lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j])
---                 io.write('</a>\n')
---                 io.write('</td>\n')
---                 io.write('<td align="right">\n')
---                 if lNowOnOrthanc['StudyUID2oStudyUID'][lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]]] then
---                     io.write('<a href="../../../app/explorer.html#study?uuid=' .. lNowOnOrthanc['StudyUID2oStudyUID'][lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]]] .. '">\n')
---                 end
---                 if lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]] then
---                     io.write(lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]])
---                 else
---                     io.write('')
---                 end
---                 if lNowOnOrthanc['StudyUID2oStudyUID'][lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]]] then
---                     io.write('</a>\n')
---                 end
---                 io.write('</td>\n')
---                 io.write('</tr>\n')
---             end
---         end
---         for lStudyInstanceUID, lStudyInstanceUIDAnon in pairs(lPatientMap[lPID]['StudyInstanceUIDMap']) do
---             -- if gVerbose then print(string.rep(' ', gIndent) .. 'With studies: ' .. lPID) end
---             if not lStudyInstanceUIDPrinted[lStudyInstanceUID] then
---                 local lPACSData = nil
---                 local lLookupMatch = false
---                 if lLookupTable then
---                     lPACSData, lLookupMatch = FindPACSInLookupTableFromSIUID(lLookupTable,lStudyInstanceUID)
---                     if not lPACSData then
---                         if gVerbose then print('Not found in lookup: ' .. lStudyInstanceUID) end
---                     end
---                 end
---                 if lFlagXRefModality and (not lPACSData) and (not string.match(lPatientMap[lPID]['PatientID'], '[^0-9]')) then
---                     local lPatientIDList = {}
---                     table.insert(lPatientIDList, lPatientMap[lPID]['PatientID'])
---                     if next(lPatientMap[lPID]['OtherPatientIDs']) then
---                         local lOtherPatientID
---                         for _, lOtherPatientID in pairs(lPatientMap[lPID]['OtherPatientIDs']) do
---                             if not string.match(lOtherPatientID, '[^0-9]') then
---                                 table.insert(lPatientIDList, lOtherPatientID)
---                             end
---                         end
---                     end
---                     for _, lOtherPatientID in pairs(lPatientIDList) do 
---                         lPostData = {}
---                         lPostData['Level'] = 'Study'
---                         lPostData['Query'] = {}
---                         lPostData['Query']['StudyInstanceUID'] = lStudyInstanceUID
---                         lPostData['Query']['PatientID'] = lOtherPatientID
---                         lPostResult = ParseJson(RestApiPost('/modalities/' .. lXRefModality .. '/query', DumpJson(lPostData,true), false))
---                         if lPostResult['ID'] then
---                             local lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'], false))
---                             if lQuery[1] == "answers" then
---                                 lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers', false))
---                                 if lQuery[1] == "0" then
---                                     lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0', false))
---                                     if lQuery[1] == "content" then
---                                         lPACSData = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0/content', false))
---                                         if lPACSData then
---                                             break
---                                         end
---                                     end
---                                 end
---                             end
---                         end
---                     end
---                     if not lPACSData then
---                         for _, lOtherPatientID in pairs(lPatientIDList) do 
---                             lPostData = {}
---                             lPostData['Level'] = 'Patient'
---                             lPostData['Query'] = {}
---                             lPostData['Query']['PatientID'] = lOtherPatientID
---                             lPostResult = ParseJson(RestApiPost('/modalities/' .. lXRefModality .. '/query', DumpJson(lPostData,true), false))
---                             if lPostResult['ID'] then
---                                 local lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'], false))
---                                 if lQuery[1] == "answers" then
---                                     lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers', false))
---                                     if lQuery[1] == "0" then
---                                         lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0', false))
---                                         if lQuery[1] == "content" then
---                                             lPACSData = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0/content', false))
---                                             if lPACSData then
---                                                 break
---                                             end
---                                         end
---                                     end
---                                 end
---                             end
---                         end
---                     end
---                 end
---                 io.write('<tr>\n')
---                 if lPACSData then
---                     if lPACSData['0010,0010'] then
---                         io.write('<td>' .. lPACSData['0010,0010']['Value'] .. '</td>\n')
---                     else
---                         io.write('<td>&nbsp</td>\n')
---                     end
---                 else
---                     io.write('<td>&nbsp</td>\n')
---                 end
---                 if lPACSData then
---                     if lPACSData['0010,0020'] then
---                         io.write('<td>' .. lPACSData['0010,0020']['Value'] .. '</td>\n')
---                     else
---                         io.write('<td>&nbsp</td>\n')
---                     end
---                 else
---                     io.write('<td align="right">' .. lPatientIDShort .. '</td>\n')
---                 end
---                 io.write('<td align="right">\n')
---                 if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
---                     io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientMap[lPID]['PatientIDAnon']] .. '">\n')
---                 end
---                 if lPatientMap[lPID]['InternalNumber'] then
---                     io.write(lPatientMap[lPID]['InternalNumber'])
---                 else
---                     io.write('')
---                 end
---                 if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
---                     io.write('</a>\n')
---                 end
---                 io.write('</td>\n')
---                 if lFlagSIUID2Anon then
---                     if lPatientMap[lPID]['SIUID2NameAnonMap'][lStudyInstanceUID] then
---                         io.write('<td>\n')
---                         for k, _ in pairs(lPatientMap[lPID]['SIUID2NameAnonMap'][lStudyInstanceUID]) do
---                             io.write(k .. ', ')
---                         end
---                         io.write('</td>\n')
---                     else
---                         io.write('<td>&nbsp</td>\n')
---                     end
---                 end
---                 if lPACSData then
---                     if lPACSData['0008,0020'] then
---                         io.write('<td>' .. lPACSData['0008,0020']['Value'] .. '</td>\n')
---                         if lFlagKeepOriginalDates or not lShiftEpoch then
---                             if lFlagKeepOriginalDates then
---                                 io.write('<td>' .. lPACSData['0008,0020']['Value'] .. '</td>\n')
---                             else
---                                 io.write('<td>&nbsp</td>\n')
---                             end
---                         else
---                             local lNewDateString
---                             if (not lLookupMatch) or (lLookupTable and (not lPACSData['AnonDate']) and (lPACSData['0008,0020']['Value'] ~= 'NotInPACS')) then
---                                 -- lNewDateString = ShiftDateTimeString(lShiftEpoch,lPACSData['0008,0020']['Value'])
---                                 local lPostData = {}
---                                 lPostData['ShiftEpoch'] = lShiftEpoch
---                                 lPostData['YYYYMMDD'] = lPACSData['0008,0020']['Value']
---                                 local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
---                                 lNewDateString = lResults['NewDateString']
---                             else
---                                 lNewDateString = lPACSData['AnonDate'] or 'BLANK'
---                             end
---                             io.write('<td>' .. lNewDateString .. '</td>\n')
---                         end
---                     else
---                         io.write('<td>NotInPACS</td>\n')
---                         io.write('<td>&nbsp</td>\n')
---                     end
---                 else
---                     io.write('<td>NotInPACS</td>\n')
---                     io.write('<td>&nbsp</td>\n')
---                 end
---                 if lPACSData then
---                     if lPACSData['0008,0050'] then
---                         io.write('<td>' .. lPACSData['0008,0050']['Value'] .. '</td>\n')
---                     else
---                         io.write('<td>NotInPACS</td>\n')
---                     end
---                 else
---                     io.write('<td>NotInPACS</td>\n')
---                 end
---                 io.write('<td>\n')
---                 for k, lAltPID in pairs(lPatientMap[lPID]['OtherPatientIDs']) do 
---                     io.write(lAltPID .. ', \n')
---                 end
---                 if lPACSData then
---                     if lPACSData['0010,0020'] then
---                         if lPACSData['0010,0020']['Value'] ~= lPatientIDShort then
---                             io.write(lPatientIDShort)
---                         end
---                     end
---                 end
---                 io.write('</td>\n')
---                 if lPatientMap[lPID]['PatientIDAnon'] then
---                     io.write('<td align="center">' .. lPatientMap[lPID]['PatientIDAnon'] .. '</td>\n')
---                 else
---                     io.write('<td align="center">&nbsp</td>\n')
---                 end
---                 io.write('<td align="right">' .. lStudyInstanceUID .. '</td>\n')
---                 io.write('<td align="right">\n')
---                 if lNowOnOrthanc['StudyUID2oStudyUID'][lStudyInstanceUIDAnon] then
---                     io.write('<a href="../../../app/explorer.html#study?uuid=' .. lNowOnOrthanc['StudyUID2oStudyUID'][lStudyInstanceUIDAnon] .. '">\n')
---                 end
---                 io.write(lStudyInstanceUIDAnon)
---                 if lNowOnOrthanc['StudyUID2oStudyUID'][lStudyInstanceUIDAnon] then
---                     io.write('</a>\n')
---                 end
---                 io.write('</td>\n')
---                 io.write('</tr>\n')
---             end
---         end
---         io.flush()
---     end
---     io.write('</tbody>\n')
---     io.write('</table>\n')
---     io.write('</body>\n')
---     io.write('</html>\n')
---     io.close(file_out)
--- 
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
--- 
--- end
--- 
+-- ======================================================
+function LoadLookupTableFast(aFileLookup, aMakeBackup)
+
+    -- I'm going to hard code the lookup location just in case someone gets the idea to escape the execute statement and wreak havoc
+    local lFileLookup = "/media/html/lookup/master/lookuptable.html"
+    local lTempFile = os.tmpname()
+    -- local lCommand = "sed 's/&nbsp//g' " .. aFileLookup .. " | html2text -nobs -width 2048 | grep \"|\" | sed 's/_//g'" .. " > " .. lTempFile
+    local lCommand = "sed 's/&nbsp//g' " .. lFileLookup .. " | html2text -nobs -width 2048 | grep \"|\" | sed 's/_/ /g'" .. " > " .. lTempFile
+    local lResult = os.execute(lCommand)
+    if lResult == 1 then
+        return nil
+    end
+
+    local lLun = io.open(lTempFile,"r")
+    if lLun == nil then
+        return nil
+    end
+    lLun:close()
+
+    local lLun = io.open(lFileLookup,"r")
+    if lLun == nil then
+        return nil
+    end
+    lLun:close()
+
+    if aMakeBackup then
+        -- local lLun = assert(io.open(aFileLookup,"r"))
+        local lLun = assert(io.open(lFileLookup,"r"))
+        local lFileData = lLun:read("*all")
+        lLun:close()
+        -- local lOut = assert(io.open(aFileLookup .. "." .. os.date("%Y%m%d%H%M%S"),"w"))
+        local lOut = assert(io.open(lFileLookup .. "." .. os.date("%Y%m%d%H%M%S"),"w"))
+        lOut:write(lFileData)
+        lOut:close()
+    end
+
+    local lLines = {}
+    for lLine in io.lines(lTempFile) do
+        lLines[#lLines + 1] = lLine
+    end
+    if not os.remove(lTempFile) then
+       return nil
+    end
+
+    local lLookupTable = {}
+    local lDataKeys = {}
+    local lIndexCol = 1
+    for lHeader in string.gmatch(string.sub(lLines[1],2,-1),"([^|]*)|") do
+        lDataKeys[lIndexCol] = trim(lHeader)
+        lIndexCol = lIndexCol + 1
+        lLookupTable[trim(lHeader)] = {}
+    end
+
+    local lIndexRow = 1
+    for i = 2, #lLines do
+        local lRow = string.sub(lLines[i],2,-1)
+        local lIndexCol = 1
+        for lColumnStripped in string.gmatch(lRow, "([^|]*)|") do
+            local lEntry = nil
+            if string.match(trim(lColumnStripped),",") then
+                local lIndexEntry = 1
+                lEntry = {}
+                local lSingleEntry
+                for lSingleEntry in string.gmatch(trim(lColumnStripped), "([^,]*)[,%s]*") do
+                    if string.match(lSingleEntry,"[^%s]+") then
+                        lEntry[lIndexEntry] = lSingleEntry
+                        lIndexEntry = lIndexEntry + 1
+                    end
+                end
+                if lIndexEntry < 2 then
+                    lEntry = nil
+                end
+            else
+                if string.len(trim(lColumnStripped)) > 0 then
+                    lEntry = trim(lColumnStripped)
+                end
+            end
+            if lEntry then
+                lLookupTable[lDataKeys[lIndexCol]][lIndexRow] = lEntry
+            else
+                lLookupTable[lDataKeys[lIndexCol]][lIndexRow] = 'BLANK'
+            end
+            lIndexCol = lIndexCol + 1
+        end
+        lIndexRow = lIndexRow + 1
+    end
+
+    return lLookupTable
+
+end
+
+-- ======================================================
+function FindPACSInLookupTableFromSIUID(aLookupTable,aStudyInstanceUID)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    gIndent = gIndent + 3
+    -- if gVerbose then print(string.rep(' ', gIndent) .. 'Scanning existing lookup table') end
+    local lRow, lFound
+    for lRowTemp, lStudyInstanceUIDs in pairs(aLookupTable['StudyInstanceUID']) do 
+        lFound = false
+        lRow = lRowTemp
+        if type(lStudyInstanceUIDs) == 'table' then
+            for lCol, lStudyInstanceUID in ipairs(lStudyInstanceUIDs) do
+                lFound = lStudyInstanceUID == aStudyInstanceUID
+                if lFound then break end
+            end
+        else
+            lFound = lStudyInstanceUIDs == aStudyInstanceUID
+        end
+        if lFound then break end
+    end
+    gIndent = gIndent - 3
+    if gIndent > 0 then gIndent = gIndent - 3 end
+    if not lFound then return nil,nil end
+
+    local lPACSData = nil
+    if aLookupTable['Name'][lRow] then
+        local lPatientName = nil
+        if type(aLookupTable['Name'][lRow]) == 'table' then
+            lPatientName = table.concat(aLookupTable['Name'][lRow],',')
+        else
+            lPatientName = aLookupTable['Name'][lRow]
+        end
+        if lPatientName and (lPatientName ~= 'BLANK') then
+            if not lPACSData then lPACSData = {} end
+            lPACSData['0010,0010'] = {}
+            lPACSData['0010,0010']['Value'] = lPatientName
+        end
+    end
+    if aLookupTable['PatientID'][lRow] then
+        local lPatientID = nil
+        if type(aLookupTable['PatientID'][lRow]) == 'table' then
+            lPatientID = table.concat(aLookupTable['PatientID'][lRow],',')
+        else
+            lPatientID = aLookupTable['PatientID'][lRow]
+        end
+        if lPatientID and (lPatientID ~= 'BLANK') then
+            if not lPACSData then lPACSData = {} end
+            lPACSData['0010,0020'] = {}
+            lPACSData['0010,0020']['Value'] = lPatientID
+        end
+    end
+    if aLookupTable['Date'][lRow] then
+        local lStudyDate = nil
+        if type(aLookupTable['Date'][lRow]) == 'table' then
+            lStudyDate = table.concat(aLookupTable['Date'][lRow],',')
+        else
+            lStudyDate = aLookupTable['Date'][lRow]
+        end
+        if lStudyDate and (lStudyDate ~= 'BLANK') then
+            local lAnonDate = nil
+            if aLookupTable['Anon Date'] then
+                if type(aLookupTable['Anon Date'][lRow]) == 'table' then
+                    lAnonDate = table.concat(aLookupTable['Anon Date'][lRow],',')
+                else
+                    lAnonDate = aLookupTable['Anon Date'][lRow]
+                end
+            else
+                lAnonDate = 'BLANK'
+            end
+            if not lPACSData then lPACSData = {} end
+            lPACSData['0008,0020'] = {}
+            lPACSData['0008,0020']['Value'] = lStudyDate
+            if lAnonDate and (lAnonDate ~= 'BLANK') then
+                lPACSData['AnonDate'] = lAnonDate
+            end
+        end
+    end
+    if aLookupTable['Accession'][lRow] then
+        local lAccession = nil
+        if type(aLookupTable['Accession'][lRow]) == 'table' then
+            lAccession = table.concat(aLookupTable['Accession'][lRow],',')
+        else
+            lAccession = aLookupTable['Accession'][lRow]
+        end
+        if lAccession and (lAccession ~= 'BLANK') then
+            if not lPACSData then lPACSData = {} end
+            lPACSData['0008,0050'] = {}
+            lPACSData['0008,0050']['Value'] = lAccession
+        end
+    end
+
+    if not lPACSData then
+        lFound = nil
+        if gVerbose then print(string.rep(' ', gIndent) .. 'Subject not in lookup table') end
+    else
+        lFound = true
+        -- if gVerbose then print(string.rep(' ', gIndent) .. 'Subject in lookup table') end
+    end
+    gIndent = gIndent - 3
+    if gIndent > 0 then gIndent = gIndent - 3 end
+ 
+    return lPACSData, lFound 
+
+end
+
+-- ======================================================
+function FindPACSInLookupTableFromPatientID(aLookupTable,aPatientID)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    gIndent = gIndent + 3
+    -- if gVerbose then print(string.rep(' ', gIndent) .. 'Scanning existing lookup table') end
+    local lRow, lFound
+    for lRowTemp, lPatientIDs in pairs(aLookupTable['PatientID']) do 
+        lFound = false
+        lRow = lRowTemp
+        if type(lPatientIDs) == 'table' then
+            for lCol, lPatientID in ipairs(lPatientIDs) do
+                lFound = lPatientID == aPatientID
+                if lFound then break end
+            end
+        else
+            lFound = lPatientIDs == aPatientID
+        end
+        if lFound then break end
+    end
+
+    gIndent = gIndent - 3
+    if gIndent > 0 then gIndent = gIndent - 3 end
+    if not lFound then return nil,nil end
+
+    local lPACSData = nil
+    if aLookupTable['Name'][lRow] then
+        local lPatientName = nil
+        if type(aLookupTable['Name'][lRow]) == 'table' then
+            lPatientName = table.concat(aLookupTable['Name'][lRow],',')
+        else
+            lPatientName = aLookupTable['Name'][lRow]
+        end
+        if lPatientName and (lPatientName ~= 'BLANK') then
+            if not lPACSData then lPACSData = {} end
+            lPACSData['0010,0010'] = {}
+            lPACSData['0010,0010']['Value'] = lPatientName
+        end
+    end
+    if aLookupTable['PatientID'][lRow] then
+        local lPatientID = nil
+        if type(aLookupTable['PatientID'][lRow]) == 'table' then
+            lPatientID = table.concat(aLookupTable['PatientID'][lRow],',')
+        else
+            lPatientID = aLookupTable['PatientID'][lRow]
+        end
+        if lPatientID and (lPatientID ~= 'BLANK') then
+            if not lPACSData then lPACSData = {} end
+            lPACSData['0010,0020'] = {}
+            lPACSData['0010,0020']['Value'] = lPatientID
+        end
+    end
+    if aLookupTable['Date'][lRow] then
+        local lStudyDate = nil
+        if type(aLookupTable['Date'][lRow]) == 'table' then
+            lStudyDate = table.concat(aLookupTable['Date'][lRow],',')
+        else
+            lStudyDate = aLookupTable['Date'][lRow]
+        end
+        if lStudyDate and (lStudyDate ~= 'BLANK') then
+            local lAnonDate = nil
+            if aLookupTable['Anon Date'] then
+                if type(aLookupTable['Anon Date'][lRow]) == 'table' then
+                    lAnonDate = table.concat(aLookupTable['Anon Date'][lRow],',')
+                else
+                    lAnonDate = aLookupTable['Anon Date'][lRow]
+                end
+            else
+                lAnonDate = 'BLANK'
+            end
+            if not lPACSData then lPACSData = {} end
+            lPACSData['0008,0020'] = {}
+            lPACSData['0008,0020']['Value'] = lStudyDate
+            if lAnonDate and (lAnonDate ~= 'BLANK') then
+                lPACSData['AnonDate'] = lAnonDate
+            end
+        end
+    end
+    if aLookupTable['Accession'][lRow] then
+        local lAccession = nil
+        if type(aLookupTable['Accession'][lRow]) == 'table' then
+            lAccession = table.concat(aLookupTable['Accession'][lRow],',')
+        else
+            lAccession = aLookupTable['Accession'][lRow]
+        end
+        if lAccession and (lAccession ~= 'BLANK') then
+            if not lPACSData then lPACSData = {} end
+            lPACSData['0008,0050'] = {}
+            lPACSData['0008,0050']['Value'] = lAccession
+        end
+    end
+
+    if not lPACSData then
+        lFound = nil
+        if gVerbose then print(string.rep(' ', gIndent) .. 'Subject not in lookup table') end
+    else
+        lFound = true
+        if gVerbose then print(string.rep(' ', gIndent) .. 'Subject in lookup table') end
+    end
+ 
+    gIndent = gIndent - 3
+    if gIndent > 0 then gIndent = gIndent - 3 end
+    return lPACSData, lFound 
+
+end
+
+-- ======================================================
+function UpdateLookupHTML()
+
+    local lFlagKeepOriginalDates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES') == 'true'
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    local lPatientMap, lPatientReverseMap, lFlagSIUID2Anon
+    lPatientMap, lPatientReverseMap, lFlagSIUID2Anon = LoadPHI2AnonMap()
+    local lNowOnOrthanc = NowOnOrthanc()
+
+    -- Check for the main modality that could be queried
+    local lFlagXRefModality=false
+    local lXRefModality=nil
+    if os.getenv('LUA_XREF_MODALITY') then
+        for _, lModality in pairs(ParseJson(RestApiGet('/modalities', false))) do
+            if lModality == os.getenv('LUA_XREF_MODALITY') then
+                lFlagXRefModality = true
+                lXRefModality = lModality
+                break
+            end
+        end  
+    end
+    if lFlagXRefModality then
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'FlagXRefModality=1') end
+    else
+        if gVerbose then print(string.rep(' ', gIndent+3) .. 'FlagXRefModality=1') end
+    end
+
+    -- Check for existing lookup table
+    local lFileLookup = "/media/html/lookup/master/lookuptable.html"
+    local lBackup = true
+    -- local lLookupTable = LoadLookupTable(lFileLookup,lBackup)
+    local lLookupTable = LoadLookupTableFast(lFileLookup,lBackup)
+
+    -- Prepare to output the new
+    file_out = io.open(lFileLookup, "w")
+    io.output(file_out)
+
+    io.write('<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">\n')
+    io.write('<head>\n')
+    io.write('<link rel="stylesheet" href="style.css" type="text/css" id="" media="print, projection, screen" />\n')
+    io.write('<link rel="stylesheet" href="theme.blue.min.css">\n')
+    io.write('<script type="text/javascript" src="../../../app/libs/jquery.min.js"></script>\n')
+    io.write('<script type="text/javascript" src="jquery.tablesorter.combined.min.js"></script>\n')
+    io.write('<script type="text/javascript">\n')
+    io.write('$(document).ready(function() { \n')
+    io.write('    // call the tablesorter plugin \n')
+    io.write('    $("table").tablesorter({\n')
+    io.write('        theme: "blue",\n')
+    io.write('        widgets: ["zebra", "filter"],\n')
+    io.write('        widgetOptions : {\n')
+    io.write('            filter_columnFilters: true,\n')
+    io.write('            filter_reset: ".reset",\n')
+    io.write('            zebra : [ "normal-row", "alt-row" ]\n')
+    io.write('        },\n')
+    io.write('        sortList : [[2,0]]\n')
+    io.write('    }); \n')
+    io.write('}); \n')
+    io.write('</script>\n')
+    io.write('</head>\n')
+    
+    io.write('<body>\n')
+    io.write('<a href="../../../app/explorer.html">Return to Orthanc home page</a></br>')
+    io.write('Click a column heading to sort.</br>')
+    io.write('Click <a href="updatelookup.html">here</a> to force an update of this table.</br>\n')
+    io.write('<!-- targeted by the "filter_reset" option -->\n')
+    io.write('<button type="button" class="reset">Reset Search</button>\n')
+    io.write('<table class="tablesorter-blue" border=1>\n')
+    io.write('<thead>\n')
+    io.write('<tr>\n')
+    io.write('<th>Name</th>\n')
+    io.write('<th>PatientID</th>\n')
+    io.write('<th>ID</th>\n')
+    if lFlagSIUID2Anon then
+        io.write('<th>Name Anon</th>\n')
+    end
+    io.write('<th>Date</th>\n')
+    io.write('<th>Anon Date</th>\n')
+    io.write('<th>Accession</th>\n')
+    io.write('<th>Alt PatientID</th>\n')
+    io.write('<th>Anon PatientID</th>\n')
+    io.write('<th>StudyInstanceUID</th>\n')
+    io.write('<th>Anon StudyInstanceUID</th>\n')
+    io.write('</tr>\n')
+    io.write('</thead>\n')
+    io.write('<tbody>\n')
+    local lPatientIDShort, lPostData, lPostResult
+    for lPatientID, lPID in pairs(lPatientReverseMap['Primary']) do
+
+        local lShiftEpoch
+        if lFlagKeepOriginalDates then
+           lShiftEpoch = 0
+        else 
+           lShiftEpoch = lPatientMap[lPID]['ShiftEpoch']
+        end
+        if string.sub(lPatientID, -3) == 'n2d' then
+            lPatientIDShort = string.sub(lPatientID,1,string.find(lPatientID,'n2d')-1)
+        elseif string.sub(lPatientID, -2) == '2d' then
+            lPatientIDShort = string.sub(lPatientID,1,string.find(lPatientID,'2d')-1)
+        else
+            lPatientIDShort = lPatientID
+        end
+
+        local lStudyInstanceUIDPrinted = {}
+        if lNowOnOrthanc['ByPatientID'][lPatientID] then
+
+            -- if gVerbose then print(string.rep(' ', gIndent) .. 'Now on orthanc: ' .. lPID) end
+            for j, lDate in pairs(lNowOnOrthanc['ByPatientID'][lPatientID]['StudyDate']) do 
+                lStudyInstanceUIDPrinted[lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]] = true
+                io.write('<tr>\n')
+                io.write('<td>\n')
+                io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientID] .. '">\n')
+                io.write(lNowOnOrthanc['ByPatientID'][lPatientID]['PatientName'])
+                io.write('</a>\n')
+                io.write('</td>\n')
+                io.write('<td align="right">' .. lPatientIDShort .. '</td>\n')
+                io.write('<td align="right">\n')
+                if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
+                    io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientMap[lPID]['PatientIDAnon']] .. '">\n')
+                end
+                io.write(lPatientMap[lPID]['InternalNumber'])
+                if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
+                    io.write('</a>\n')
+                end
+                io.write('</td>\n')
+                if lFlagSIUID2Anon then
+                    if lPatientMap[lPID]['SIUID2NameAnonMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID']] then
+                        io.write('<td>\n')
+                        for k, _ in pairs(lPatientMap[lPID]['SIUID2NameAnonMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID']]) do
+                            io.write(k .. ', ')
+                        end
+                        io.write('</td>\n')
+                    else
+                        io.write('<td>&nbsp</td>\n')
+                    end
+                end
+                io.write('<td align="center">' .. lDate .. '</td>\n')
+                if lFlagKeepOriginalDates or not lShiftEpoch then
+                    if lFlagKeepOriginalDates then
+                        io.write('<td align="center">' .. lDate .. '</td>\n')
+                    else
+                        io.write('<td align="center">&nbsp</td>\n')
+                    end
+                else
+                    -- local lNewDateString = hiftDateTimeString(lShiftEpoch, lDate)
+                    local lPostData = {}
+                    lPostData['ShiftEpoch'] = lShiftEpoch
+                    lPostData['YYYYMMDD'] = lDate
+                    local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+                    local lNewDateString = lResults['NewDateString']
+                    io.write('<td align="center">' .. lNewDateString .. '</td>\n')
+                end
+                io.write('<td align="right">' .. lNowOnOrthanc['ByPatientID'][lPatientID]['AccessionNumber'][j] .. '</td>\n')
+                io.write('<td>\n')
+                for k, lAltPID in pairs(lPatientMap[lPID]['OtherPatientIDs']) do 
+                    io.write(lAltPID .. ', \n')
+                end
+                io.write('</td>\n')
+                io.write('<td align="center">\n')
+                if lPatientMap[lPID]['PatientIDAnon'] then
+                    if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
+                        io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientMap[lPID]['PatientIDAnon']] .. '">\n')
+                    end
+                    io.write(lPatientMap[lPID]['PatientIDAnon'])
+                    if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
+                        io.write('</a>\n')
+                    end
+                else
+                    io.write('&nbsp')
+                end
+                io.write('</td>\n')
+                io.write('<td align="right">\n')
+                io.write('<a href="../../../app/explorer.html#study?uuid=' .. lNowOnOrthanc['StudyUID2oStudyUID'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]] .. '">\n')
+                io.write(lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j])
+                io.write('</a>\n')
+                io.write('</td>\n')
+                io.write('<td align="right">\n')
+                if lNowOnOrthanc['StudyUID2oStudyUID'][lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]]] then
+                    io.write('<a href="../../../app/explorer.html#study?uuid=' .. lNowOnOrthanc['StudyUID2oStudyUID'][lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]]] .. '">\n')
+                end
+                if lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]] then
+                    io.write(lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]])
+                else
+                    io.write('')
+                end
+                if lNowOnOrthanc['StudyUID2oStudyUID'][lPatientMap[lPID]['StudyInstanceUIDMap'][lNowOnOrthanc['ByPatientID'][lPatientID]['StudyInstanceUID'][j]]] then
+                    io.write('</a>\n')
+                end
+                io.write('</td>\n')
+                io.write('</tr>\n')
+            end
+        end
+        for lStudyInstanceUID, lStudyInstanceUIDAnon in pairs(lPatientMap[lPID]['StudyInstanceUIDMap']) do
+            -- if gVerbose then print(string.rep(' ', gIndent) .. 'With studies: ' .. lPID) end
+            if not lStudyInstanceUIDPrinted[lStudyInstanceUID] then
+                local lPACSData = nil
+                local lLookupMatch = false
+                if lLookupTable then
+                    lPACSData, lLookupMatch = FindPACSInLookupTableFromSIUID(lLookupTable,lStudyInstanceUID)
+                    if not lPACSData then
+                        if gVerbose then print('Not found in lookup: ' .. lStudyInstanceUID) end
+                    end
+                end
+                if lFlagXRefModality and (not lPACSData) and (not string.match(lPatientMap[lPID]['PatientID'], '[^0-9]')) then
+                    local lPatientIDList = {}
+                    table.insert(lPatientIDList, lPatientMap[lPID]['PatientID'])
+                    if next(lPatientMap[lPID]['OtherPatientIDs']) then
+                        local lOtherPatientID
+                        for _, lOtherPatientID in pairs(lPatientMap[lPID]['OtherPatientIDs']) do
+                            if not string.match(lOtherPatientID, '[^0-9]') then
+                                table.insert(lPatientIDList, lOtherPatientID)
+                            end
+                        end
+                    end
+                    for _, lOtherPatientID in pairs(lPatientIDList) do 
+                        lPostData = {}
+                        lPostData['Level'] = 'Study'
+                        lPostData['Query'] = {}
+                        lPostData['Query']['StudyInstanceUID'] = lStudyInstanceUID
+                        lPostData['Query']['PatientID'] = lOtherPatientID
+                        lPostResult = ParseJson(RestApiPost('/modalities/' .. lXRefModality .. '/query', DumpJson(lPostData,true), false))
+                        if lPostResult['ID'] then
+                            local lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'], false))
+                            if lQuery[1] == "answers" then
+                                lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers', false))
+                                if lQuery[1] == "0" then
+                                    lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0', false))
+                                    if lQuery[1] == "content" then
+                                        lPACSData = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0/content', false))
+                                        if lPACSData then
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if not lPACSData then
+                        for _, lOtherPatientID in pairs(lPatientIDList) do 
+                            lPostData = {}
+                            lPostData['Level'] = 'Patient'
+                            lPostData['Query'] = {}
+                            lPostData['Query']['PatientID'] = lOtherPatientID
+                            lPostResult = ParseJson(RestApiPost('/modalities/' .. lXRefModality .. '/query', DumpJson(lPostData,true), false))
+                            if lPostResult['ID'] then
+                                local lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'], false))
+                                if lQuery[1] == "answers" then
+                                    lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers', false))
+                                    if lQuery[1] == "0" then
+                                        lQuery = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0', false))
+                                        if lQuery[1] == "content" then
+                                            lPACSData = ParseJson(RestApiGet('/queries/' .. lPostResult['ID'] .. '/answers/0/content', false))
+                                            if lPACSData then
+                                                break
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                io.write('<tr>\n')
+                if lPACSData then
+                    if lPACSData['0010,0010'] then
+                        io.write('<td>' .. lPACSData['0010,0010']['Value'] .. '</td>\n')
+                    else
+                        io.write('<td>&nbsp</td>\n')
+                    end
+                else
+                    io.write('<td>&nbsp</td>\n')
+                end
+                if lPACSData then
+                    if lPACSData['0010,0020'] then
+                        io.write('<td>' .. lPACSData['0010,0020']['Value'] .. '</td>\n')
+                    else
+                        io.write('<td>&nbsp</td>\n')
+                    end
+                else
+                    io.write('<td align="right">' .. lPatientIDShort .. '</td>\n')
+                end
+                io.write('<td align="right">\n')
+                if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
+                    io.write('<a href="../../../app/explorer.html#patient?uuid=' .. lNowOnOrthanc['PatientID2oPatientID'][lPatientMap[lPID]['PatientIDAnon']] .. '">\n')
+                end
+                if lPatientMap[lPID]['InternalNumber'] then
+                    io.write(lPatientMap[lPID]['InternalNumber'])
+                else
+                    io.write('')
+                end
+                if lNowOnOrthanc['ByPatientID'][lPatientMap[lPID]['PatientIDAnon']] then
+                    io.write('</a>\n')
+                end
+                io.write('</td>\n')
+                if lFlagSIUID2Anon then
+                    if lPatientMap[lPID]['SIUID2NameAnonMap'][lStudyInstanceUID] then
+                        io.write('<td>\n')
+                        for k, _ in pairs(lPatientMap[lPID]['SIUID2NameAnonMap'][lStudyInstanceUID]) do
+                            io.write(k .. ', ')
+                        end
+                        io.write('</td>\n')
+                    else
+                        io.write('<td>&nbsp</td>\n')
+                    end
+                end
+                if lPACSData then
+                    if lPACSData['0008,0020'] then
+                        io.write('<td>' .. lPACSData['0008,0020']['Value'] .. '</td>\n')
+                        if lFlagKeepOriginalDates or not lShiftEpoch then
+                            if lFlagKeepOriginalDates then
+                                io.write('<td>' .. lPACSData['0008,0020']['Value'] .. '</td>\n')
+                            else
+                                io.write('<td>&nbsp</td>\n')
+                            end
+                        else
+                            local lNewDateString
+                            if (not lLookupMatch) or (lLookupTable and (not lPACSData['AnonDate']) and (lPACSData['0008,0020']['Value'] ~= 'NotInPACS')) then
+                                -- lNewDateString = ShiftDateTimeString(lShiftEpoch,lPACSData['0008,0020']['Value'])
+                                local lPostData = {}
+                                lPostData['ShiftEpoch'] = lShiftEpoch
+                                lPostData['YYYYMMDD'] = lPACSData['0008,0020']['Value']
+                                local lResults = ParseJson(RestApiPost('/shift_date_time_string_lua', DumpJson(lPostData,true), false))
+                                lNewDateString = lResults['NewDateString']
+                            else
+                                lNewDateString = lPACSData['AnonDate'] or 'BLANK'
+                            end
+                            io.write('<td>' .. lNewDateString .. '</td>\n')
+                        end
+                    else
+                        io.write('<td>NotInPACS</td>\n')
+                        io.write('<td>&nbsp</td>\n')
+                    end
+                else
+                    io.write('<td>NotInPACS</td>\n')
+                    io.write('<td>&nbsp</td>\n')
+                end
+                if lPACSData then
+                    if lPACSData['0008,0050'] then
+                        io.write('<td>' .. lPACSData['0008,0050']['Value'] .. '</td>\n')
+                    else
+                        io.write('<td>NotInPACS</td>\n')
+                    end
+                else
+                    io.write('<td>NotInPACS</td>\n')
+                end
+                io.write('<td>\n')
+                for k, lAltPID in pairs(lPatientMap[lPID]['OtherPatientIDs']) do 
+                    io.write(lAltPID .. ', \n')
+                end
+                if lPACSData then
+                    if lPACSData['0010,0020'] then
+                        if lPACSData['0010,0020']['Value'] ~= lPatientIDShort then
+                            io.write(lPatientIDShort)
+                        end
+                    end
+                end
+                io.write('</td>\n')
+                if lPatientMap[lPID]['PatientIDAnon'] then
+                    io.write('<td align="center">' .. lPatientMap[lPID]['PatientIDAnon'] .. '</td>\n')
+                else
+                    io.write('<td align="center">&nbsp</td>\n')
+                end
+                io.write('<td align="right">' .. lStudyInstanceUID .. '</td>\n')
+                io.write('<td align="right">\n')
+                if lNowOnOrthanc['StudyUID2oStudyUID'][lStudyInstanceUIDAnon] then
+                    io.write('<a href="../../../app/explorer.html#study?uuid=' .. lNowOnOrthanc['StudyUID2oStudyUID'][lStudyInstanceUIDAnon] .. '">\n')
+                end
+                io.write(lStudyInstanceUIDAnon)
+                if lNowOnOrthanc['StudyUID2oStudyUID'][lStudyInstanceUIDAnon] then
+                    io.write('</a>\n')
+                end
+                io.write('</td>\n')
+                io.write('</tr>\n')
+            end
+        end
+        io.flush()
+    end
+    io.write('</tbody>\n')
+    io.write('</table>\n')
+    io.write('</body>\n')
+    io.write('</html>\n')
+    io.close(file_out)
+
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+
+end
+
 -- -- ========================================
 -- function IncomingHttpRequestFilter(method, uri, ip, username, httpHeaders)
 -- 
@@ -5530,69 +5532,69 @@ end
 -- 
 -- end
 -- 
--- -- ========================================
--- function OutgoingFindRequestFilter(query, modality)
---     for key, value in pairs(query) do
---        if value == '*' then
---           query[key] = ''
---        end
---     end
---     return query
--- 
--- end
--- 
--- -- ========================================
--- function SendEmailUpdate(aSubject, aMessage)
--- 
---     if gIndent then gIndent=gIndent+3 else gIndent=0 end
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
---     gIndent = gIndent + 3
---     local lTime0 = os.time()
---     local lFlagSendEmailUpdate = os.getenv('LUA_MAIL_AUTO') == 'true'
---     if lFlagSendEmailUpdate then
--- 
---         local lDataToPython = {}
---         lDataToPython['Subject'] = aSubject
---         lDataToPython['Message'] = aMessage
---         local lPostEmail = ParseJson(RestApiPost('/email_message_lua', DumpJson(lDataToPython,true), false, {['x-remote-user']='lua-SendEmailUpdate'}))
---         if lPostEmail['error_text'] then
---             if gVerbose then print(string.rep(' ', gIndent+3) .. 'Error sending mail ' .. lPostEmail['error_text']) end
---         end
+-- ========================================
+function OutgoingFindRequestFilter(query, modality)
+    for key, value in pairs(query) do
+       if value == '*' then
+          query[key] = ''
+       end
+    end
+    return query
+
+end
+
+-- ========================================
+function SendEmailUpdate(aSubject, aMessage)
+
+    if gIndent then gIndent=gIndent+3 else gIndent=0 end
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Entering ' .. debug.getinfo(1,"n").name) end
+    gIndent = gIndent + 3
+    local lTime0 = os.time()
+    local lFlagSendEmailUpdate = os.getenv('LUA_MAIL_AUTO') == 'true'
+    if lFlagSendEmailUpdate then
+
+        local lDataToPython = {}
+        lDataToPython['Subject'] = aSubject
+        lDataToPython['Message'] = aMessage
+        local lPostEmail = ParseJson(RestApiPost('/email_message_lua', DumpJson(lDataToPython,true), false, {['x-remote-user']='lua-SendEmailUpdate'}))
+        if lPostEmail['error_text'] then
+            if gVerbose then print(string.rep(' ', gIndent+3) .. 'Error sending mail ' .. lPostEmail['error_text']) end
+        end
+        
+--         local lMailTo = os.getenv('LUA_MAIL_TO'):gsub("^['\"]*(.-)['\"]*$", "%1")
+--  
+--         smtp = require("socket.smtp")
+--         from = os.getenv('ORTHANC__NAME') .. ' <' .. os.getenv('ORTHANC__NAME') .. '@' .. os.getenv('LUA_MAIL_ORIGIN') .. '>'
+--         rcpt = {lMailTo}
 --         
--- --         local lMailTo = os.getenv('LUA_MAIL_TO'):gsub("^['\"]*(.-)['\"]*$", "%1")
--- --  
--- --         smtp = require("socket.smtp")
--- --         from = os.getenv('ORTHANC__NAME') .. ' <' .. os.getenv('ORTHANC__NAME') .. '@' .. os.getenv('LUA_MAIL_ORIGIN') .. '>'
--- --         rcpt = {lMailTo}
--- --         
--- --         mesgt = {
--- --            headers = {
--- --               to = lMailTo, 
--- --               subject = aSubject
--- --            },
--- --            body = aMessage
--- --         }
--- --         
--- --         r, e = smtp.send{
--- --            server = os.getenv('LUA_MAIL_SERVER'), 
--- --            from = from, 
--- --            rcpt = rcpt, 
--- --            source = smtp.message(mesgt)
--- --         }
--- --         if e then
--- --            print(r)
--- --            print(e)
--- --         end
---  
---     end
---  
---     gIndent = gIndent - 3
---     if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
---     if gIndent > 0 then gIndent = gIndent - 3 end
--- 
--- end
--- 
--- -- -- ========================================
+--         mesgt = {
+--            headers = {
+--               to = lMailTo, 
+--               subject = aSubject
+--            },
+--            body = aMessage
+--         }
+--         
+--         r, e = smtp.send{
+--            server = os.getenv('LUA_MAIL_SERVER'), 
+--            from = from, 
+--            rcpt = rcpt, 
+--            source = smtp.message(mesgt)
+--         }
+--         if e then
+--            print(r)
+--            print(e)
+--         end
+ 
+    end
+ 
+    gIndent = gIndent - 3
+    if gVerbose then print(string.rep(' ', gIndent) .. 'Time spent in ' .. debug.getinfo(1,"n").name .. ': ', os.time()-lTime0) end
+    if gIndent > 0 then gIndent = gIndent - 3 end
+
+end
+
+-- -- ========================================
 -- function PrepareDataForAnonymizeGUI(aQueryPACS)
 -- 
 --     local lQueryPACS = false

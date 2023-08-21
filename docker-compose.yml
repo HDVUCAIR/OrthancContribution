@@ -58,10 +58,12 @@ services:
       # --------------------------------
       # Basics
       BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
-      ORTHANC__EXECUTE_LUA_ENABLED: "true"
+      #Lua scripts now converted to python
+      ORTHANC__EXECUTE_LUA_ENABLED: "false"
       ORTHANC__HTTP_PORT: "8042"
       ORTHANC__HTTP_TIMEOUT: "10"
-      ORTHANC__LUA_SCRIPTS: '["/etc/orthanc/phi_scripts.lua"]'
+      #Lua scripts now converted to python
+      #ORTHANC__LUA_SCRIPTS: '["/etc/orthanc/phi_scripts.lua"]'
       ORTHANC__NAME: "${PHI_ORTHANC_WEBSITE_NAME}"
       ORTHANC__SAVE_JOBS: "false"
       ORTHANC__STABLE_AGE: "600"
@@ -184,10 +186,10 @@ services:
       - type: bind
         source: ${PHI_HOST_DATA_DIR_ORTHANC}
         target: /media
-      - type: bind
-        source: ./phi_files/phi_scripts.lua
-        target: /etc/orthanc/phi_scripts.lua
-        read_only: true
+      #- type: bind
+      #  source: ./phi_files/phi_scripts.lua
+      #  target: /etc/orthanc/phi_scripts.lua
+      #  read_only: true
       - type: bind
         source: ./shared_files/make_certs_orthanc.sh
         target: /scripts/make_certs_orthanc.sh
@@ -204,11 +206,30 @@ services:
     user: "$POSTGRES_UID:$POSTGRES_GID"
     environment:
       PGDATA: "/var/lib/postgresql/data/pgdata"
+      # Moved passwords and such to secrets (reverting here until docker fixed)
       PG_USER: "${COMMON_BASENAME}_phi_orthanc"
       PG_DB: "${COMMON_BASENAME}_phi_orthanc_db"
       POSTGRES_PASSWORD: "${PHI_PASSWORD_FOR_PG_USER_POSTGRES}"
       PG_ORTHANC_PASSWORD: "${PHI_PASSWORD_FOR_PG_USER_ORTHANC}"
-    depends_on: [anon_orthanc]
+      #POSTGRES_PASSWORD_FILE: "/run/secrets/phi.pg.orthanc.password"
+    # Secrets does not currently work here because of a problem with docker https://github.com/moby/moby/issues/45719
+    #secrets:
+    #  - source: phi.pg.user 
+    #    uid: "$POSTGRES_UID"
+    #    gid: "$POSTGRES_GID"
+    #    mode: 0400
+    #  - source: phi.pg.db
+    #    uid: "$POSTGRES_UID"
+    #    gid: "$POSTGRES_GID"
+    #    mode: 0400
+    #  - source: phi.postgres.password
+    #    uid: "$POSTGRES_UID"
+    #    gid: "$POSTGRES_GID"
+    #    mode: 0400
+    #  - source: phi.pg.orthanc.password
+    #    uid: "$POSTGRES_UID"
+    #    gid: "$POSTGRES_GID"
+    #    mode: 0400
     container_name: ${COMMON_BASENAME}_phi_postgres
     volumes:
       - type: bind
