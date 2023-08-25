@@ -424,7 +424,12 @@ services:
       - nw_phi
 
   anon_orthanc_index:
-    image: postgres:${PG_VERSION_TAG}
+    image: postgres:${PG_VERSION_TAG}-cron
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+      args:
+        PG_VERSION_TAG: ${PG_VERSION_TAG}
     user: "$POSTGRES_UID:$POSTGRES_GID"
     environment:
       PGDATA: "/var/lib/postgresql/data/pgdata"
@@ -607,7 +612,12 @@ services:
       - nw_disk
 
   disk_orthanc_index:
-    image: postgres:${PG_VERSION_TAG}
+    image: postgres:${PG_VERSION_TAG}-cron
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+      args:
+        PG_VERSION_TAG: ${PG_VERSION_TAG}
     user: "$POSTGRES_UID:$POSTGRES_GID"
     environment:
       PGDATA: "/var/lib/postgresql/data/pgdata"
