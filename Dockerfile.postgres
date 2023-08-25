@@ -1,0 +1,8 @@
+# Start with osimis orthanc with plugins
+ARG PG_VERSION_TAG=15
+FROM postgres:${PG_VERSION_TAG}
+
+# We need to add the lua postgres interface
+RUN apt-get update \
+    && apt-get install -y \
+       cron
