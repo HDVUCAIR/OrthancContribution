@@ -5019,7 +5019,19 @@ def set_2d_or_cview_tomo(orthanc_series_id):
 def set_patient_name_base(patient_name_base_in):
 # ----------------------------------------------------------------------------
     global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Old patient name: %s' % global_var['patient_name_base'])
+
     global_var['patient_name_base'] = patient_name_base_in
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'New patient name base: %s' % patient_name_base_in)
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
 
 # =======================================================
 def set_screen_or_diagnostic(orthanc_study_id):
@@ -5959,7 +5971,7 @@ def GetPatientNameBase(output, uri, **request):
     if request['method'] == 'GET':
         patient_name_base_local = get_patient_name_base()
         result = {'PatientNameBase' : patient_name_base_local}
-        output.AnswerBuffer(json.dumps(result), 'application/json')
+        output.AnswerBuffer(json.dumps(result,indent=3), 'application/json')
     else:
         output.SendMethodNotAllowed('GET') 
 
@@ -6004,6 +6016,17 @@ def IncomingFilter(uri, **request):
     if method in ['DELETE', 'PUT']:
         return user_permitted(uri, remote_user)
         
+    if method == 'POST' and \
+        uri.find('/set_patient_name_base') >= 0:
+        if not user_permitted(uri, remote_user):
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'User not permitted to anonymize: %s' % remote_user)
+            return False
+        else: 
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'User permitted to anonymize: %s' % remote_user)
+        return True
+
     if method == 'POST' and \
         (uri.find('/anonymize') >= 0 or \
          uri.find('/jsanon') >= 0 or \
@@ -6731,6 +6754,7 @@ def SetPatientNameBase(output, uri, **request):
             set_patient_name_base(incoming_data['PatientNameBase'].strip())
         if 'Reset' in incoming_data:
             reset_patient_name_base()
+        output.AnswerBuffer('Success', 'text/plain')
     else:
         output.SendMethodNotAllowed('POST') 
 

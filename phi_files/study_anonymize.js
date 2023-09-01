@@ -208,15 +208,14 @@ $( window ).on( 'load', function() {
          alert('Only [a-zA-Z0-9_] characters permitted');
       } else {
          if (value_patient_basename == "") {
-            $.post("../../tools/execute-script", 
-                   {data : "print(gPatientNameBase)"},
+            $.get("../../get_patient_name_base", 
                    function(result,status){
                       $("#ase_status_base").html('Yes');
                       if (status == "success") {
                          $("#ase_status_col").css("background-color", "lightgreen");
                          if (result != null) {
-                            $( "#ase_entry_base" ).val(result);
-                            $("#ase_current_base").text(result);
+                            $( "#ase_entry_base" ).val(result.PatientNameBase);
+                            $("#ase_current_base").text(result.PatientNameBase);
                             updateAnonName();
                          }
                       } else {
@@ -226,12 +225,11 @@ $( window ).on( 'load', function() {
                   );
          } else {
             var request = $.ajax({
-                url:'../../tools/execute-script', 
+                url:'../../set_patient_name_base', 
                 type: 'POST',
-                cache: false,
-                contentType: 'application/x-www-form-urlencoded', 
-                data: "gPatientNameBase='" + value_patient_basename + "'",
-                processData: false,
+                contentType: 'application/json', 
+                data: "{\"PatientNameBase\" : \"" + value_patient_basename + "\"}",
+                dataType: "json",
                 success : function( msg ) {
                    $("#ase_status_col").css("background-color", "lightgreen");
                    $("#ase_status_base").html('Yes');
@@ -240,6 +238,7 @@ $( window ).on( 'load', function() {
                 },
                 error: function( jqXHR, text_status ) {
                    $("#ase_status_col").css("background-color", "pink");
+                   alert(JSON.stringify(jqXHR));
                    alert( "Request failed: " + text_status );
                 }
             });

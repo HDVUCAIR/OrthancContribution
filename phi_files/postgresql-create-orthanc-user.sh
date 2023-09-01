@@ -7,6 +7,26 @@ if [ -z ${PG_USER+x} ]; then PG_USER=orthanc; fi
 if [ -z ${PG_DB+x} ]; then PG_DB=orthanc; fi
 if [ -z ${PG_ORTHANC_PASSWORD+x} ]; then PG_ORTHANC_PASSWORD=orthanc_access; fi
 
+if [ -e /run/secrets/phi.pg.user ]
+then
+   PG_USER=`cat /run/secrets/phi.pg.user`
+else
+   PG_USER=orthanc
+fi
+if [ -e /run/secrets/phi.pg.db ]
+then
+   PG_DB=`cat /run/secrets/phi.pg.db`
+else
+   PG_DB=orthanc
+fi
+
+if [ -e /run/secrets/phi.pg.orthanc.password ]
+then
+   PG_ORTHANC_PASSWORD=`cat /run/secrets/phi.pg.orthanc.password`
+else
+   PG_ORTHANC_PASSWORD=orthanc_access
+fi
+   
 export DEBIAN_FRONTEND=noninteractive
 
 PROVISIONED_ON=/etc/orthanc_provision_on_timestamp
