@@ -237,9 +237,17 @@ $( window ).on( 'load', function() {
                    updateAnonName();
                 },
                 error: function( jqXHR, text_status ) {
-                   $("#ase_status_col").css("background-color", "pink");
-                   alert(JSON.stringify(jqXHR));
-                   alert( "Request failed: " + text_status );
+                   if (jqXHR.responseText == "Success") {
+                      $("#ase_status_col").css("background-color", "lightgreen");
+                      $("#ase_status_base").html('Yes');
+                      $("#ase_current_base").text(value_patient_basename);
+                      updateAnonName();
+                   } else {
+                      $("#ase_status_col").css("background-color", "pink");
+                      alert(jqXHR.responseText);
+                      alert(JSON.stringify(jqXHR));
+                      alert( "Request failed: " + text_status );
+                   }
                 }
             });
          }

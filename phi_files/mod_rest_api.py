@@ -6291,6 +6291,22 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
         if status['status'] != 0:
             output.AnswerBuffer(json.dumps(status, indent=3), 'application/json')
 
+        # Assemble map of patient studies
+        response_patients = orthanc.RestApiGet('/patients')
+        patient_studies = {}
+        for opatientid in json.loads(response_patients):
+            response_patient = orthanc.RestApiGet('/patients/%s' % opatientid)
+            meta_patient = json.loads(response_patient)
+            patient_name = meta_patient['MainDicomTags']['PatientName'] if 'PatientName' in meta_patient['MainDicomTags'] else opatientid
+            if patient_name not in patient_studies:
+                patient_studies[patient_name] = []
+            patient_studies[patient_name] += meta_patient['Studies']
+        patient_names = list(patient_studies.keys())
+        patient_names.sort()
+        ostudyids = []
+        for patient_name in patient_names:
+            ostudyids += patient_studies[patient_name]
+ 
         # Initialize output
         data_for_anonymize_gui = {'StudyMeta' : {},
                                   'SeriesMeta' : {},
@@ -6300,8 +6316,9 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
         study_date = {}
 
         # DICOM now on Orthanc
-        response_studies = orthanc.RestApiGet('/studies')
-        for ostudyid in json.loads(response_studies):
+        #response_studies = orthanc.RestApiGet('/studies')
+        #for ostudyid in json.loads(response_studies):
+        for ostudyid in ostudyids:
 
             flag_first_image = True
             meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % ostudyid))
