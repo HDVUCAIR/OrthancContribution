@@ -238,6 +238,9 @@ services:
     container_name: ${COMMON_BASENAME}_phi_postgres
     volumes:
       - type: bind
+        source: ./phi_files/pg_hba.conf
+        target: /var/lib/postgresql/data/pgdata/pg_hba.conf
+      - type: bind
         source: ./phi_files/postgresql-create-orthanc-user.sh
         target: /docker-entrypoint-initdb.d/postgresql-create-orthanc-user.sh
       - type: bind
