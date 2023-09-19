@@ -50,6 +50,43 @@ global_var['uid_map'] = None
 # ============================================================================
 # Modify the GUI
 # ============================================================================
+# Attempt to add systemstat button
+# ----------------------------------------------------------------------------
+button_js_system_meta = "$('#lookup').live('pagebeforecreate', function() {" + \
+                           " var b = $('<a>')" + \
+                             " .attr('data-role', 'button')" + \
+                             " .attr('href', '#')" + \
+                             " .attr('data-icon', 'action')" + \
+                             " .attr('data-theme', 'e')" + \
+                             " .text('System Settings');" + \
+                           " b.insertAfter($('#content').parent());" + \
+                           " b.click(function() {" + \
+                             " var uuid='none'; " + \
+                             " if ($.mobile.pageData) {" + \
+                             "   uuid = $.mobile.pageData.uuid" + \
+                             " };" + \
+                             " window.open('/%s/system');" % global_var['website'] + \
+                             "}" + \
+                           ");" + \
+                         "});"
+button_js_system_stats = "$('#lookup').live('pagebeforecreate', function() {" + \
+                           " var b = $('<a>')" + \
+                             " .attr('data-role', 'button')" + \
+                             " .attr('href', '#')" + \
+                             " .attr('data-icon', 'action')" + \
+                             " .attr('data-theme', 'e')" + \
+                             " .text('System Stats');" + \
+                           " b.insertAfter($('#content').parent());" + \
+                           " b.click(function() {" + \
+                             " var uuid='none'; " + \
+                             " if ($.mobile.pageData) {" + \
+                             "   uuid = $.mobile.pageData.uuid" + \
+                             " };" + \
+                             " window.open('/%s/statistics');" % global_var['website'] + \
+                             "}" + \
+                           ");" + \
+                         "});"
+
 # Buttons on patient page
 # ----------------------------------------------------------------------------
 # Same as API patients/uid
@@ -175,7 +212,8 @@ button_js_series_stats = "$('#series').live('pagebeforecreate', function() {" + 
 # ----------------------------------------------------------------------------
 # Inserting the above button definitions into the explorer
 # ----------------------------------------------------------------------------
-orthanc.ExtendOrthancExplorer(' '.join([button_js_patient_meta, button_js_patient_stats, \
+orthanc.ExtendOrthancExplorer(' '.join([button_js_system_meta, button_js_system_stats, \
+                                        button_js_patient_meta, button_js_patient_stats, \
                                         button_js_study_meta, button_js_study_stats, \
                                         button_js_series_meta, button_js_series_stats]))
 
@@ -2644,7 +2682,7 @@ def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=Non
     
         #Exception for HIFU and Dynacad
         flag_dynacad = False
-        #flag_dynacad = flag_dynacad or meta_instance['SeriesDescription'].find('DCAD') >= 0
+        #flag_dynacad = flag_dynacad or ('SeriesDescription' in meta_instance and meta_instance['SeriesDescription'].find('DCAD') >= 0
         #flag_dynacad = flag_dynacad or ('0073,1003' in meta_instance and meta_instance['0073,1003']find('DYNACAD') >= 0)
         
         #Checking for non-mammo images
