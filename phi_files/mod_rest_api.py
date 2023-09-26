@@ -87,6 +87,7 @@ button_js_system_stats = "$('#lookup').live('pagebeforecreate', function() {" + 
                            ");" + \
                          "});"
 
+# ----------------------------------------------------------------------------
 # Buttons on patient page
 # ----------------------------------------------------------------------------
 # Same as API patients/uid
@@ -218,10 +219,10 @@ orthanc.ExtendOrthancExplorer(' '.join([button_js_system_meta, button_js_system_
                                         button_js_series_meta, button_js_series_stats]))
 
 # ============================================================================
-def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
-                        sql_pid, patient_id_anon, 
-                        sql_siuid, study_instance_uid_anon,
-                        patient_id_modifier=''):
+def anonymize_instances_at_level(anon_at_level, orthanc_level_id, flag_first_call,
+                                 sql_pid, patient_id_anon, 
+                                 sql_siuid, study_instance_uid_anon,
+                                 patient_id_modifier=''):
 # ----------------------------------------------------------------------------
 
     global global_var
@@ -422,7 +423,7 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Starting the study modification call')
     modify_post_data = {}
     modify_post_data['Remove'] = tag_remove
-    flag_remove_private_tags = os.getenv('LUA_FLAG_REMOVE_PRIVATE_TAGS', default='true') == 'true'
+    flag_remove_private_tags = os.getenv('PYTHON_FLAG_REMOVE_PRIVATE_TAGS', default='true') == 'true'
     if flag_remove_private_tags and not tag_handling['KeepSomePrivate']:
         modify_post_data['RemovePrivateTags'] = flag_remove_private_tags
     modify_post_data['Force'] = True
@@ -519,7 +520,7 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
             return status, None, None, None
-    flag_save_patient_name_anon = os.getenv('LUA_FLAG_SAVE_PATIENTNAME_ANON',default='true') == 'true'
+    flag_save_patient_name_anon = os.getenv('PYTHON_FLAG_SAVE_PATIENTNAME_ANON',default='true') == 'true'
     if flag_save_patient_name_anon:
         # orthanc.LogWarning('PatientNameAnon: %s' % patient_name_anon)
         # orthanc.LogWarning('SQLsiuid: %d' % sql_siuid)
@@ -539,44 +540,270 @@ def anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
         return {'status' : 0}, meta_instances_anon, orthanc_study_id_anon, None
 
 # ============================================================================
-def anonymize_study(orthanc_study_id):
-    """Replaces the lua AnonymizeStudy"""
+def anonymize_study(orthanc_study_id_parent):
+    """
+    PURPOSE:  Main function for processing the anonymization.
+    """
 # ----------------------------------------------------------------------------
 
     global global_var
-    global_var['log_indent_level'] = 0
     if python_verbose_logwarning:
         time_0 = time.time()
         frame = inspect.currentframe()
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
         global_var['log_indent_level'] += 3
-    response_system = orthanc.RestApiGet('/system')
-    meta_system = json.loads(response_system)
-    aet = meta_system['DicomAet']
 
-    #response_post = orthanc.RestApiPost('/tools/execute-script', 'gIndent=0')
-    #response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=true')
-    global_var['flag_force_anon'] = True
-    response_study = orthanc.RestApiGet('/studies/%s' % orthanc_study_id)
-    meta_study = json.loads(response_study)
-    if ('ModifiedFrom' not in meta_study) and ('AnonymizedFrom' not in meta_study):
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Anonymizing %s' % orthanc_study_id_parent)
+    if python_verbose_logwarning and global_var['flag_force_anon']:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Forcing anonymization')
+    meta_system = json.loads(orthanc.RestApiGet('/system'))
+    meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_parent))
+
+    if 'PatientName' in meta_study['PatientMainDicomTags'] and \
+        (meta_study['PatientMainDicomTags']['PatientName'].find(meta_system['Name']) >= 0 or 
+         (global_var['patient_name_base'] is not None and meta_study['PatientMainDicomTags']['PatientName'].find(global_var['patient_name_base']) >= 0)): 
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Non-anonymized study stable.  Initiating auto anon')
-        email_message('%s Triggered Anonymization' % aet, 'Manual anonymization triggered.  Look for an update upon completion.')
-        #response_post = orthanc.RestApiPost('/tools/execute-script', 'OnStableStudyMain(\'%s\', nil, nil)' % orthanc_study_id)
-        status = on_stable_study_main(orthanc_study_id)
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (name match)')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+        return {'status': 0}
+
+    flag_images_sent = False
+    if 'ModifiedFrom' in meta_study or 'AnonymizedFrom' in meta_study:
+    #if 'AnonymizedFrom' in meta_study:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (name match)')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+        return {'status': 0}
+
+    # Check that previously anonymized studies are not on Orthanc
+    if not global_var['flag_force_anon']:
+        for orthanc_study_id_other in json.loads(orthanc.RestApiGet('/studies')):
+            meta_study_other = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_other))
+            if ('AnonymziedFrom' in meta_study_other and meta_study_other['AnonymizedFrom'] == orthanc_study_id_parent) or \
+               ('ModifiedFrom' in meta_study_other and meta_study_other['ModifiedFrom'] == orthanc_study_id_parent):
+#            if ('AnonymziedFrom' in meta_study_other and meta_study_other['AnonymizedFrom'] == orthanc_study_id_parent):
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Already anonymized')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
+                return {'status' : 0}
+
+    #  Filter by original/primary and other status
+    flag_prescreen_send_to_remote = os.getenv('PYTHON_FLAG_PRESCREEN_ORIGINAL_PRIMARY', default='true') == 'true'
+    if flag_prescreen_send_to_remote:
+        counts, flag_deleted = filter_and_delete_instances(orthanc_study_id_parent)   
+        n_series_start = counts['series']['start']
+        n_series_deleted = counts['series']['deleted']
+        if flag_deleted:
+            meta_study = None
+            for orthanc_study_id_other in json.loads(orthanc.RestApiGet('/studies')):
+                if orthanc_study_id_other == orthanc_study_id_parent:
+                    meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_parent))
+        if meta_study is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'All series deleted by prefilter. Aborting anonymization.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return {'status' : 0}
+
+    # Filter by modality
+    flag_prescreen_by_modality = os.getenv('PYTHON_FLAG_PRESCREEN_BY_MODALITY', default='true') == 'true'
+    if flag_prescreen_by_modality:
+        # flag_deleted, n_series_start, n_series_deleted = PreScreenSeriesByModality(orthanc_study_id_parent) 
+        counts, flag_deleted = filter_and_delete_series_by_modality(orthanc_study_id_parent)
+        flag_deleted = lResults['FlagDeleted']
+        n_series_start = counts['start']
+        n_series_deleted = counts['deleted']
+        if flag_deleted:
+            meta_study = None
+            for orthanc_study_id_other in pairs(json.loads(orthanc.RestApiGet('/studies'))):
+                if (orthanc_study_id_other == orthanc_study_id_parent):
+                    meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_parent))
+        if meta_study is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'All series deleted by modality. Aborting anonymization.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return {'status' : 0}
+
+    flag_anonymize_by_series = os.getenv('PYTHON_FLAG_ANON_BY_SERIES', default='false') == 'true'
+    if flag_anonymize_by_series:
+        flag_split_2d_from_cview_tomo = os.getenv('PYTHON_FLAG_SPLIT_2D_FROM_CVIEW_TOMO', default='false') == 'true'
+        if flag_split_2d_from_cview_tomo:
+            flag_complete = check_split_2d_from_cview_tomo(orthanc_study_id_parent)
+            if not flag_complete:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Incomplete set of 2d or tomo. Aborting.')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
+                return {'status' : 0}
+
+        status = anonymize_study_by_series(orthanc_study_id_parent, meta_study=meta_study)
         if status['status'] != 0:
-            orthanc.LogWarning('Auto anon failed: %s' % status['error_text'])
-    else:
-        email_message('%s Triggered Anonymization' % aet, 'Manual anonymization triggered on anonymized data.  Skipping further anonymization.')
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem anonymizing by series. Aborting.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return status
+        
         if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Already anonymized data.  Skipping reanon')
-    #response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=false')
-    global_var['flag_force_anon'] = False
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+        return {'status' : 0}
+
+    # We modify the incoming patientIDs based on descriptions
+    # If "screen" appears in the description, the modifier is 's' else 'd' for diagnostic
+    # This has the effect of generating possibly to anonymous subjects for each incoming subject
+    # Comment out the call to the routine if you want normal use of PatientIDs
+    patient_id_modifier = ''
+    flag_split_screen_from_diagnostic = os.getenv('PYTHON_FLAG_SPLIT_SCREEN_DIAG', default='true') == 'true'
+    if flag_split_screen_from_diagnostic:
+        patient_id_modifier = set_screen_or_diagnostic(orthanc_study_id_parent)
+    flag_every_accession_a_patient = os.getenv('PYTHON_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
+    if flag_every_accession_a_patient:
+        patient_id_modifier = '_%s' % str(meta_study['MainDicomTags']['AccessionNumber']) if 'AccessionNumber' in meta_study['MainDicomTags'] else 'other'
+
+    # Check to see if this subject was previously anonymized
+    # StudyInstanceUID is only modified when anonymizing at the series level
+    study_instance_uid_modifier = ''
+    status, flag_new_patient_id, sql_pid, patient_id_anon = \
+        save_patient_ids_to_db(orthanc_study_id=orthanc_study_id_parent, patient_id_modifier=patient_id_modifier)
+    if status['status'] != 0:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem saving patient ids to db. Aborting.')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+        return status
+    status, flag_new_study_instance_uid, sql_siuid, study_instance_uid_anon = \
+        save_study_instance_uid_to_db(orthanc_study_id_parent, sql_pid, study_instance_uid_modifier=study_instance_uid_modifier)
+    if status['status'] != 0:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem saving study uid to db. Aborting.')
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+        return status
+
+    # We're not going to bother anonymizing unless either a new patient or study
+    flag_non_original_detected = False
+    flag_force_anon = False or global_var['flag_force_anon']
+    if flag_force_anon or (flag_new_patient_id or flag_new_study_instance_uid):
+
+        # First pass anonymization
+        flag_first_call = True
+        status, meta_instances_anon, orthanc_study_id_anon, patient_name_anon = \
+            anonymize_instances_at_level('Study', orthanc_study_id_parent, flag_first_call,
+                                sql_pid, patient_id_anon, sql_siuid, study_instance_uid_anon,
+                                patient_id_modifier)
+        if status['status'] != 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem anonymizing instances. Aborting.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return status
+
+        # Set up old-->new UID map
+        flag_remap_sop_instance_uid = True
+        flag_remap_kept_uid = True
+        uid_map, uid_type = map_uid_old_to_new(orthanc_study_id_anon, flag_remap_sop_instance_uid, flag_remap_kept_uid)
+        global_var['uid_map'] = uid_map
+
+        # Set up replacements for AccessionNumber and StudyID
+        replace_root = {}
+        replace_root['AccessionNumber'] = orthanc_study_id_anon[0:8] + orthanc_study_id_anon[9:17]
+        replace_root['StudyID'] = orthanc_study_id_anon[18:26] + orthanc_study_id_anon[27:35]
+    
+        # Check for existing lShiftEpoch
+        status, shift_epoch = load_shift_epoch_from_db(sql_pid)
+        if status['status'] != 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem loading shift epoch. Aborting.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return status
+        
+        # Compute lShiftEpoch
+        flag_keep_original_dates = os.getenv('PYTHON_FLAG_KEEP_ORIGINAL_DATES', default='false') == 'true'
+        if shift_epoch is None:
+            # Compute random shift up to one year
+            random.seed()
+            shift_epoch = random.randint(0,365*24*3600)
+            flag_save_shift_epoch = True
+            status = save_shift_epoch_to_db(sql_pid, shift_epoch)
+            if status['status'] != 0:
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem saving shift epoch. Aborting.')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] -= 3
+                return status
+
+        # For some cases, we keep the dates, so shift_epoch=0
+        if flag_keep_original_dates:
+            shift_epoch = 0
+
+        # Second pass anonymization creates files modified by shift_epoch
+        # Deletes First pass anonymized files following shift_epoch modification
+        status, orthanc_instances_id_new = shift_date_time_patage_of_instances(meta_instances_anon, shift_epoch, replace_root)
+        if status['status'] != 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem shifting times. Aborting.')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return status
+    
+        # Delete the original instance
+        for meta_instance_anon in meta_instances_anon:
+            orthanc_instance_id = meta_instance_anon['ID']
+            orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
+    
+        # Send to receiving modality
+        flag_by_instance = filter_what_instances_to_keep(orthanc_instance_ids=orthanc_instances_id_new)
+        
+        # for i, loInstanceID in pairs(orthanc_instances_id_new):
+        for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
+            if flag_send_to_remote:
+                if not flag_force_anon:
+                    # orthanc.RestApiPost('/modalities/%s/store' % os.getenv('PYTHON_ANON_ORTHANC'), orthanc_instance_id)
+                    flag_images_sent = True
+            else:
+                orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
+                flag_non_original_detected = True
+
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Updating lookup table')
+
+        status = update_lookup_html()
+        if status['status'] != 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem updating lookup table.')
+
+        if patient_name_anon is not None:
+            status = auto_email(os.getenv('ORTHANC__NAME') + ' Anon Complete', 'Anonymization complete:' + patient_name_anon)
+        else:
+            status = auto_email(os.getenv('ORTHANC__NAME') + ' Anon Complete', 'Anonymization complete.')
+        if status['status'] != 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem sending emails..')
+
+    else: # existing patient/study combo
+
+       if python_verbose_logwarning:
+           orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Skipping re-anon of existing patient/study')
+
+    if flag_non_original_detected:
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Some non-original images were not sent')
+
+    if flag_images_sent and python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Images sent to remote modalities') 
 
     if python_verbose_logwarning:
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
         global_var['log_indent_level'] -= 3
+
+    return {'status' : 0}
 
 # ============================================================================
 def anonymize_study_by_series(orthanc_study_id, meta_study = None):
@@ -610,11 +837,11 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
         # We modify the incoming patientIDs based on descriptions
         # Currently, we modify by 2D vs non-2D
         patient_id_modifier = ''
-        flag_split_2d_from_cview_tomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO', default='false') == 'true'
+        flag_split_2d_from_cview_tomo = os.getenv('PYTHON_FLAG_SPLIT_2D_FROM_CVIEW_TOMO', default='false') == 'true'
         if flag_split_2d_from_cview_tomo:
             patient_id_modifier = set_2d_or_cview_tomo(orthanc_series_id)
 
-        flag_every_accession_a_patient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT', default='false') == 'true'
+        flag_every_accession_a_patient = os.getenv('PYTHON_FLAG_EVERY_ACCESSION_A_PATIENT', default='false') == 'true'
         if flag_every_accession_a_patient:
             patient_id_modifier = '_%s' % meta_study['MainDicomTags']['AccessionNumber']
         patient_id_modifier_by_series[orthanc_series_id] = patient_id_modifier
@@ -708,7 +935,7 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
             for orthanc_series_id in orthanc_series_ids:
                 
                 status, meta_instances_anon_temp, orthanc_study_id_anon_temp, patient_name_anon_temp = \
-                    anonymize_instances('Series', orthanc_series_id, flag_first_call,
+                    anonymize_instances_at_level('Series', orthanc_series_id, flag_first_call,
                                         sql_pid[patient_id_modifier], patient_id_anon[patient_id_modifier],
                                         sql_siuid[patient_id_modifier], study_instance_uid[patient_id_modifier],
                                         patient_id_modifier)
@@ -817,7 +1044,7 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                 flag_save_shift_epoch = True
 
             # For some cases, we keep the dates, so shift_epoch=0
-            flag_keep_original_dates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES', default='false') == 'true'
+            flag_keep_original_dates = os.getenv('PYTHON_FLAG_KEEP_ORIGINAL_DATES', default='false') == 'true'
             if flag_keep_original_dates:
                 shift_epoch = 0
 
@@ -854,7 +1081,7 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
             for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
                 if flag_send_to_remote:
                     if not flag_force_anon:
-                        # orthanc.RestApiPost('/modalities/%s/store' % os.getenv('LUA_ANON_ORTHANC'), orthanc_instance_id)
+                        # orthanc.RestApiPost('/modalities/%s/store' % os.getenv('PYTHON_ANON_ORTHANC'), orthanc_instance_id)
                         flag_images_sent = True
                 else:
                     orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
@@ -875,7 +1102,7 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
     # UpdateLookupHTML()
     if python_verbose_logwarning:
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Updating lookup table')
-    orthanc.RestApiGet('/update_lookup_table_html_lua')
+    status = update_lookup_html()
     patient_name_anon = '.'
     if len(patient_name_anon_dict) > 0:
         patient_name_anon = ':'
@@ -893,6 +1120,52 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
         return status
 
     return {'status' : 0}
+
+# ============================================================================
+def anonymize_study_init(orthanc_study_id, flag_force_anon=True, trigger_type='manual'):
+    """Replaces the lua AnonymizeStudy"""
+# ----------------------------------------------------------------------------
+
+    global global_var
+    global_var['log_indent_level'] = 0
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+    response_system = orthanc.RestApiGet('/system')
+    meta_system = json.loads(response_system)
+    aet = meta_system['DicomAet']
+
+    #response_post = orthanc.RestApiPost('/tools/execute-script', 'gIndent=0')
+    #response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=true')
+    global_var['flag_force_anon'] = flag_force_anon
+    response_study = orthanc.RestApiGet('/studies/%s' % orthanc_study_id)
+    meta_study = json.loads(response_study)
+    status = {'status' : 0}
+    if ('ModifiedFrom' not in meta_study) and ('AnonymizedFrom' not in meta_study):
+    #if ('AnonymizedFrom' not in meta_study):
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Non-anonymized study stable.  Initiating auto anon')
+        email_message('%s Triggered Anonymization' % aet, 'Manual anonymization triggered.  Look for an update upon completion.')
+        #response_post = orthanc.RestApiPost('/tools/execute-script', 'OnStableStudyMain(\'%s\', nil, nil)' % orthanc_study_id)
+        status = anonymize_study(orthanc_study_id)
+        if status['status'] != 0:
+            orthanc.LogWarning('Auto anon failed: %s' % status['error_text'])
+    else:
+        status = {'status' : 1, 'error_text' : 'Anonymization triggered (%s) on anonymized data.  Skipping further anonymization.' % trigger_type}
+        email_message('%s Triggered Anonymization' % aet, 'Anonymization triggered (%s) on anonymized data.  Skipping further anonymization.' % trigger_type)
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Already anonymized data.  Skipping reanon')
+    #response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=false')
+    if flag_force_anon:
+        global_var['flag_force_anon'] = False
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
+    return status
 
 # =======================================================
 def auto_email(subject, message):
@@ -916,8 +1189,8 @@ def base_tag_handling():
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
         global_var['log_indent_level'] += 3
 
-    flag_keep_siemens_mr = os.getenv('LUA_FLAG_KEEP_SIEMENS_MR_TAGS',default='false') == 'true'
-    flag_hologic = os.getenv('LUA_COLLECT_HOLOGIC',default='false') == 'true'
+    flag_keep_siemens_mr = os.getenv('PYTHON_FLAG_KEEP_SIEMENS_MR_TAGS',default='false') == 'true'
+    flag_hologic = os.getenv('PYTHON_COLLECT_HOLOGIC',default='false') == 'true'
 
     table_from_ctp = {}
     table_from_ctp['0008-0005'] = {'en' : True,  'op' : 'keep',    'name' : 'SpecificCharacterSet',                         'comment' : ''}
@@ -2071,9 +2344,9 @@ def check_xref_modality():
         global_var['log_indent_level'] += 3
     flag_xref_modality=False
     xref_modality=None
-    if 'LUA_XREF_MODALITY' in os.environ:
+    if 'PYTHON_XREF_MODALITY' in os.environ:
         for modality in json.loads(orthanc.RestApiGet('/modalities')):
-            if modality == os.environ['LUA_XREF_MODALITY']:
+            if modality == os.environ['PYTHON_XREF_MODALITY']:
                 flag_xref_modality = True
                 xref_modality = modality
                 break
@@ -2600,8 +2873,8 @@ def filter_and_delete_series_by_modality(orthanc_study_id):
     counts['end'] = len(meta_study['Series'])
 
     # Get environment
-    modalities_allowed = os.getenv('LUA_ALLOWED_MODALITIES', default='').split(',')
-    modalities_denied = os.getenv('LUA_DENIED_MODALITIES', default='').split(',')
+    modalities_allowed = os.getenv('PYTHON_ALLOWED_MODALITIES', default='').split(',')
+    modalities_denied = os.getenv('PYTHON_DENIED_MODALITIES', default='').split(',')
 
     # Filter series
     for orthanc_series_id in meta_study['Series']:
@@ -2668,9 +2941,9 @@ def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=Non
         meta_instance = json.loads(response_instance)
 
         # By default we assume derived (for safety) unless proven otherwise by existing ImageType 
-        flag_assume_original_primary = os.getenv('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY', default='false') == 'true'
-        flag_original_primary = os.getenv('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY', default='false') == 'true'
-        flag_primary = os.getenv('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY', default='false') == 'true'
+        flag_assume_original_primary = os.getenv('PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY', default='false') == 'true'
+        flag_original_primary = os.getenv('PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY', default='false') == 'true'
+        flag_primary = os.getenv('PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY', default='false') == 'true'
         if not flag_assume_original_primary: #Turn off in order to keep Derived/Secondaries
             if 'ImageType' in meta_instance:
                 flag_original_primary = re_original_primary.match(meta_instance['ImageType']) is not None
@@ -2686,7 +2959,7 @@ def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=Non
         #flag_dynacad = flag_dynacad or ('0073,1003' in meta_instance and meta_instance['0073,1003']find('DYNACAD') >= 0)
         
         #Checking for non-mammo images
-        flag_screen_for_reports = os.getenv('LUA_FLAG_SCREEN_FOR_REPORTS',default='true') == 'true' #turn on to weed out reports
+        flag_screen_for_reports = os.getenv('PYTHON_FLAG_SCREEN_FOR_REPORTS',default='true') == 'true' #turn on to weed out reports
         flag_non_report = 'ImageType' in meta_instance
         if flag_screen_for_reports: #Test for unwanted mammo studies
             for field_type, field_items in {                                  'ImageType' : ['dose', 'screen', 'report', 'exam protocol'],
@@ -2707,7 +2980,7 @@ def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=Non
                     break
 
         #Consider both original and primary
-        if (os.getenv('LUA_FLAG_MUST_BE_ORIGINAL', default='true') == 'true'):
+        if (os.getenv('PYTHON_FLAG_MUST_BE_ORIGINAL', default='true') == 'true'):
            flag_by_instance[orthanc_instance_id] = flag_dynacad or (flag_original_primary and flag_non_report)
         else:
            flag_by_instance[orthanc_instance_id] = flag_dynacad or (flag_primary and flag_non_report)
@@ -2896,7 +3169,7 @@ def get_internal_number(sql_pid, patient_id_modifier,
 
         internal_number = None
         internal_number_new = None
-        internal_number_type = os.getenv('LUA_INTERNAL_NUMBER_TYPE', default='random')
+        internal_number_type = os.getenv('PYTHON_INTERNAL_NUMBER_TYPE', default='random')
 
         while internal_number is None:
 
@@ -3658,8 +3931,8 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
     n_patients = len(orthanc_patient_ids)
 
     # Misc parameters
-    flag_split_screen_from_diagnostic = os.getenv('LUA_FLAG_SPLIT_SCREEN_DIAG', default='false') == 'true'
-    flag_every_accession_a_patient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT', default='false') == 'true'
+    flag_split_screen_from_diagnostic = os.getenv('PYTHON_FLAG_SPLIT_SCREEN_DIAG', default='false') == 'true'
+    flag_every_accession_a_patient = os.getenv('PYTHON_FLAG_EVERY_ACCESSION_A_PATIENT', default='false') == 'true'
     meta_system = json.loads(orthanc.RestApiGet('/system'))
 
     # Assemble dict
@@ -3741,270 +4014,6 @@ def on_orthanc(pg_connection=None, pg_cursor=None):
         global_var['log_indent_level'] -= 3
 
     return {'status': 0}, now_on_orthanc
-
-# ============================================================================
-def on_stable_study_main(orthanc_study_id_incoming):
-    """
-    PURPOSE:  Main function for processing the anonymization.
-    """
-# ----------------------------------------------------------------------------
-
-    global global_var
-    if python_verbose_logwarning:
-        time_0 = time.time()
-        frame = inspect.currentframe()
-        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
-        global_var['log_indent_level'] += 3
-
-    if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Anonymizing %s' % orthanc_study_id_incoming)
-    if python_verbose_logwarning and global_var['flag_force_anon']:
-        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Forcing anonymization')
-    meta_system = json.loads(orthanc.RestApiGet('/system'))
-    meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_incoming))
-
-    if 'PatientName' in meta_study['PatientMainDicomTags'] and \
-        (meta_study['PatientMainDicomTags']['PatientName'].find(meta_system['Name']) >= 0 or 
-         (global_var['patient_name_base'] is not None and meta_study['PatientMainDicomTags']['PatientName'].find(global_var['patient_name_base']) >= 0)): 
-        if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (name match)')
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-            global_var['log_indent_level'] -= 3
-        return {'status': 0}
-
-    flag_images_sent = False
-    if 'ModifiedFrom' in meta_study or 'AnonymizedFrom' in meta_study:
-        if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (name match)')
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-            global_var['log_indent_level'] -= 3
-        return {'status': 0}
-
-    # Check that previously anonymized studies are not on Orthanc
-    if not global_var['flag_force_anon']:
-        for orthanc_study_id_other in json.loads(orthanc.RestApiGet('/studies')):
-            meta_study_other = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_other))
-            if ('AnonymziedFrom' in meta_study_other and meta_study_other['AnonymizedFrom'] == orthanc_study_id_incoming) or \
-               ('ModifiedFrom' in meta_study_other and meta_study_other['ModifiedFrom'] == orthanc_study_id_incoming):
-                if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Already anonymized')
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-                    global_var['log_indent_level'] -= 3
-                return {'status' : 0}
-
-    #  Filter by original/primary and other status
-    flag_prescreen_send_to_remote = os.getenv('LUA_FLAG_PRESCREEN_ORIGINAL_PRIMARY', default='true') == 'true'
-    if flag_prescreen_send_to_remote:
-        counts, flag_deleted = filter_and_delete_instances(orthanc_study_id_incoming)   
-        n_series_start = counts['series']['start']
-        n_series_deleted = counts['series']['deleted']
-        if flag_deleted:
-            meta_study = None
-            for orthanc_study_id_other in json.loads(orthanc.RestApiGet('/studies')):
-                if orthanc_study_id_other == orthanc_study_id_incoming:
-                    meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_incoming))
-        if meta_study is None:
-            if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'All series deleted by prefilter. Aborting anonymization.')
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-                global_var['log_indent_level'] -= 3
-            return {'status' : 0}
-
-    # Filter by modality
-    flag_prescreen_by_modality = os.getenv('LUA_FLAG_PRESCREEN_BY_MODALITY', default='true') == 'true'
-    if flag_prescreen_by_modality:
-        # flag_deleted, n_series_start, n_series_deleted = PreScreenSeriesByModality(orthanc_study_id_incoming) 
-        counts, flag_deleted = filter_and_delete_series_by_modality(orthanc_study_id_incoming)
-        flag_deleted = lResults['FlagDeleted']
-        n_series_start = counts['start']
-        n_series_deleted = counts['deleted']
-        if flag_deleted:
-            meta_study = None
-            for orthanc_study_id_other in pairs(json.loads(orthanc.RestApiGet('/studies'))):
-                if (orthanc_study_id_other == orthanc_study_id_incoming):
-                    meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_incoming))
-        if meta_study is None:
-            if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'All series deleted by modality. Aborting anonymization.')
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-                global_var['log_indent_level'] -= 3
-            return {'status' : 0}
-
-    flag_anonymize_by_series = os.getenv('LUA_FLAG_ANON_BY_SERIES', default='false') == 'true'
-    if flag_anonymize_by_series:
-        flag_split_2d_from_cview_tomo = os.getenv('LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO', default='false') == 'true'
-        if flag_split_2d_from_cview_tomo:
-            flag_complete = check_split_2d_from_cview_tomo(orthanc_study_id_incoming)
-            if not flag_complete:
-                if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Incomplete set of 2d or tomo. Aborting.')
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-                    global_var['log_indent_level'] -= 3
-                return {'status' : 0}
-
-        status = anonymize_study_by_series(orthanc_study_id_incoming, meta_study=meta_study)
-        if status['status'] != 0:
-            if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem anonymizing by series. Aborting.')
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-                global_var['log_indent_level'] -= 3
-            return status
-        
-        if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-            global_var['log_indent_level'] -= 3
-        return {'status' : 0}
-
-    # We modify the incoming patientIDs based on descriptions
-    # If "screen" appears in the description, the modifier is 's' else 'd' for diagnostic
-    # This has the effect of generating possibly to anonymous subjects for each incoming subject
-    # Comment out the call to the routine if you want normal use of PatientIDs
-    patient_id_modifier = ''
-    flag_split_screen_from_diagnostic = os.getenv('LUA_FLAG_SPLIT_SCREEN_DIAG', default='true') == 'true'
-    if flag_split_screen_from_diagnostic:
-        patient_id_modifier = set_screen_or_diagnostic(orthanc_study_id_incoming)
-    flag_every_accession_a_patient = os.getenv('LUA_FLAG_EVERY_ACCESSION_A_PATIENT') == 'true'
-    if flag_every_accession_a_patient:
-        patient_id_modifier = '_%s' % str(meta_study['MainDicomTags']['AccessionNumber']) if 'AccessionNumber' in meta_study['MainDicomTags'] else 'other'
-
-    # Check to see if this subject was previously anonymized
-    # StudyInstanceUID is only modified when anonymizing at the series level
-    study_instance_uid_modifier = ''
-    status, flag_new_patient_id, sql_pid, patient_id_anon = \
-        save_patient_ids_to_db(orthanc_study_id=orthanc_study_id_incoming, patient_id_modifier=patient_id_modifier)
-    if status['status'] != 0:
-        if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem saving patient ids to db. Aborting.')
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-            global_var['log_indent_level'] -= 3
-        return status
-    status, flag_new_study_instance_uid, sql_siuid, study_instance_uid_anon = \
-        save_study_instance_uid_to_db(orthanc_study_id_incoming, sql_pid, study_instance_uid_modifier=study_instance_uid_modifier)
-    if status['status'] != 0:
-        if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem saving study uid to db. Aborting.')
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-            global_var['log_indent_level'] -= 3
-        return status
-
-    # We're not going to bother anonymizing unless either a new patient or study
-    flag_non_original_detected = False
-    flag_force_anon = False or global_var['flag_force_anon']
-    if flag_force_anon or (flag_new_patient_id or flag_new_study_instance_uid):
-
-        # First pass anonymization
-        flag_first_call = True
-        status, meta_instances_anon, orthanc_study_id_anon, patient_name_anon = \
-            anonymize_instances('Study', orthanc_study_id_incoming, flag_first_call,
-                                sql_pid, patient_id_anon, sql_siuid, study_instance_uid_anon,
-                                patient_id_modifier)
-        if status['status'] != 0:
-            if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem anonymizing instances. Aborting.')
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-                global_var['log_indent_level'] -= 3
-            return status
-
-        # Set up old-->new UID map
-        flag_remap_sop_instance_uid = True
-        flag_remap_kept_uid = True
-        uid_map, uid_type = map_uid_old_to_new(orthanc_study_id_anon, flag_remap_sop_instance_uid, flag_remap_kept_uid)
-        global_var['uid_map'] = uid_map
-
-        # Set up replacements for AccessionNumber and StudyID
-        replace_root = {}
-        replace_root['AccessionNumber'] = orthanc_study_id_anon[0:8] + orthanc_study_id_anon[9:17]
-        replace_root['StudyID'] = orthanc_study_id_anon[18:26] + orthanc_study_id_anon[27:35]
-    
-        # Check for existing lShiftEpoch
-        status, shift_epoch = load_shift_epoch_from_db(sql_pid)
-        if status['status'] != 0:
-            if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem loading shift epoch. Aborting.')
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-                global_var['log_indent_level'] -= 3
-            return status
-        
-        # Compute lShiftEpoch
-        flag_keep_original_dates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES', default='false') == 'true'
-        if shift_epoch is None:
-            # Compute random shift up to one year
-            random.seed()
-            shift_epoch = random.randint(0,365*24*3600)
-            flag_save_shift_epoch = True
-            status = save_shift_epoch_to_db(sql_pid, shift_epoch)
-            if status['status'] != 0:
-                if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem saving shift epoch. Aborting.')
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-                    global_var['log_indent_level'] -= 3
-                return status
-
-        # For some cases, we keep the dates, so shift_epoch=0
-        if flag_keep_original_dates:
-            shift_epoch = 0
-
-        # Second pass anonymization creates files modified by shift_epoch
-        # Deletes First pass anonymized files following shift_epoch modification
-        status, orthanc_instances_id_new = shift_date_time_patage_of_instances(meta_instances_anon, shift_epoch, replace_root)
-        if status['status'] != 0:
-            if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem shifting times. Aborting.')
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-                global_var['log_indent_level'] -= 3
-            return status
-    
-        # Delete the original instance
-        for meta_instance_anon in meta_instances_anon:
-            orthanc_instance_id = meta_instance_anon['ID']
-            orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
-    
-        # Send to receiving modality
-        flag_by_instance = filter_what_instances_to_keep(orthanc_instance_ids=orthanc_instances_id_new)
-        
-        # for i, loInstanceID in pairs(orthanc_instances_id_new):
-        for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
-            if flag_send_to_remote:
-                if not flag_force_anon:
-                    # orthanc.RestApiPost('/modalities/%s/store' % os.getenv('LUA_ANON_ORTHANC'), orthanc_instance_id)
-                    flag_images_sent = True
-            else:
-                orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
-                flag_non_original_detected = True
-
-        if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Updating lookup table')
-
-        status = update_lookup_html()
-        if status['status'] != 0:
-            if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem updating lookup table.')
-
-        if patient_name_anon is not None:
-            status = auto_email(os.getenv('ORTHANC__NAME') + ' Anon Complete', 'Anonymization complete:' + patient_name_anon)
-        else:
-            status = auto_email(os.getenv('ORTHANC__NAME') + ' Anon Complete', 'Anonymization complete.')
-        if status['status'] != 0:
-            if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem sending emails..')
-
-    else: # existing patient/study combo
-
-       if python_verbose_logwarning:
-           orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Skipping re-anon of existing patient/study')
-
-    if flag_non_original_detected:
-        if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Some non-original images were not sent')
-
-    if flag_images_sent and python_verbose_logwarning:
-        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Images sent to remote modalities') 
-
-    if python_verbose_logwarning:
-        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-        global_var['log_indent_level'] -= 3
-
-    return {'status' : 0}
 
 # ============================================================================
 def recursive_find_uid_to_keep(parent, level_in=global_var['max_recurse_depth'], kept_uid={}, top_level_tag_to_keep = {}, parent_key=None):
@@ -5345,7 +5354,7 @@ def update_lookup_html():
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
         global_var['log_indent_level'] += 3
 
-    flag_keep_original_dates = os.getenv('LUA_FLAG_KEEP_ORIGINAL_DATES', default='false') == 'true'
+    flag_keep_original_dates = os.getenv('PYTHON_FLAG_KEEP_ORIGINAL_DATES', default='false') == 'true'
 
     # Load the map from the sql database
     status, patient_map, patient_reverse_map, flag_siuid_to_anon = load_phi_to_anon_map()
@@ -5771,135 +5780,6 @@ def user_permitted(uri, remote_user):
     return True
 
 # ============================================================================
-def AnonymizeInstancesLua(output, uri, **request):
-    """API interface to replace lua AnonymizeInstances"""
-# ----------------------------------------------------------------------------
-
-    global global_var
-
-    if request['method'] == 'POST':
-        data_in = json.loads(request['body'])
-        anon_at_level = data_in['Level']
-        orthanc_level_id = data_in['LevelID']
-        flag_first_call = data_in['FlagFirstCall']
-        sql_pid = int(data_in['SQLpid'])
-        patient_id_anon = data_in['PatientIDAnon'] if 'PatientIDAnon' in data_in else None
-        sql_siuid = int(data_in['SQLsiuid'])
-        study_instance_uid_anon = data_in['StudyInstanceUIDAnon'] if 'StudyInstanceUIDAnon' in data_in else None
-        if 'TopLevelTagToKeep' in data_in:
-            global_var['top_level_tag_to_keep'] = data_in['TopLevelTagToKeep']
-        if 'KeptUID' in data_in:
-            global_var['kept_uid'] = data_in['KeptUID']
-        if 'PatientNameBase' in data_in:
-            global_var['patient_name_base'] = data_in['PatientNameBase']
-        if 'PatientNameIDChar' in data_in:
-            global_var['patient_name_id_char'] = data_in['PatientNameIDChar']
-        if 'AddressList' in data_in:
-            global_var['address_list'] = data_in['AddressList']
-        if 'AddressConstructor' in data_in:
-            global_var['address_constructor'] = data_in['AddressConstructor']
-        if 'UIDMap' in data_in:
-            global_var['uid_map'] = data_in['UIDMap']
-            
-        patient_id_modifier = data_in['PatientIDModifier'] if 'PatientIDModifier' in data_in else ''
-        status, meta_instances_anon, orthanc_study_id_anon, patient_name_anon = \
-            anonymize_instances(anon_at_level, orthanc_level_id, flag_first_call,
-                                sql_pid, patient_id_anon, sql_siuid, study_instance_uid_anon,
-                                patient_id_modifier)
-        data_out = {}
-        if status['status'] == 0:
-            data_out['InstancesAnonMeta'] = meta_instances_anon
-            data_out['StudyIDAnon'] = orthanc_study_id_anon
-            if patient_name_anon is not None:
-                data_out['PatientNameAnon'] = patient_name_anon
-            data_out['TopLevelTagToKeep'] = global_var['top_level_tag_to_keep']
-            data_out['KeptUID'] = global_var['kept_uid']
-            if global_var['patient_name_base'] is not None:
-                data_out['PatientNameBase'] = global_var['patient_name_base']
-            if global_var['patient_name_id_char'] is not None:
-                data_out['PatientNameIDChar'] = global_var['patient_name_id_char']
-            if len(global_var['address_constructor']) > 0:
-                data_out['AddressConstructor'] = global_var['address_constructor']
-            if len(global_var['address_list']) > 0:
-                data_out['AddressList'] = global_var['address_list']
-            if global_var['uid_map'] is not None:
-                data_out['UIDMap'] = global_var['uid_map']
-        else:
-            data_out['status'] = status['status']
-            data_out['error_text'] = status['error_text']
-        output.AnswerBuffer(json.dumps(data_out), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def AnonymizeStudyBySeriesLua(output, uri, **request):
-    """API interface to replace lua AnonymizeStudyBySeries"""
-# ----------------------------------------------------------------------------
-
-    global global_var
-
-    if request['method'] == 'POST':
-        data_in = json.loads(request['body'])
-        orthanc_study_id = data_in['StudyID']
-        meta_study = data_in['StudyMeta'] if 'StudyMeta' in data_in else None
-        global_var['flag_force_anon'] = data_in['FlagForceAnon'] if 'FlagForceAnon' in data_in else False
-        if 'TopLevelTagToKeep' in data_in:
-            global_var['top_level_tag_to_keep'] = data_in['TopLevelTagToKeep']
-        if 'KeptUID' in data_in:
-            global_var['kept_uid'] = data_in['KeptUID']
-        if 'PatientNameBase' in data_in:
-            global_var['patient_name_base'] = data_in['PatientNameBase']
-        if 'PatientNameIDChar' in data_in:
-            global_var['patient_name_id_char'] = data_in['PatientNameIDChar']
-        if 'AddressList' in data_in:
-            global_var['address_list'] = data_in['AddressList']
-        if 'AddressConstructor' in data_in:
-            global_var['address_constructor'] = data_in['AddressConstructor']
-        if 'UIDMap' in data_in:
-            global_var['uid_map'] = data_in['UIDMap']
-
-        status = anonymize_study_by_series(orthanc_study_id, meta_study=meta_study)
-
-        output.AnswerBuffer(json.dumps(status), 'application/json')
-
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def BaseTagHandlingLua(output, uri, **request):
-    """API interface to Replace lua BaseTagHandling"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'GET':
-        tag_handling, tag_handling_list = base_tag_handling()
-        data_out = {'TagHandling' : tag_handling, 'TagHandlingList' : tag_handling_list}
-        output.AnswerBuffer(json.dumps(data_out), 'application/json')
-    else:
-        output.SendMethodNotAllowed('GET')
-
-# ============================================================================
-def CheckSplit2DFromCViewTomoLua(output, uri, **request):
-    """API interface to Replace lua CheckSplit2DFromCViewTomo"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'POST':
-        orthanc_study_id = json.loads(request['body'])
-        output.AnswerBuffer(json.dumps(check_split_2d_from_cview_tomo(orthanc_study_id)), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def ConfirmOrCreateLookupTableSQLLua(output, uri, **request):
-    """API interface to check for existence of sql lookup table and create if necessary"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'GET':
-        if 'x-remote-user' not in request['headers'] or request['headers']['x-remote-user'] != 'lua-ConfirmOrCreate': 
-            output.AnswerBuffer(json.dumps({'status': 1, 'error_text' :'ConfirmOrCreateLookupTable:missing or invalid user'}), 'application/json')
-            return
-        status = confirm_or_create_lookup_table_sql()
-        output.AnswerBuffer(json.dumps(status, indent = 3), 'application/json')
-    else:
-        output.SendMethodNotAllowed('GET')
-
-# ============================================================================
 def ConstructPatientName(output, uri, **request):
     """API interface to construct the patients name"""
 # ----------------------------------------------------------------------------
@@ -5929,28 +5809,6 @@ def EmailStudyReport(output, uri, **request):
     else:
         output.SendMethodNotAllowed('GET')
 
-# =======================================================
-def EmailSubjectMessageLua(output, uri, **request):
-    """API interface to send particular subject a message"""
-# -------------------------------------------------------
-    if request['method'] == 'POST':
-        if 'x-remote-user' not in request['headers'] or request['headers']['x-remote-user'] != 'lua-SendEmailUpdate': 
-            output.AnswerBuffer(json.dumps({'status': 1, 'error_text' : 'EmailSubjectMessageLua: missing or invalid user'}), 'application/json')
-            return
-        incoming_data = json.loads(request['body'])
-        if 'Subject' not in incoming_data or 'Message' not in incoming_data:
-            output.AnswerBuffer(json.dumps({'status': 2, 'error_text':'EmailSubjectMessageLua: Missing subject or message'}), 'application/json')
-            return
-        subject = incoming_data['Subject']
-        message = incoming_data['Message']
-        status = email_message(subject, message)
-        if status['status'] != 0:
-            output.AnswerBuffer(json.dumps(status), 'application/json')
-        else:
-            output.AnswerBuffer(json.dumps(status), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
 # ============================================================================
 def GetConfiguration(output, uri, **request):
     """API interface to retrieve the configuration"""
@@ -5960,48 +5818,6 @@ def GetConfiguration(output, uri, **request):
         output.AnswerBuffer(configuration, 'application/json')
     else:
         output.SendMethodNotAllowed('GET')
-
- # ============================================================================
-def GetInternalNumberLua(output, uri, **request):
-    """API interface to retrieve the internal number"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'POST':
-        if 'x-remote-user' not in request['headers'] or request['headers']['x-remote-user'] != 'lua-GetInternalNumberLua': 
-            result = {'status' : {'status': 1, 'error_text' : 'GetInternalNumberLua: missing or invalid user'}}
-            output.AnswerBuffer(json.dumps(result), 'application/json')
-            return
-        incoming_data = json.loads(request['body'])
-        sql_pid = int(incoming_data['SQLpid'])
-        patient_id_modifier = incoming_data['PatientIDModifier'].strip() if 'PatientIDModifier' in incoming_data else ''
-        status, internal_number = get_internal_number(sql_pid, patient_id_modifier)
-        result = {}
-        result['status'] = status
-        if internal_number is not None:
-            result['internal_number'] = internal_number
-        output.AnswerBuffer(json.dumps(result,indent=3), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def GetPatientIDsLua(output, uri, **request):
-    """API interface meant to replace Lua routine GetPatientIDs"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'POST':
-        
-        incoming_data = json.loads(request['body'])
-        orthanc_study_id = incoming_data['OrthancStudyID']
-        patient_id_modifier = incoming_data['PatientIDModifier'].strip() if 'PatientIDModifier' in incoming_data else ''
-        status, patient_ids = get_patient_ids(orthanc_study_id=orthanc_study_id, patient_id_modifier=patient_id_modifier)
-        if status['status'] != 0:
-            output.AnswerBuffer(json.dumps(status), 'application/json')
-        else:
-            data_outgoing = {'indices': [], 'patient_ids' : []}
-            for index, patient_id in patient_ids.items():
-                data_outgoing['indices'] += [index]
-                data_outgoing['patient_ids'] += [patient_id]
-            output.AnswerBuffer(json.dumps(data_outgoing), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
 
 # ============================================================================
 def GetPatientNameBase(output, uri, **request):
@@ -6065,10 +5881,19 @@ def IncomingFilter(uri, **request):
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'User permitted to anonymize: %s' % remote_user)
         return True
 
+    if method == 'POST' and uri.find('/execute-script') >= 0:
+        if not user_permitted(uri, remote_user):
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'User not permitted to execute-script: %s' % remote_user)
+            return False
+        else: 
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'User permitted to execute-script: %s' % remote_user)
+            return True
+
     if method == 'POST' and \
         (uri.find('/anonymize') >= 0 or \
-         uri.find('/jsanon') >= 0 or \
-         uri.find('/execute-script') >= 0):
+         uri.find('/jsanon') >= 0):
 
         if not user_permitted(uri, remote_user):
             if python_verbose_logwarning:
@@ -6108,16 +5933,13 @@ def IncomingFilter(uri, **request):
             #    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Starting old style anon')
             #    return True
             orthanc_study_id = study_res.group(1)
-            anonymize_study(orthanc_study_id)
+            status = anonymize_study_init(orthanc_study_id, trigger_type='jsanon' if flag_js else 'anonymize')
             if python_verbose_logwarning:
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Anon returned.')
             if flag_js:
                 return True
             else:
                 return False
-
-        if uri.find('/execute-script') >= 0:
-            return True
 
     if uri.find('/extra/lookup/master/updatelookup.html') >= 0:
         if user_permitted(uri, remote_user):
@@ -6172,46 +5994,6 @@ def JSAnonymizeStudy(output, uri, **request):
         output.SendMethodNotAllowed('POST')
 
 # ============================================================================
-def LoadPHI2AnonMapLua(output, uri, **request):
-    """API interface meant to replace Lua routine LoadPHI2AnonMap"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'GET':
-        patient_map, patient_reverse_map, flag_siuid_to_anon = load_phi_to_anon_map()
-    else:
-        output.SendMethodNotAllowed('GET')
-
-# ============================================================================
-def LoadShiftEpochFromDBLua(output, uri, **request):
-    """API interface meant to replace Lua routine LoadShiftEpochFromDB"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'POST':
-        incoming_data = json.loads(request['body'])
-        sql_pid = incoming_data['SQLpid']
-        data_outgoing, shift_epoch = load_shift_epoch_from_db(sql_pid)
-        if data_outgoing['status'] == 0 and shift_epoch is not None:
-            data_outgoing['ShiftEpoch'] = shift_epoch
-        output.AnswerBuffer(json.dumps(data_outgoing), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def MapUIDOldToNewLua(output, uri, **request):
-    """API interface meant to replace Lua routine MapUIDOldToNew"""
-# ----------------------------------------------------------------------------
-    global global_var
-    if request['method'] == 'POST':
-        incoming_data = json.loads(request['body'])
-        orthanc_study_id_new = incoming_data['StudyIDNew']
-        flag_remap_sop_instance_uid = incoming_data['FlagRemapSOPInstanceUID']
-        flag_remap_kept_uid = incoming_data['FlagRemapKeptUID']
-        global_var['kept_uid'] = incoming_data['KeptUID'] if 'KeptUID' in incoming_data else {}
-        uid_map, uid_type = map_uid_old_to_new(orthanc_study_id_new, flag_remap_sop_instance_uid, flag_remap_kept_uid)
-        data_outgoing = {'UIDMap' : uid_map, 'UIDType' : uid_type}
-        output.AnswerBuffer(json.dumps(data_outgoing), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
 def OnChange(change_type, level, resource_id):
     """
     PURPOSE: Manage incoming DICOM when a state change is detected
@@ -6227,19 +6009,11 @@ def OnChange(change_type, level, resource_id):
         # Auto anonymization
         #response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=false')
         #response_post = orthanc.RestApiPost('/tools/execute-script', 'gIndent=0')
-        global_var['flag_force_anon'] = False
-        global_var['log_indent_level'] = 0
-        flag_anonymize_upon_stable = os.getenv('LUA_FLAG_AUTO_ANON_WHEN_STABLE', default='false') == 'true'
+        flag_anonymize_upon_stable = os.getenv('PYTHON_FLAG_AUTO_ANON_WHEN_STABLE', default='false') == 'true'
         if flag_anonymize_upon_stable:
-            response_study = orthanc.RestApiGet('/studies/%s' % resource_id)
-            meta_study = json.loads(response_study)
-            if ('ModifiedFrom' not in meta_study) and ('AnonymizedFrom' not in meta_study):
-                if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Non-anonymized study stable.  Initiating auto anon')
-                #response_post = orthanc.RestApiPost('/tools/execute-script', 'OnStableStudyMain(\'%s\', nil, nil)' % resource_id)
-                status = on_stable_study_main(resource_id)
-                if status['status'] != 0:
-                    orthanc.LogWarning('Auto anon failed: %s' % status['error_text'])
+            status = anonymize_study_init(resource_id, flag_force_anon=False, trigger_type='onchange')
+            if status['status'] != 0:
+                orthanc.LogWarning('Auto anon failed: %s' % status['error_text'])
 
         # Email updates
         if os.getenv('PYTHON_MAIL_AUTO', default='false') == 'true':
@@ -6332,6 +6106,7 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
         # Assemble map of patient studies
         response_patients = orthanc.RestApiGet('/patients')
         patient_studies = {}
+        #orthanc.LogWarning(json.dumps(json.loads(response_patients),indent=3))
         for opatientid in json.loads(response_patients):
             response_patient = orthanc.RestApiGet('/patients/%s' % opatientid)
             meta_patient = json.loads(response_patient)
@@ -6358,11 +6133,13 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
         #for ostudyid in json.loads(response_studies):
         for ostudyid in ostudyids:
 
+            #orthanc.LogWarning(ostudyid)
             flag_first_image = True
             meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % ostudyid))
             patient_id_modifier = ''
             study_instance_uid_modifier = ''
             if not ('AnonymizedFrom' in meta_study or 'ModifiedFrom' in meta_study):
+            #if 'AnonymizedFrom' not in meta_study:
         
                 study_instance_uid = meta_study['MainDicomTags']['StudyInstanceUID'] + study_instance_uid_modifier
                 patient_id = meta_study['PatientMainDicomTags']['PatientID'] + patient_id_modifier
@@ -6503,201 +6280,6 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
         global_var['log_indent_level'] -= 3
 
 # ============================================================================
-def PreScreenSendToRemoteLua(output, uri, **request):
-    """Replace Lua PreScreenSendToRemote"""
-# ----------------------------------------------------------------------------
-
-    if request['method'] == 'POST':
-        orthanc_study_id = json.loads(request['body'])
-        counts, flag_deleted = filter_and_delete_instances(orthanc_study_id)   
-        result = { 'FlagDeleted'    : flag_deleted['series'],
-                   'NSeriesStart'   : counts['series']['start'],
-                   'NSeriesDeleted' : counts['series']['deleted']}
-        output.AnswerBuffer(json.dumps(result), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def PreScreenSeriesByModalityLua(output, uri, **request):
-    """Replace Lua PreScreenSeriesByModality"""
-# ----------------------------------------------------------------------------
-
-    if request['method'] == 'POST':
-        orthanc_study_id = json.loads(request['body'])
-        counts, flag_deleted = filter_and_delete_series_by_modality(orthanc_study_id)   
-        result = { 'FlagDeleted'    : flag_deleted,
-                   'NSeriesStart'   : counts['start'],
-                   'NSeriesDeleted' : counts['deleted']}
-        output.AnswerBuffer(json.dumps(result), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def RecursiveFindUIDToKeepLua(output, uri, **request):
-    """API interface meant to replace Lua routine RecursiveFindUIDToKeep"""
-# ----------------------------------------------------------------------------
-    global global_var
-    if request['method'] == 'GET':
-        orthanc_instance_id = request['groups'][0]
-        meta_instance = json.loads(orthanc.RestApiGet('/instances/%s/tags' % orthanc_instance_id))
-        try:
-            level_out, kept_uid, top_level_tag_to_keep, parent_key = recursive_find_uid_to_keep(meta_instance)
-            result = {'status' : 0}
-            for kk, vv in kept_uid.items():
-                global_var['kept_uid'][kk] = vv
-            for kk, vv in top_level_tag_to_keep.items():
-                global_var['top_level_tag_to_keep'][kk] = vv
-            result['KeptUID'] = global_var['kept_uid']
-            result['TopLevelTagToKeep'] = global_var['top_level_tag_to_keep']
-        except:
-            result = {'status' : 1, 'error_text' : 'Problem recursing instance meta data'}
-        output.AnswerBuffer(json.dumps(result), 'application/json')
-    else:
-        output.SendMethodNotAllowed('GET')
-
-# ============================================================================
-def RecursiveReplaceUIDLua(output, uri, **request):
-    """Replace Lua RecursiveReplaceUIDLua"""
-# ----------------------------------------------------------------------------
-
-    global global_var
-    if request['method'] == 'POST':
-        incoming_data = json.loads(request['body'])
-        parent = incoming_data['Parent']
-        global_var['uid_map'] = incoming_data['UIDMap'] if 'UIDMap' in incoming_data else None
-        element, level_out = recursive_replace_uid(parent)
-        result = {}
-        result['ReplaceValue'] = element
-        result['LevelOut'] = level_out
-        result['AddressList'] = global_var['address_list']
-        output.AnswerBuffer(json.dumps(result), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def SavePatientIDsAnonToDBLua(output, uri, **request):
-    """API interface meant to replace Lua routine SavePatientIDsAnonToDB"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'POST':
-        incoming_data = json.loads(request['body'])
-        sql_pid = incoming_data['SQLpid']
-        orthanc_study_id = incoming_data['OrthancStudyID']
-        status = save_patient_ids_anon_to_db(sql_pid, orthanc_study_id=orthanc_study_id)
-        output.AnswerBuffer(json.dumps(status), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def SavePatientIDsToDBLua(output, uri, **request):
-    """API interface meant to replace Lua routine SavePatientIDsToDB"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'POST':
-        incoming_data = json.loads(request['body'])
-        orthanc_study_id = incoming_data['OrthancStudyID']
-        patient_id_modifier = incoming_data['PatientIDModifier'].strip() if 'PatientIDModifier' in incoming_data else ''
-        status, flag_new_patient_id, sql_pid_unique, patient_id_anon = \
-            save_patient_ids_to_db(orthanc_study_id=orthanc_study_id, patient_id_modifier=patient_id_modifier)
-        if status['status'] != 0:
-            output.AnswerBuffer(json.dumps(status), 'application/json')
-        else:
-            results = {'FlagNewPatientID' : flag_new_patient_id, 
-                       'SQLpid' : '%d' % sql_pid_unique,
-                       'PatientIDAnon' : patient_id_anon}
-            output.AnswerBuffer(json.dumps(results), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def SavePatientNameAnonToDBLua(output, uri, **request):
-    """API interface meant to replace Lua routine SavePatientNameAnonToDB"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'POST':
-        incoming_data = json.loads(request['body'])
-        sql_siuid = incoming_data['SQLsiuid']
-        patient_name_anon = incoming_data['PatientNameAnon']
-        status = save_patient_name_anon_to_db(patient_name_anon, sql_siuid)
-        output.AnswerBuffer(json.dumps(status), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def SaveShiftEpochToDBLua(output, uri, **request):
-    """API interface meant to replace Lua routine SaveShiftEpochToDB"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'POST':
-        incoming_data = json.loads(request['body'])
-        sql_pid = incoming_data['SQLpid']
-        shift_epoch = incoming_data['ShiftEpoch']
-        data_outgoing = save_shift_epoch_to_db(sql_pid,shift_epoch)
-        output.AnswerBuffer(json.dumps(data_outgoing), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def SaveStudyInstanceUIDAnonToDBLua(output, uri, **request):
-    """API interface meant to replace Lua routine SaveStudyInstanceUIDAnonToDB"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'POST':
-        incoming_data = json.loads(request['body'])
-        orthanc_study_id = incoming_data['OrthancStudyID']
-        sql_siuid = incoming_data['SQLsiuid']
-        status = save_study_instance_uid_anon_to_db(orthanc_study_id, sql_siuid)
-        output.AnswerBuffer(json.dumps(status), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def SaveStudyInstanceUIDToDBLua(output, uri, **request):
-    """API interface meant to replace Lua routine SaveStudyInstanceUIDToDB"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'POST':
-        incoming_data = json.loads(request['body'])
-        orthanc_study_id = incoming_data['OrthancStudyID']
-        sql_pid = incoming_data['SQLpid']
-        study_instance_uid_modifier = incoming_data['aStudyInstanceUIDModifier'].strip() if 'aStudyInstanceUIDModifier' in incoming_data else ''
-        status, flag_new_study_instance_uid, sql_siuid, study_instance_uid_anon = \
-            save_study_instance_uid_to_db(orthanc_study_id, sql_pid, study_instance_uid_modifier=study_instance_uid_modifier)
-        if status['status'] != 0:
-            output.AnswerBuffer(json.dumps(status), 'application/json')
-        else:
-            results = {'FlagNewStudyInstanceUID' : flag_new_study_instance_uid, 
-                       'SQLsiuid' : '%d' % sql_siuid}
-            if study_instance_uid_anon is not None:
-                results['StudyInstanceUIDAnon'] = study_instance_uid_anon
-            output.AnswerBuffer(json.dumps(results), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def SendInstancesToRemoteFilterLua(output, uri, **request):
-    """
-    PURPOSE:  API interface meant to replace the functionality of the Lua routine 
-                 SendToRemoteFilter.  Unlike the Lua version, which operates
-                 on a single instance and returns a single boolean, this version
-                 can operate on an entire study, series or instance list.
-    """
-# ----------------------------------------------------------------------------
-
-    if request['method'] == 'POST':
-        incoming_data = json.loads(request['body'])
-        orthanc_study_ids = None
-        orthanc_series_ids = None
-        orthanc_instance_ids = None
-        if 'orthanc_study_ids' in incoming_data:
-            orthanc_study_ids = incoming_data['orthanc_study_ids']
-        if 'orthanc_series_ids' in incoming_data:
-            orthanc_series_ids = incoming_data['orthanc_series_ids']
-        if 'orthanc_instance_ids' in incoming_data:
-            orthanc_instance_ids = incoming_data['orthanc_instance_ids']
-        flag_by_instance = filter_what_instances_to_keep(orthanc_study_ids=orthanc_study_ids, 
-                                                         orthanc_series_ids=orthanc_series_ids,
-                                                         orthanc_instance_ids=orthanc_instance_ids)
-        output.AnswerBuffer(json.dumps(flag_by_instance), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-
-# ============================================================================
 def ScanInstanceForGroupElement(output, uri, **request):
     """API interface to scan_instance_for_group_element."""
 # ----------------------------------------------------------------------------
@@ -6791,16 +6373,6 @@ def ScanStudyForOddGroups(output, uri, **request):
         output.SendMethodNotAllowed('GET')
 
 # ============================================================================
-def Set2DOrCViewTomoLua(output, uri, **request):
-# ----------------------------------------------------------------------------
-    if request['method'] == 'GET':
-        orthanc_series_id = request['groups'][0]
-        patient_id_modifier = set_2d_or_cview_tomo(orthanc_series_id)
-        output.AnswerBuffer(patient_id_modifier, 'text/plain')
-    else:
-        output.SendMethodNotAllowed('GET')
-
-# ============================================================================
 def SetPatientNameBase(output, uri, **request):
 # ----------------------------------------------------------------------------
     if request['method'] == 'POST':
@@ -6824,95 +6396,28 @@ def SetScreenOrDiagnostic(output, uri, **request):
         output.SendMethodNotAllowed('GET')
 
 # ============================================================================
-def ShiftDateTimePatAgeOfInstancesLua(output, uri, **request):
-    """API interface meant to replace Lua routine ShiftDateTimePatAgeOfInstances"""
-# ----------------------------------------------------------------------------
-    global global_var
-    if request['method'] == 'POST':
-        incoming_data = json.loads(request['body'])
-        meta_instances = incoming_data['InstancesMeta']
-        shift_epoch = int(incoming_data['ShiftEpoch'])
-        replace_root = incoming_data['ReplaceRoot']
-        global_var['uid_map'] = incoming_data['UIDMap']
-        global_var['top_level_tag_to_keep'] = incoming_data['TopLevelTagToKeep']
-        global_var['address_list'] = incoming_data['AddressList'] if 'AddressList' in incoming_data else {}
-        global_var['kept_uid'] = incoming_data['KeptUID'] if 'KeptUID' in incoming_data else {}
-        status, orthanc_instance_ids_new = shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_root)
-        data_outgoing = {}
-        data_outgoing['status'] = status['status']
-        if status['status'] == 0:
-            data_outgoing['InstanceIDNew'] = orthanc_instance_ids_new
-        output.AnswerBuffer(json.dumps(data_outgoing), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def ShiftDateTimeStringLua(output, uri, **request):
-    """API interface meant to replace Lua routine ShiftDateTimeString"""
-# ----------------------------------------------------------------------------
-    if request['method'] == 'POST':
-        incoming_data = json.loads(request['body'])
-        shift_epoch = int(incoming_data['ShiftEpoch'])
-        incoming_ymd = incoming_data['YYYYMMDD']
-        incoming_hms = incoming_data['HHMMSS'] if 'HHMMSS' in incoming_data else None
-        data_outgoing = {}
-        if incoming_hms is None:
-            data_outgoing['NewDateString'] = shift_date_time_string(shift_epoch, incoming_ymd)
-        else:
-            outgoing_ymd, outgoing_hms = shift_date_time_string(shift_epoch, incoming_ymd, incoming_hms)
-            data_outgoing['NewDateString'] = outgoing_ymd
-            data_outgoing['NewTimeString'] = outgoing_hms
-        output.AnswerBuffer(json.dumps(data_outgoing), 'application/json')
-    else:
-        output.SendMethodNotAllowed('POST')
-
-# ============================================================================
-def ToggleLuaFlagAssumeOriginalPrimary(output, uri, **request):
-    """API to trigger setting LUA_FLAG_ASSUME_ORIGINAL_PRIMARY env variable for lua scripts"""
+def TogglePythonFlagAssumeOriginalPrimary(output, uri, **request):
+    """API to trigger setting PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY env variable for lua scripts"""
 # ----------------------------------------------------------------------------
 
     if user_permitted(uri, get_remote_user(request['headers'])):
         try:
-            flag_current = os.getenv('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY')
+            flag_current = os.getenv('PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY')
             if flag_current == 'true':
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'LUA_FLAG_ASSUME_ORIGINAL_PRIMARY is true, turning false...')
-                os.environ['LUA_FLAG_ASSUME_ORIGINAL_PRIMARY'] = 'false'
-                output.AnswerBuffer('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY was true, now false', 'text/plain')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY is true, turning false...')
+                os.environ['PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY'] = 'false'
+                output.AnswerBuffer('PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY was true, now false', 'text/plain')
             else:
                 if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'LUA_FLAG_ASSUME_ORIGINAL_PRIMARY is false, turning true...')
-                os.environ['LUA_FLAG_ASSUME_ORIGINAL_PRIMARY'] = 'true'
-                output.AnswerBuffer('LUA_FLAG_ASSUME_ORIGINAL_PRIMARY was false, now true', 'text/plain')
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY is false, turning true...')
+                os.environ['PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY'] = 'true'
+                output.AnswerBuffer('PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY was false, now true', 'text/plain')
         except:
             if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem getting LUA_FLAG_ASSUME_ORIGINAL_PRIMARY state')
-            output.AnswerBuffer('Problem getting LUA_FLAG_ASSUME_ORIGINAL_PRIMARY state', 'text/plain')
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem getting PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY state')
+            output.AnswerBuffer('Problem getting PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY state', 'text/plain')
 
-# ============================================================================
-def ToggleLuaVerbose(output, uri, **request):
-    """API to trigger setting gVerbose in Lua scripts"""
-# ----------------------------------------------------------------------------
-
-    if user_permitted(uri, get_remote_user(request['headers'])):
-        try:
-            response_post = orthanc.RestApiPost('/tools/execute-script', 'if gVerbose then print(1) else print(0) end')
-            state = json.loads(response_post)
-            if state == 1:
-                if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'gVerbose is ON, turning OFF...')
-                orthanc.RestApiPost('/tools/execute-script', 'gVerbose=nil')
-                output.AnswerBuffer('gVerbose was ON, now OFF', 'text/plain')
-            else:
-                if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'gVerbose is OFF, turning ON...')
-                orthanc.RestApiPost('/tools/execute-script', 'gVerbose=1')
-                output.AnswerBuffer('gVerbose was OFF, now ON', 'text/plain')
-        except:
-            if python_verbose_logwarning:
-                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem getting gVerbose state')
-            output.AnswerBuffer('Problem getting gVerbose state', 'text/plain')
-        
 # ============================================================================
 def TogglePythonMailAuto(output, uri, **request):
     """API to toggle the state of the PYTHON_MAIL_AUTO env variable"""
@@ -6960,64 +6465,27 @@ def UpdateLookupTable(output, uri, **request):
     else:
         output.AnswerBuffer('UpdateLookupTable: Success', 'text/plain')
 
- # ============================================================================
-def UpdateLookupTableHTMLLua(output, uri, **request):
-    """ API to replace lua UpdateLookupTableHTML """
-# ----------------------------------------------------------------------------
-    status = update_lookup_html()
-    if status['status'] != 0:
-        output.AnswerBuffer(json.dumps(status, indent=3), 'application/json')
-    else:
-        output.AnswerBuffer('UpdateLookupTable: Success', 'text/plain')
-
 # ============================================================================
 # Main
 orthanc.RegisterIncomingHttpRequestFilter(IncomingFilter)
 orthanc.RegisterOnChangeCallback(OnChangeThreaded)
-orthanc.RegisterRestCallback('/anonymize_instances_lua', AnonymizeInstancesLua)
-orthanc.RegisterRestCallback('/anonymize_study_by_series_lua', AnonymizeStudyBySeriesLua)
-orthanc.RegisterRestCallback('/base_tag_handling_lua', BaseTagHandlingLua)
-orthanc.RegisterRestCallback('/check_split_2d_from_cview_tomo_lua', CheckSplit2DFromCViewTomoLua)
-orthanc.RegisterRestCallback('/confirm_or_create_lookup_table_sql_lua', ConfirmOrCreateLookupTableSQLLua)
 orthanc.RegisterRestCallback('/construct_patient_name', ConstructPatientName)
 orthanc.RegisterRestCallback('/studies/(.*)/email_report', EmailStudyReport)
-orthanc.RegisterRestCallback('/email_message_lua', EmailSubjectMessageLua)
 #orthanc.RegisterRestCallback('/get_configuration', GetConfiguration)
-orthanc.RegisterRestCallback('/get_internal_number_lua', GetInternalNumberLua)
-orthanc.RegisterRestCallback('/get_patient_ids_lua', GetPatientIDsLua)
 orthanc.RegisterRestCallback('/get_patient_name_base', GetPatientNameBase)
 #orthanc.RegisterRestCallback('/inspect_python_api', InspectPythonAPI)
 orthanc.RegisterRestCallback('/studies/(.*)/jsanon', JSAnonymizeStudy)
-orthanc.RegisterRestCallback('/load_phi2anon_map_lua', LoadPHI2AnonMapLua)
-orthanc.RegisterRestCallback('/load_shift_epoch_from_db_lua', LoadShiftEpochFromDBLua)
-orthanc.RegisterRestCallback('/map_uid_old_to_new_lua', MapUIDOldToNewLua)
 orthanc.RegisterRestCallback('/prepare_data_for_anonymize', PrepareDataForAnonymizeGUI)
-orthanc.RegisterRestCallback('/prescreen_send_to_remote_lua', PreScreenSendToRemoteLua)
-orthanc.RegisterRestCallback('/prescreen_series_by_modality_lua', PreScreenSeriesByModalityLua)
-orthanc.RegisterRestCallback('/instances/(.*)/recursive_find_uid_to_keep_lua', RecursiveFindUIDToKeepLua)
-orthanc.RegisterRestCallback('/recursive_replace_uid_lua', RecursiveReplaceUIDLua)
-orthanc.RegisterRestCallback('/save_patient_ids_anon_to_db_lua', SavePatientIDsAnonToDBLua)
-orthanc.RegisterRestCallback('/save_patient_ids_to_db_lua', SavePatientIDsToDBLua)
-orthanc.RegisterRestCallback('/save_patient_name_anon_to_db_lua', SavePatientNameAnonToDBLua)
-orthanc.RegisterRestCallback('/save_shift_epoch_to_db_lua', SaveShiftEpochToDBLua)
-orthanc.RegisterRestCallback('/save_study_instance_uid_anon_to_db_lua', SaveStudyInstanceUIDAnonToDBLua)
-orthanc.RegisterRestCallback('/save_study_instance_uid_to_db_lua', SaveStudyInstanceUIDToDBLua)
-orthanc.RegisterRestCallback('/send_instances_to_remote_filter_lua', SendInstancesToRemoteFilterLua)
-orthanc.RegisterRestCallback('/shift_date_time_string_lua', ShiftDateTimeStringLua)
 orthanc.RegisterRestCallback('/instances/(.*)/group(.*)recursive_search', ScanInstanceForGroupElement)
 orthanc.RegisterRestCallback('/instances/(.*)/odd_group_recursive_search', ScanInstanceForOddGroups)
 orthanc.RegisterRestCallback('/series/(.*)/group(.*)recursive_search', ScanSeriesForGroupElement)
 orthanc.RegisterRestCallback('/series/(.*)/odd_group_recursive_search', ScanSeriesForOddGroups)
 orthanc.RegisterRestCallback('/studies/(.*)/group(.*)recursive_search', ScanStudyForGroupElement)
 orthanc.RegisterRestCallback('/studies/(.*)/odd_group_recursive_search', ScanStudyForOddGroups)
-orthanc.RegisterRestCallback('/series/(.*)/set_2d_or_cview_tomo_lua', Set2DOrCViewTomoLua)
 orthanc.RegisterRestCallback('/set_patient_name_base', SetPatientNameBase)
 orthanc.RegisterRestCallback('/studies/(.*)/set_screen_or_diagnostic', SetScreenOrDiagnostic)
-orthanc.RegisterRestCallback('/shift_date_time_patage_of_instances_lua', ShiftDateTimePatAgeOfInstancesLua)
-orthanc.RegisterRestCallback('/toggle_lua_flag_assume_original_primary', ToggleLuaFlagAssumeOriginalPrimary)
-orthanc.RegisterRestCallback('/toggle_lua_verbose', ToggleLuaVerbose)
+orthanc.RegisterRestCallback('/toggle_python_flag_assume_original_primary', TogglePythonFlagAssumeOriginalPrimary)
 orthanc.RegisterRestCallback('/toggle_python_mail_auto', TogglePythonMailAuto)
 orthanc.RegisterRestCallback('/toggle_python_verbose', TogglePythonVerbose)
 orthanc.RegisterRestCallback('/update_lookup_table', UpdateLookupTable)
-orthanc.RegisterRestCallback('/update_lookup_table_html_lua', UpdateLookupTableHTMLLua)
 
