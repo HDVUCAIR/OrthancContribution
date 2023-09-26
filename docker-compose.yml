@@ -31,16 +31,19 @@ services:
       # --------------------------------
       # Basics
       BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
-      #Lua scripts now converted to python
       ORTHANC__EXECUTE_LUA_ENABLED: "false"
       ORTHANC__HTTP_PORT: "8042"
       ORTHANC__HTTP_TIMEOUT: "10"
-      #Lua scripts now converted to python
-      #ORTHANC__LUA_SCRIPTS: '["/etc/orthanc/phi_scripts.lua"]'
       ORTHANC__NAME: "${PHI_ORTHANC_WEBSITE_NAME}"
       ORTHANC__SAVE_JOBS: "false"
       ORTHANC__STABLE_AGE: "600"
       ORTHANC__STORAGE_DIRECTORY: "/media/storage/OrthancDB"
+      # Meta data
+      ORTHANC__USER_METADATA: >
+        { 
+          "AnonymizationHistory" : 1029,
+          "ExportHistory" : 1030
+        }
       LOGDIR: "/media/logs"
       #LOGFILE: "/media/logs/orthanc.log"
       TRACE_ENABLED: "false"
@@ -143,6 +146,10 @@ services:
       PYTHON_FLAG_SPLIT_2D_FROM_CVIEW_TOMO: "${PHI_FLAG_SPLIT_2D_FROM_CVIEW_TOMO}"
       PYTHON_FLAG_SPLIT_SCREEN_DIAG: "${PHI_FLAG_SPLIT_SCREEN_DIAG}"
       PYTHON_INTERNAL_NUMBER_TYPE: "${PHI_INTERNAL_NUMBER_TYPE}"
+      PYTHON_IRB_LABEL_TO_PATBASENAME: >
+        {
+          "IRB_SevenTwoSeven" : "^irb727.*" 
+        }
       PYTHON_MAIL_AUTO: "${PHI_MAIL_AUTO}"
       PYTHON_MAIL_ORIGIN: "${PHI_MAIL_ORIGIN}"
       PYTHON_MAIL_SENDER: "${PHI_MAIL_SENDER}"
@@ -179,10 +186,6 @@ services:
       - type: bind
         source: ${PHI_HOST_DATA_DIR_ORTHANC}
         target: /media
-      #- type: bind
-      #  source: ./phi_files/phi_scripts.lua
-      #  target: /etc/orthanc/phi_scripts.lua
-      #  read_only: true
       - type: bind
         source: ./shared_files/make_certs_orthanc.sh
         target: /scripts/make_certs_orthanc.sh
@@ -474,7 +477,7 @@ services:
       # --------------------------------
       # Basics
       BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
-      #ORTHANC__EXECUTE_LUA_ENABLED: "true"
+      ORTHANC__EXECUTE_LUA_ENABLED: "false"
       ORTHANC__HTTP_PORT: "8042"
       ORTHANC__HTTP_TIMEOUT: "10"
       ORTHANC__NAME: "${DISK_ORTHANC_WEBSITE_NAME}"
@@ -633,9 +636,16 @@ services:
       - nw_disk
 
 secrets:
-   phi.orthanc.secret.json:
-      file: ./phi_files/orthanc.secret.json
-
+  phi.orthanc.secret.json:
+    file: ./phi_files/orthanc.secret.json
+  #phi.pg.user:
+  #  file: ./phi_files/pg.user
+  #phi.pg.db:
+  #  file: ./phi_files/pg.db
+  #phi.postgres.password:
+  #  environment: PHI_PASSWORD_FOR_PG_USER_POSTGRES 
+  #phi.pg.orthanc.password:
+  #  environment: PHI_PASSWORD_FOR_PG_USER_ORTHANC
 networks:
 
   nw_anon:

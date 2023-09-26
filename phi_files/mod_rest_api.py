@@ -38,7 +38,9 @@ global_var['fqdn'] = os.getenv('HOST_FQDN', default='Unknown.Host')
 
 global_var['address_constructor'] = []
 global_var['address_list'] = {}
+global_var['anonymization_queue'] = {}
 global_var['flag_force_anon'] = False
+global_var['irb_label_to_patient_name_base'] = json.loads(os.getenv('PYTHON_IRB_LABEL_TO_PATBASENAME', default='{}'))
 global_var['kept_uid'] = {}
 global_var['log_indent_level'] = 0
 global_var['max_recurse_depth'] = 20
@@ -217,6 +219,285 @@ orthanc.ExtendOrthancExplorer(' '.join([button_js_system_meta, button_js_system_
                                         button_js_patient_meta, button_js_patient_stats, \
                                         button_js_study_meta, button_js_study_stats, \
                                         button_js_series_meta, button_js_series_stats]))
+
+# ============================================================================
+def anonymize_by_label_init():
+# ----------------------------------------------------------------------------
+
+    global global_var
+
+    if python_verbose_logwarning:
+        global_var['log_indent_level'] = 0
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
+    irb_re = re.compile('irb[0-9]+', re.IGNORECASE)
+    global_var['anonymization_queue'] = {} 
+
+    # Construct html headers
+    answer_buffer = []
+    answer_buffer += ['<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">\n']
+    answer_buffer += ['<head>\n']
+    answer_buffer += ['<link rel="stylesheet" href="./extra/lookup/master/style.css" type="text/css" id="" media="print, projection, screen" />\n']
+    answer_buffer += ['<link rel="stylesheet" href="./extra/lookup/master/theme.blue.min.css">\n']
+    answer_buffer += ['<script type="text/javascript" src="./app/libs/jquery.min.js"></script>\n']
+    answer_buffer += ['<script type="text/javascript" src="./extra/lookup/master/jquery.tablesorter.combined.min.js"></script>\n']
+    answer_buffer += ['<script type="text/javascript">\n']
+    answer_buffer += ['$(document).ready(function() { \n']
+    answer_buffer += ['    // call the tablesorter plugin \n']
+    answer_buffer += ['    $("table").tablesorter({\n']
+    answer_buffer += ['        theme: "blue",\n']
+    answer_buffer += ['        widgets: ["zebra", "filter"],\n']
+    answer_buffer += ['        widgetOptions : {\n']
+    answer_buffer += ['            filter_columnFilters: true,\n']
+    answer_buffer += ['            filter_reset: ".reset",\n']
+    answer_buffer += ['            zebra : [ "normal-row", "alt-row" ]\n']
+    answer_buffer += ['        },\n']
+    answer_buffer += ['        sortList : [[2,0]]\n']
+    answer_buffer += ['    }); \n']
+    answer_buffer += ['}); \n']
+    answer_buffer += ['</script>\n']
+
+    # Find labeled studies
+    studies_with_labels = {}
+    orthanc_study_ids = json.loads(orthanc.RestApiGet('/studies'))
+    for orthanc_study_id in orthanc_study_ids:
+        labels = json.loads(orthanc.RestApiGet('/studies/%s/labels' % orthanc_study_id))
+        irb_label = None
+        for label in labels:
+            if irb_re.match(label) is not None:
+                irb_label = label
+                break
+        if irb_label is not None:
+            studies_with_labels[orthanc_study_id] = {'label' : irb_label}
+
+    # Determine if previously anonymized
+    if len(studies_with_labels) > 0:
+        for orthanc_study_id, orthanc_study_dict in studies_with_labels.items():
+            anonymization_history = anonymization_history_get(orthanc_study_id)
+            if anonymization_history is not None:
+                if 'AnonymizedTo' in anonymization_history:
+                    for orthanc_study_id_anon, anonymization_atoms in anonymization_history['AnonymizedTo'].items():
+                        if orthanc_study_id_anon in orthanc_study_ids:
+                            if 'AnonymizedTo' not in studies_with_labels[orthanc_study_id]:
+                                studies_with_labels[orthanc_study_id]['AnonymizedTo'] = {}
+                            if orthanc_study_id_anon not in studies_with_labels[orthanc_study_id]['AnonymizedTo']:
+                                studies_with_labels[orthanc_study_id]['AnonymizedTo'][orthanc_study_id_anon] = []
+                            studies_with_labels[orthanc_study_id]['AnonymizedTo'][orthanc_study_id_anon] += anonymization_atoms
+            for orthanc_study_id_anon in orthanc_study_ids:
+                anonymization_history_anon = anonymization_history_get(orthanc_study_id_anon)
+                if anonymization_history_anon is not None:
+                    if 'AnonymizedFrom' in anonymization_history_anon:
+                        for orthanc_study_id_parent, anonymization_atoms in anonymization_history_anon['AnonymizedFrom'].items():
+                            if orthanc_study_id_parent == orthanc_study_id:
+                                if 'AnonymizedTo' not in studies_with_labels[orthanc_study_id]:
+                                    studies_with_labels[orthanc_study_id]['AnonymizedTo'] = {}
+                                if orthanc_study_id_anon not in studies_with_labels[orthanc_study_id]['AnonymizedTo']:
+                                    studies_with_labels[orthanc_study_id]['AnonymizedTo'][orthanc_study_id_anon] = []
+                                studies_with_labels[orthanc_study_id]['AnonymizedTo'][orthanc_study_id_anon] += anonymization_atoms
+
+        # Set up the queue 
+        for orthanc_study_id, orthanc_study_dict in studies_with_labels.items():
+            if 'AnonymizedTo' not in orthanc_study_dict:
+                global_var['anonymization_queue'][orthanc_study_id] = irb_label_to_patient_name_base(orthanc_study_dict['label'])
+ 
+        # Finish the HTML header
+        if len(global_var['anonymization_queue']) > 0:
+            answer_buffer += ['<script type="text/javascript">\n']
+            answer_buffer += ["$( window ).on( 'load', function() {\n"]
+            answer_buffer += ["   $( '#abl_initiate_anon' ).click( function() {\n"]
+            answer_buffer += ["      var proceed = confirm('Proceed with anonymization?');\n"]
+            answer_buffer += ['      if (proceed == false) {\n']
+            answer_buffer += ['         return;\n']
+            answer_buffer += ['      } \n']
+            answer_buffer += ['      $.post("./anonymize_by_label_run", \n']
+            answer_buffer += ['             {data : ""},\n']
+            answer_buffer += ['             function(result,status){\n']
+            answer_buffer += ['                stop_prog = 1;\n']
+            answer_buffer += ['                if (status == "success") {\n']
+            answer_buffer += ["                   alert('Success!');\n"]
+            answer_buffer += ['                   location.reload();\n']
+            answer_buffer += ['                } else {\n']
+            answer_buffer += ['                   alert("Problem with anon: " + status);\n']
+            answer_buffer += ['                }\n']
+            answer_buffer += ['             }\n']
+            answer_buffer += ['         );\n']
+            answer_buffer += ['     });\n']
+            answer_buffer += ['});\n']
+            answer_buffer += ['</script>\n']
+            #answer_buffer += ['<script type="text/javascript">\n']
+            #answer_buffer += ['</script>\n']
+
+        answer_buffer += ['</head>\n']
+        answer_buffer += ['<body>\n']
+        answer_buffer += ['<a href="./app/explorer.html">Return to Orthanc home page</a></br>\n']
+        answer_buffer += ['Click a column heading to sort.</br>\n']
+        answer_buffer += ['<!-- targeted by the "filter_reset" option -->\n']
+        answer_buffer += ['<button type="button" class="reset">Reset Search</button>\n']
+        answer_buffer += ['<table class="tablesorter-blue" border=1>\n']
+        answer_buffer += ['<thead>\n']
+        answer_buffer += ['<tr>\n']
+        answer_buffer += ['<th>IRB Label</th>\n']
+        answer_buffer += ['<th>IRB Basename</th>\n']
+        answer_buffer += ['<th>Anonymization Status</th>\n']
+        answer_buffer += ['<th>PatientID</th>\n']
+        answer_buffer += ['<th>Name</th>\n']
+        answer_buffer += ['<th>Anon ID</th>\n']
+        answer_buffer += ['<th>StudyDate</th>\n']
+        answer_buffer += ['<th>Accession</th>\n']
+        answer_buffer += ['<th>StudyDescription</th>\n']
+        answer_buffer += ['<th>StudyInstanceUID</th>\n']
+        answer_buffer += ['</tr>\n']
+        answer_buffer += ['</thead>\n']
+        answer_buffer += ['<tbody>\n']
+
+        # Create the output table
+        for orthanc_study_id, orthanc_study_dict in studies_with_labels.items():
+            meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
+            orthanc_patient_id = meta_study['ParentPatient']
+            study_description = meta_study['MainDicomTags']['StudyDescription'] if 'StudyDescription' in meta_study['MainDicomTags'] else '&nbsp'
+            study_date = meta_study['MainDicomTags']['StudyDate'] if 'StudyDate' in meta_study['MainDicomTags'] else '&nbsp'
+            patient_name = meta_study['PatientMainDicomTags']['PatientName'] if 'PatientName' in meta_study['PatientMainDicomTags'] else '&nbsp'
+            patient_id = meta_study['PatientMainDicomTags']['PatientID']
+            status, internal_numbers = get_internal_numbers_by_patient_id(patient_id)
+            if status['status'] != 0 and python_verbose_logwarning:
+                orthanc.LogWarning('Error retrieving internal numbers: %d %s' % (status['status'], status['error_text']))
+            accession_number = meta_study['MainDicomTags']['AccessionNumber'] if 'AccessionNumber' in meta_study['MainDicomTags'] else '&nbsp'
+            study_instance_uid = meta_study['MainDicomTags']['StudyInstanceUID']
+            answer_buffer += ['<tr>']
+            answer_buffer += ['<td>%s</td>' % orthanc_study_dict['label']]
+            answer_buffer += ['<td>%s</td>' % irb_label_to_patient_name_base(orthanc_study_dict['label'])]
+            if 'AnonymizedTo' in orthanc_study_dict:
+                answer_buffer += ['<td>complete</td>']
+            else:
+                answer_buffer += ['<td>queued</td>']
+            answer_buffer += ['<td><a href="./app/explorer.html#patient?uuid=%s">%s</a></td>' % (orthanc_patient_id, patient_id)]
+            answer_buffer += ['<td><a href="./app/explorer.html#patient?uuid=%s">%s</a></td>' % (orthanc_patient_id, patient_name)]
+            orthanc_study_id_anon = None
+            if 'AnonymizedTo' in orthanc_study_dict:
+                for orthanc_study_id_anon_temp, anon_atoms in orthanc_study_dict['AnonymizedTo'].items():
+                    if orthanc_study_id_anon_temp in orthanc_study_ids:
+                        orthanc_study_id_anon = orthanc_study_id_anon_temp
+                        break
+            if orthanc_study_id_anon is None:
+                if len(internal_numbers) > 0:
+                    answer_buffer += ['<td>%s</td>' % ','.join([str(item) for item in internal_numbers])]
+                else:
+                    answer_buffer += ['<td>&nbsp</td>']
+            else:
+                if len(internal_numbers) > 0:
+                    answer_buffer += ['<td><a href="./app/explorer.html#study?uuid=%s">%s</a></td>' % (orthanc_study_id_anon, ','.join([str(item) for item in internal_numbers]))]
+                else:
+                    answer_buffer += ['<td><a href="./app/explorer.html#study?uuid=%s">anon</a></td>' % orthanc_study_id_anon]
+            answer_buffer += ['<td>%s</td>' % study_date]
+            answer_buffer += ['<td>%s</td>' % accession_number]
+            answer_buffer += ['<td>%s</td>' % study_description]
+            answer_buffer += ['<td><a href="./app/explorer.html#study?uuid=%s">%s</a></td>' % (orthanc_study_id,study_instance_uid)]
+            answer_buffer += ['</tr>\n']
+            answer_buffer += ['</tbody>\n']
+            answer_buffer += ['</table>\n']
+            if len(global_var['anonymization_queue']) > 0:
+                answer_buffer += ['<button type="button" id="abl_initiate_anon">Initiate Anonymization</button>\n']
+            answer_buffer += ['</body>\n']
+            answer_buffer += ['</html>']
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
+    return ''.join(answer_buffer)
+
+# ============================================================================
+def anonymize_by_label_run(remote_user='None'):
+# ----------------------------------------------------------------------------
+
+    global global_var
+    if python_verbose_logwarning:
+        global_var['log_indent_level'] = 0
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
+    for orthanc_study_id, patient_name_base in global_var['anonymization_queue'].items():
+        set_patient_name_base(patient_name_base)
+        status = anonymize_study_init(orthanc_study_id, flag_force_anon=True, trigger_type='anonbylabel', remote_user=remote_user)
+        reset_patient_name_base()
+        if status['status'] != 0:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+                return status
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+    
+    return {'status' : 0}
+
+# ============================================================================
+def anonymization_history_get(orthanc_study_id):
+# ----------------------------------------------------------------------------
+
+    meta_list = json.loads(orthanc.RestApiGet('/studies/%s/metadata' % orthanc_study_id))
+    if 'AnonymizationHistory' in meta_list:
+        try:
+            anonymization_history = json.loads(orthanc.RestApiGet('/studies/%s/metadata/AnonymizationHistory' % orthanc_study_id))
+        except:
+            anonymization_history = None
+    else:
+        anonymization_history = None
+
+    return anonymization_history
+
+ # ============================================================================
+def anonymization_history_modify(anonymization_history=None, type_insert=None, orthanc_study_id=None, atom=None, store_in=None):
+# ----------------------------------------------------------------------------
+    if anonymization_history is None:
+        anonymization_history = {}
+        if type_insert is not None:
+            anonymization_history[type_insert] = {}
+            if orthanc_study_id is not None:
+                anonymization_history[type_insert][orthanc_study_id] = []
+                if atom is not None:
+                    anonymization_history[type_insert][orthanc_study_id] += [atom]
+    else:
+        if type_insert is not None:
+            if type_insert not in anonymization_history:
+                anonymization_history[type_insert] = {}
+            if orthanc_study_id is not None:
+                if orthanc_study_id not in anonymization_history[type_insert]:
+                    anonymization_history[type_insert][orthanc_study_id] = []
+                if atom is not None:
+                    anonymization_history[type_insert][orthanc_study_id] += [atom]
+
+    if store_in is not None:
+        response_store = orthanc.RestApiPut('/studies/%s/metadata/AnonymizationHistory' % store_in, json.dumps(anonymization_history))
+
+    return anonymization_history
+
+# ============================================================================
+def anonymization_history_atom_modify(atom = None, status=None, error_text=None, make_date_time=None, trigger_type=None, remote_user=None, patient_name_base=None):
+# ----------------------------------------------------------------------------
+
+    if atom is None:
+        atom = {}
+    if status is not None:
+        atom['status'] = status
+    if error_text is not None:
+        atom['error_text'] = error_text
+    if trigger_type is not None:
+        atom['trigger_type'] = trigger_type
+    if remote_user is not None:
+        atom['remote_user'] = remote_user
+    if make_date_time is not None:
+        atom[make_date_time] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    if patient_name_base is not None:
+        atom['patient_name_base'] = patient_name_base
+
+    return atom
 
 # ============================================================================
 def anonymize_instances_at_level(anon_at_level, orthanc_level_id, flag_first_call,
@@ -540,7 +821,7 @@ def anonymize_instances_at_level(anon_at_level, orthanc_level_id, flag_first_cal
         return {'status' : 0}, meta_instances_anon, orthanc_study_id_anon, None
 
 # ============================================================================
-def anonymize_study(orthanc_study_id_parent):
+def anonymize_study(orthanc_study_id_parent, trigger_type, remote_user):
     """
     PURPOSE:  Main function for processing the anonymization.
     """
@@ -559,37 +840,13 @@ def anonymize_study(orthanc_study_id_parent):
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Forcing anonymization')
     meta_system = json.loads(orthanc.RestApiGet('/system'))
     meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_parent))
-
-    if 'PatientName' in meta_study['PatientMainDicomTags'] and \
-        (meta_study['PatientMainDicomTags']['PatientName'].find(meta_system['Name']) >= 0 or 
-         (global_var['patient_name_base'] is not None and meta_study['PatientMainDicomTags']['PatientName'].find(global_var['patient_name_base']) >= 0)): 
-        if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (name match)')
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-            global_var['log_indent_level'] -= 3
-        return {'status': 0}
-
+    anonymization_history = anonymization_history_get(orthanc_study_id_parent)
     flag_images_sent = False
-    if 'ModifiedFrom' in meta_study or 'AnonymizedFrom' in meta_study:
-    #if 'AnonymizedFrom' in meta_study:
-        if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (name match)')
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-            global_var['log_indent_level'] -= 3
-        return {'status': 0}
-
-    # Check that previously anonymized studies are not on Orthanc
-    if not global_var['flag_force_anon']:
-        for orthanc_study_id_other in json.loads(orthanc.RestApiGet('/studies')):
-            meta_study_other = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_other))
-            if ('AnonymziedFrom' in meta_study_other and meta_study_other['AnonymizedFrom'] == orthanc_study_id_parent) or \
-               ('ModifiedFrom' in meta_study_other and meta_study_other['ModifiedFrom'] == orthanc_study_id_parent):
-#            if ('AnonymziedFrom' in meta_study_other and meta_study_other['AnonymizedFrom'] == orthanc_study_id_parent):
-                if python_verbose_logwarning:
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Already anonymized')
-                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-                    global_var['log_indent_level'] -= 3
-                return {'status' : 0}
+    orthanc_study_id_anon = 'Aborted'
+    anonymization_history_atom = anonymization_history_atom_modify(make_date_time='initiated', 
+                                                                   trigger_type=trigger_type, 
+                                                                   remote_user=remote_user, 
+                                                                   patient_name_base=get_patient_name_base())
 
     #  Filter by original/primary and other status
     flag_prescreen_send_to_remote = os.getenv('PYTHON_FLAG_PRESCREEN_ORIGINAL_PRIMARY', default='true') == 'true'
@@ -607,6 +864,8 @@ def anonymize_study(orthanc_study_id_parent):
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'All series deleted by prefilter. Aborting anonymization.')
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
+            anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=0, error_text = 'Deleted by op prefilter')
+            anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id_parent)
             return {'status' : 0}
 
     # Filter by modality
@@ -619,7 +878,7 @@ def anonymize_study(orthanc_study_id_parent):
         n_series_deleted = counts['deleted']
         if flag_deleted:
             meta_study = None
-            for orthanc_study_id_other in pairs(json.loads(orthanc.RestApiGet('/studies'))):
+            for orthanc_study_id_other in json.loads(orthanc.RestApiGet('/studies')):
                 if (orthanc_study_id_other == orthanc_study_id_parent):
                     meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_parent))
         if meta_study is None:
@@ -627,6 +886,8 @@ def anonymize_study(orthanc_study_id_parent):
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'All series deleted by modality. Aborting anonymization.')
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
+            anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=0, error_text = 'Deleted by mod prefilter')
+            anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id_parent)
             return {'status' : 0}
 
     flag_anonymize_by_series = os.getenv('PYTHON_FLAG_ANON_BY_SERIES', default='false') == 'true'
@@ -639,14 +900,18 @@ def anonymize_study(orthanc_study_id_parent):
                     orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Incomplete set of 2d or tomo. Aborting.')
                     orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                     global_var['log_indent_level'] -= 3
+                anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=0, error_text = 'Incomplete 2d or tomo')
+                anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id_parent)
                 return {'status' : 0}
 
-        status = anonymize_study_by_series(orthanc_study_id_parent, meta_study=meta_study)
+        status = anonymize_study_by_series(orthanc_study_id_parent, anonymization_history, anonymization_history_atom, meta_study=meta_study, trigger_type=trigger_type, remote_user=remote_user)
         if status['status'] != 0:
             if python_verbose_logwarning:
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem anonymizing by series. Aborting.')
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
+            anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=0, error_text = 'Problem anonymizing by series')
+            anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id_parent)
             return status
         
         if python_verbose_logwarning:
@@ -676,6 +941,8 @@ def anonymize_study(orthanc_study_id_parent):
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem saving patient ids to db. Aborting.')
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
             global_var['log_indent_level'] -= 3
+        anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=status['status'], error_text = status['error_text'])
+        anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id_parent)
         return status
     status, flag_new_study_instance_uid, sql_siuid, study_instance_uid_anon = \
         save_study_instance_uid_to_db(orthanc_study_id_parent, sql_pid, study_instance_uid_modifier=study_instance_uid_modifier)
@@ -684,11 +951,13 @@ def anonymize_study(orthanc_study_id_parent):
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem saving study uid to db. Aborting.')
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
             global_var['log_indent_level'] -= 3
+        anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=status['status'], error_text = status['error_text'])
+        anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id_parent)
         return status
 
     # We're not going to bother anonymizing unless either a new patient or study
     flag_non_original_detected = False
-    flag_force_anon = False or global_var['flag_force_anon']
+    flag_force_anon = global_var['flag_force_anon']
     if flag_force_anon or (flag_new_patient_id or flag_new_study_instance_uid):
 
         # First pass anonymization
@@ -702,8 +971,15 @@ def anonymize_study(orthanc_study_id_parent):
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem anonymizing instances. Aborting.')
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
+            anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=status['status'], error_text = status['error_text'])
+            anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id_parent)
             return status
 
+        # Update the parent history
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Updating child anonymization history.')
+        anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, make_date_time='completed')
+            
         # Set up old-->new UID map
         flag_remap_sop_instance_uid = True
         flag_remap_kept_uid = True
@@ -722,6 +998,8 @@ def anonymize_study(orthanc_study_id_parent):
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem loading shift epoch. Aborting.')
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
+            anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=status['status'], error_text = status['error_text'])
+            anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id_parent)
             return status
         
         # Compute lShiftEpoch
@@ -737,6 +1015,8 @@ def anonymize_study(orthanc_study_id_parent):
                     orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem saving shift epoch. Aborting.')
                     orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                     global_var['log_indent_level'] -= 3
+                anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=status['status'], error_text = status['error_text'])
+                anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id_parent)
                 return status
 
         # For some cases, we keep the dates, so shift_epoch=0
@@ -751,17 +1031,25 @@ def anonymize_study(orthanc_study_id_parent):
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Problem shifting times. Aborting.')
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                 global_var['log_indent_level'] -= 3
+            anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=status['status'], error_text = status['error_text'])
+            anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id_parent)
             return status
     
         # Delete the original instance
         for meta_instance_anon in meta_instances_anon:
             orthanc_instance_id = meta_instance_anon['ID']
             orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
+
+        # Set up the child history       
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Updating child anonymization history.')
+        anonymization_history_anon = anonymization_history_get(orthanc_study_id_anon)
+        anonymization_history_atom_anon = anonymization_history_atom_modify(None, 0, 'Success', make_date_time='completed', trigger_type=trigger_type, remote_user=remote_user)
+        anonymization_history_anon = anonymization_history_modify(anonymization_history_anon, 'AnonymizedFrom', orthanc_study_id_parent, anonymization_history_atom_anon, orthanc_study_id_anon)
     
         # Send to receiving modality
         flag_by_instance = filter_what_instances_to_keep(orthanc_instance_ids=orthanc_instances_id_new)
         
-        # for i, loInstanceID in pairs(orthanc_instances_id_new):
         for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
             if flag_send_to_remote:
                 if not flag_force_anon:
@@ -789,8 +1077,11 @@ def anonymize_study(orthanc_study_id_parent):
 
     else: # existing patient/study combo
 
-       if python_verbose_logwarning:
-           orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Skipping re-anon of existing patient/study')
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Skipping re-anon of existing patient/study')
+        anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=0, error_text = 'Skipping re-anon of existing patient/study', make_date_time='completed')
+        anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id_parent)
+        return {'status' : 0}
 
     if flag_non_original_detected:
         if python_verbose_logwarning:
@@ -803,10 +1094,13 @@ def anonymize_study(orthanc_study_id_parent):
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
         global_var['log_indent_level'] -= 3
 
+    anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=0, error_text = 'Success')
+    anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id_parent)
+
     return {'status' : 0}
 
 # ============================================================================
-def anonymize_study_by_series(orthanc_study_id, meta_study = None):
+def anonymize_study_by_series(orthanc_study_id, anonymization_history, anonymization_history_atom, meta_study = None, trigger_type='unknown', remote_user='None'):
 # Assume we've already pre-screened for modality
 # ----------------------------------------------------------------------------
 
@@ -948,6 +1242,11 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                 if patient_name_anon_temp is not None:
                     patient_name_anon_dict[patient_name_anon_temp] = True
 
+                # Update the parent history
+                if python_verbose_logwarning:
+                    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Updating child anonymization history.')
+                anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, make_date_time='completed')
+
                 if flag_first_call:
                     meta_instances_anon = meta_instances_anon_temp
                     orthanc_study_id_anon = orthanc_study_id_anon_temp
@@ -961,12 +1260,16 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                         if python_verbose_logwarning:
                             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                             global_var['log_indent_level'] -= 3
+                        anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=status['status'], error_text = status['error_text'])
+                        anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon_temp, anonymization_history_atom, orthanc_study_id)
                         return status
 
                     if sql_pid[patient_id_modifier] != sql_pid_temp:
                         if python_verbose_logwarning:
                             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                             global_var['log_indent_level'] -= 3
+                        anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=1, error_text = 'Mismatch reading sqlpid')
+                        anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon_temp, anonymization_history_atom, orthanc_study_id)
                         return {'status' : 1, 'error_text' : 'Unexpected mismatch when reading SQLpid'}
 
                     if patient_id_modifier not in patient_id_anon:
@@ -976,6 +1279,8 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                             if python_verbose_logwarning:
                                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                                 global_var['log_indent_level'] -= 3
+                            anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=1, error_text = 'Mismatch reading patientidanon')
+                            anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon_temp, anonymization_history_atom, orthanc_study_id)
                             return {'status' : 1, 'error_text' : 'Unexpected mismatch when reading dPatientIDAnon'}
 
                     status, flag_new_study_instance_uid_temp, sql_siuid_temp, study_instance_uid_temp = \
@@ -986,12 +1291,16 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                         if python_verbose_logwarning:
                             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                             global_var['log_indent_level'] -= 3
+                        anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=status['status'], error_text = status['error_text'])
+                        anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon_temp, anonymization_history_atom, orthanc_study_id)
                         return status
 
                     if sql_siuid[patient_id_modifier] != sql_siuid_temp:
                         if python_verbose_logwarning:
                             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                             global_var['log_indent_level'] -= 3
+                        anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=1, error_text = 'Unexpected mismatch when reading sqlsiuid')
+                        anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon_temp, anonymization_history_atom, orthanc_study_id)
                         return {'status' : 1, 'error_text' : 'Unexpected mismatch when reading SQLsiuid'}
 
                     if patient_id_modifier not in study_instance_uid:
@@ -1001,6 +1310,8 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                             if python_verbose_logwarning:
                                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                                 global_var['log_indent_level'] -= 3
+                            anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=1, error_text = 'Unexpected mismatch when reading studyinstanceuidanon')
+                            anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon_temp, anonymization_history_atom, orthanc_study_id)
                             return {'status' : 1, 'error_text' : 'Unexpected mismatch when reading dStudyInstanceUIDAnon'}
 
                 else:
@@ -1012,10 +1323,13 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                         if python_verbose_logwarning:
                             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                             global_var['log_indent_level'] -= 3
+                        anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=1, error_text = 'Unexpected change in idanon for same modifier')
+                        anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon_temp, anonymization_history_atom, orthanc_study_id)
                         return {'status' : 1, 'error_text' : 'Unexpected change in IDAnon for same modifier'}
 
                 flag_first_call = False
-
+                anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=0, error_text = 'Success')
+            
             # Set up old-->new UID map
             flag_remap_sop_instance_uid = True
             flag_remap_kept_uid = True
@@ -1032,6 +1346,8 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                 if python_verbose_logwarning:
                     orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                     global_var['log_indent_level'] -= 3
+                anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=status['status'], error_text = status['error_text'])
+                anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon_temp, anonymization_history_atom, orthanc_study_id)
                 return status
             
             # ------------------------------------------------
@@ -1054,6 +1370,8 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                     if python_verbose_logwarning:
                         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                         global_var['log_indent_level'] -= 3
+                    anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=status['status'], error_text = status['error_text'])
+                    anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon_temp, anonymization_history_atom, orthanc_study_id)
                     return status
 
             # ------------------------------------------------
@@ -1064,6 +1382,8 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                 if python_verbose_logwarning:
                     orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                     global_var['log_indent_level'] -= 3
+                anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=status['status'], error_text = status['error_text'])
+                anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon_temp, anonymization_history_atom, orthanc_study_id)
                 return status
 
             # Delete the original instance
@@ -1071,12 +1391,21 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
                 orthanc_instance_id = (meta_instance_anon['ID'])
                 orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
     
+            # Set up the child history       
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Updating child anonymization history.')
+            anonymization_history_anon = anonymization_history_get(orthanc_study_id_anon)
+            anonymization_history_atom_from = anonymization_history_atom_modify(None, status=0, error_text='Success', make_date_time='completed', trigger_type=trigger_type, remote_user=remote_user)
+            anonymization_history_anon = anonymization_history_modify(anonymization_history_anon, 'AnonymizedFrom', orthanc_study_id, anonymization_history_atom_from, orthanc_study_id_anon)
+
             # Send to receiving modality
             flag_by_instance = filter_what_instances_to_keep(orthanc_instance_ids=orthanc_instance_ids_new)
             if flag_by_instance is None:
                 if python_verbose_logwarning:
                     orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
                     global_var['log_indent_level'] -= 3
+                anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=1, error_text = 'Problem calling send instances to remote filter')
+                anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon_temp, anonymization_history_atom, orthanc_study_id)
                 return {'status' : 1, 'error_text' : 'Problem calling send_instances_to_remote_filter'}
             for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
                 if flag_send_to_remote:
@@ -1119,15 +1448,16 @@ def anonymize_study_by_series(orthanc_study_id, meta_study = None):
     if status['status'] != 0:
         return status
 
+    anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=0, error_text='Success', make_date_time='completed')
+    anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon, anonymization_history_atom, orthanc_study_id)
+
     return {'status' : 0}
 
 # ============================================================================
-def anonymize_study_init(orthanc_study_id, flag_force_anon=True, trigger_type='manual'):
-    """Replaces the lua AnonymizeStudy"""
+def anonymize_study_init(orthanc_study_id, flag_force_anon=global_var['flag_force_anon'], trigger_type='manual', remote_user='None'):
 # ----------------------------------------------------------------------------
 
     global global_var
-    global_var['log_indent_level'] = 0
     if python_verbose_logwarning:
         time_0 = time.time()
         frame = inspect.currentframe()
@@ -1136,28 +1466,77 @@ def anonymize_study_init(orthanc_study_id, flag_force_anon=True, trigger_type='m
     response_system = orthanc.RestApiGet('/system')
     meta_system = json.loads(response_system)
     aet = meta_system['DicomAet']
-
-    #response_post = orthanc.RestApiPost('/tools/execute-script', 'gIndent=0')
-    #response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=true')
     global_var['flag_force_anon'] = flag_force_anon
     response_study = orthanc.RestApiGet('/studies/%s' % orthanc_study_id)
     meta_study = json.loads(response_study)
+    anonymization_history = anonymization_history_get(orthanc_study_id)
+
+    # ------------------------------------------------------------------------
+    # Check whether this study has been anonymized before (or from another study)
+    # ------------------------------------------------------------------------
+    # If we are not forcing it, look for any sign of previous anon
+    if trigger_type == 'onchange' or not flag_force_anon:
+        # Prevent any onchange triggers if already modified or anonymized according to study meta
+        flag_skip = ('ModifiedFrom' in meta_study) or ('AnonymizedFrom' in meta_study)
+        if flag_skip and python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (orthanc history)')
+        # If this study was previously anonymized and its child exists, skip
+        if (not flag_skip) and 'AnonymizedTo' in anonymization_history:
+            for orthanc_study_id_anon, atom_list in anonymization_history['AnonymizedTo'].items():
+                try:
+                    response_study_anon = orthanc.RestApiGet('/studies/%s' % orthanc_study_id_anon)
+                    meta_study_anon = json.loads(response_study_anon)
+                    if len(meta_study_anon) > 0:
+                        flag_skip = True
+                        if python_verbose_logwarning:
+                            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (meta history)')
+                        break
+                except:
+                    continue
+        # Do other studies point to this one
+        if not flag_skip:
+            for orthanc_study_id_other in json.loads(orthanc.RestApiGet('/studies')):
+                meta_study_other = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_other))
+                anonymization_history_other = anonymization_history_get(orthanc_study_id_other)
+                if ('AnonymizedFrom' in meta_study_other and meta_study_other['AnonymizedFrom'] == orthanc_study_id_parent) or \
+                   ('ModifiedFrom' in meta_study_other and meta_study_other['ModifiedFrom'] == orthanc_study_id_parent):
+                    flag_skip = True
+                    if python_verbose_logwarning:
+                        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (orthanc history prior)')
+                if 'AnonymizedFrom' in anonymization_history_other and orthanc_study_id in anonymization_history_other['AnonymizedFrom']:
+                    flag_skip = True
+                    if python_verbose_logwarning:
+                        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (meta history child)')
+                if flag_skip:
+                    break
+        
+        # Check whether the patient name shows signs of anonymization
+        if 'PatientName' in meta_study['PatientMainDicomTags'] and \
+            (meta_study['PatientMainDicomTags']['PatientName'].find(meta_system['Name']) >= 0 or 
+             (global_var['patient_name_base'] is not None and meta_study['PatientMainDicomTags']['PatientName'].find(global_var['patient_name_base']) >= 0)):
+            flag_skip = True
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (meta history prior)')
+
+        if 'AnonymizedFrom' in anonymization_history:
+            flag_skip = True
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Appears to be already anonymized (meta history parent)')
+
+        if flag_skip:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return {'status': 0}
+
     status = {'status' : 0}
-    if ('ModifiedFrom' not in meta_study) and ('AnonymizedFrom' not in meta_study):
-    #if ('AnonymizedFrom' not in meta_study):
-        if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Non-anonymized study stable.  Initiating auto anon')
-        email_message('%s Triggered Anonymization' % aet, 'Manual anonymization triggered.  Look for an update upon completion.')
-        #response_post = orthanc.RestApiPost('/tools/execute-script', 'OnStableStudyMain(\'%s\', nil, nil)' % orthanc_study_id)
-        status = anonymize_study(orthanc_study_id)
-        if status['status'] != 0:
-            orthanc.LogWarning('Auto anon failed: %s' % status['error_text'])
-    else:
-        status = {'status' : 1, 'error_text' : 'Anonymization triggered (%s) on anonymized data.  Skipping further anonymization.' % trigger_type}
-        email_message('%s Triggered Anonymization' % aet, 'Anonymization triggered (%s) on anonymized data.  Skipping further anonymization.' % trigger_type)
-        if python_verbose_logwarning:
-            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Already anonymized data.  Skipping reanon')
-    #response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=false')
+    if trigger_type == 'onchange' and python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Non-anonymized study stable.  Initiating auto anon')
+    email_message('%s Triggered Anonymization' % aet, 'Anonymization (%s) triggered.  Look for an update upon completion.' % trigger_type)
+    status = anonymize_study(orthanc_study_id, trigger_type, remote_user)
+    if status['status'] != 0:
+        orthanc.LogWarning('Auto anon failed: %s' % status['error_text'])
+
     if flag_force_anon:
         global_var['flag_force_anon'] = False
 
@@ -3250,6 +3629,66 @@ def get_internal_number(sql_pid, patient_id_modifier,
     return {'status': 0}, internal_number
  
 # ============================================================================
+def get_internal_numbers_by_patient_id(patient_id,
+                                       pg_connection=None, pg_cursor=None):
+# ----------------------------------------------------------------------------
+
+    global global_var
+    if python_verbose_logwarning:
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
+    internal_numbers = []
+
+    # Connect to the database
+    flag_local_db = False
+    if pg_connection is None and pg_cursor is None:
+        status, pg_connection, pg_cursor = connect_to_database()
+        flag_local_db = True
+        if status['status'] != 0:
+            if pg_connection is not None:
+                pg_connection.close()
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return status, internal_numbers
+    else:
+        if pg_connection is None or pg_cursor is None:
+            if python_verbose_logwarning:
+                orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] -= 3
+            return {'status':1, 'error_text': 'get_internal_numbers_by_patient_id: Must provide both con and cur'}, internal_numbers
+
+    sql_query = "SELECT value FROM internalnumber WHERE pid IN (SELECT pid FROM patientid WHERE value=%s)"
+    try:
+        pg_cursor.execute(sql_query, (patient_id,))
+    except:
+        if flag_local_db:
+            pg_cursor.close()
+            pg_connection.close()
+        if python_verbose_logwarning:
+            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] -= 3
+
+        return {'status':1, 'error_text':'get_internal_numbers_by_patient_id: Problem querying for patientid table'}, internal_numbers
+    row = pg_cursor.fetchone()
+    while row is not None:
+        internal_numbers += [row[0]]
+        row = pg_cursor.fetchone()
+
+    if flag_local_db:
+        pg_cursor.close()
+        pg_connection.close()
+
+    if python_verbose_logwarning:
+        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] -= 3
+
+    return {'status': 0}, internal_numbers
+ 
+# ============================================================================
 def get_patient_ids(orthanc_study_id=None,
                     meta_study=None,
                     patient_id_modifier=''):
@@ -3354,6 +3793,22 @@ def get_remote_user(request_headers):
 
     return remote_user
 
+# ============================================================================
+def irb_label_to_patient_name_base(irb_label):
+    """Map the irb_label (from a study's label list) to a patient_name_base"""
+# ----------------------------------------------------------------------------
+
+    global global_var
+    patient_name_base = None
+    for irb_basename, irb_re in global_var['irb_label_to_patient_name_base'].items():
+        if re.match(irb_re, irb_label) is not None:
+            patient_name_base = irb_basename
+            break
+    if patient_name_base is None:
+        patient_name_base = irb_label
+
+    return patient_name_base
+   
 # ============================================================================
 def load_lookup_table(file_lookup, make_backup=False):
     """Parse the lookup table.  Make backup if directed."""
@@ -5442,6 +5897,7 @@ def update_lookup_html():
         lun.write('<tbody>\n')
         
         #compute_times = {}
+        now_on_orthanc['StudyInstanceUIDPrinted'] = {}
         for patient_id, pid in patient_reverse_map['Primary'].items():
 
             #time0 = time.time()
@@ -5480,6 +5936,7 @@ def update_lookup_html():
                     else:
                         study_instance_uid_anon = None
                     study_instance_uid_printed[study_instance_uid] = True
+                    now_on_orthanc['StudyInstanceUIDPrinted'][study_instance_uid] = True
                     lun.write('<tr>\n')
                     lun.write('<td>\n')
                     lun.write('<a href="../../../app/explorer.html#patient?uuid=' + now_on_orthanc['PatientID2oPatientID'][patient_id] + '">\n')
@@ -5733,6 +6190,7 @@ def update_lookup_html():
                     lun.write('</td>\n')
                     lun.write('</tr>\n')
                     study_instance_uid_printed[study_instance_uid] = True
+                    now_on_orthanc['StudyInstanceUIDPrinted'][study_instance_uid] = True
                     #compute_times[110]['count'] += 1
                     #compute_times[110]['value'] += time.time() - time0
             lun.flush()
@@ -5740,6 +6198,35 @@ def update_lookup_html():
             #    if compute_time['value'] == 0 or compute_time['count'] == 0:
             #        continue
             #    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Compute time %d %f' % (c_id, compute_time['value'] / compute_time['count']))
+        for patient_id, row_of_data in now_on_orthanc['ByPatientID'].items():
+            for index_entry in range(len(row_of_data['StudyInstanceUID'])):
+                study_instance_uid = row_of_data['StudyInstanceUID'][index_entry]
+                if study_instance_uid not in now_on_orthanc['StudyInstanceUIDPrinted']:
+                    date_str = row_of_data['StudyDate'][index_entry]
+                    accession_number = row_of_data['AccessionNumber'][index_entry]
+                    lun.write('<tr>\n')
+                    lun.write('<td>\n')
+                    lun.write('<a href="../../../app/explorer.html#patient?uuid=' + now_on_orthanc['PatientID2oPatientID'][patient_id] + '">\n')
+                    lun.write(now_on_orthanc['ByPatientID'][patient_id]['PatientName'])
+                    lun.write('</a>\n')
+                    lun.write('</td>\n')
+                    lun.write('<td align="right">' + patient_id + '</td>\n')
+                    lun.write('<td>&nbsp</td>\n')
+                    lun.write('<td>&nbsp</td>\n')
+                    lun.write('<td align="center">' + date_str + '</td>\n')
+                    lun.write('<td>&nbsp</td>\n')
+                    lun.write('<td align="right">' + accession_number + '</td>\n')
+                    lun.write('<td>&nbsp</td>\n')
+                    lun.write('<td>&nbsp</td>\n')
+                    lun.write('<td align="right">\n')
+                    lun.write('<a href="../../../app/explorer.html#study?uuid=' + now_on_orthanc['StudyUID2oStudyUID'][study_instance_uid] + '">\n')
+                    lun.write(study_instance_uid)
+                    lun.write('</a>\n')
+                    lun.write('</td>\n')
+                    lun.write('<td>&nbsp</td>\n')
+                    lun.write('</tr>\n')
+                    lun.flush()
+
         lun.write('</tbody>\n')
         lun.write('</table>\n')
         lun.write('</body>\n')
@@ -5778,6 +6265,36 @@ def user_permitted(uri, remote_user):
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Remote user is permitted (%s)' % remote_user)
 
     return True
+
+# ============================================================================
+def AnonymizeByLabel(output, uri, **request):
+    """API interface to setup anonymization based on Orthanc labels"""
+# ----------------------------------------------------------------------------
+
+    global global_var
+    if user_permitted(uri, get_remote_user(request['headers'])):
+        answer_buffer = anonymize_by_label_init()
+        output.AnswerBuffer(answer_buffer, 'text/html')
+    else:
+        orthanc.LogWarning('Anonymize by label not permitted to user %s' % get_remote_user(request['headers']))
+        output.AnswerBuffer('Anonymize by label not permitted to user', 'text/plain')
+
+# ============================================================================
+def AnonymizeByLabelRun(output, uri, **request):
+    """API interface to run anonymization based on Orthanc labels"""
+# ----------------------------------------------------------------------------
+
+    global global_var
+    remote_user = get_remote_user(request['headers'])
+    if user_permitted(uri, get_remote_user(request['headers'])):
+        status = anonymize_by_label_run(remote_user)
+        if status['status'] == 0:
+            output.AnswerBuffer('success', 'text/plain')
+        else:
+            output.AnswerBuffer(status['error_text'], 'text/plain')
+    else:
+        orthanc.LogWarning('Anonymize by label not permitted to user %s' % get_remote_user(request['headers']))
+        output.AnswerBuffer('Anonymize by label not permitted to user', 'text/plain')
 
 # ============================================================================
 def ConstructPatientName(output, uri, **request):
@@ -5835,7 +6352,6 @@ def IncomingFilter(uri, **request):
 # ----------------------------------------------------------------------------
 
     global global_var
-    global_var['log_indent_level'] = 0
 
     headers_str = ''
     for key,value in request['headers'].items():
@@ -5892,7 +6408,7 @@ def IncomingFilter(uri, **request):
             return True
 
     if method == 'POST' and \
-        (uri.find('/anonymize') >= 0 or \
+        ((uri.find('/anonymize') >= 0 and (uri.find('/anonymize_by') < 0)) or \
          uri.find('/jsanon') >= 0):
 
         if not user_permitted(uri, remote_user):
@@ -5928,12 +6444,9 @@ def IncomingFilter(uri, **request):
         if study_res is not None:
             if python_verbose_logwarning:
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Starting anon')
-            ## Temporarily allow old style orthanc anon
-            #if not flag_js:
-            #    orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Starting old style anon')
-            #    return True
             orthanc_study_id = study_res.group(1)
-            status = anonymize_study_init(orthanc_study_id, trigger_type='jsanon' if flag_js else 'anonymize')
+            global_var['log_indent_level'] = 0
+            status = anonymize_study_init(orthanc_study_id, flag_force_anon=True, trigger_type='jsanon' if flag_js else 'anonymize', remote_user=remote_user)
             if python_verbose_logwarning:
                 orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Anon returned.')
             if flag_js:
@@ -5943,7 +6456,6 @@ def IncomingFilter(uri, **request):
 
     if uri.find('/extra/lookup/master/updatelookup.html') >= 0:
         if user_permitted(uri, remote_user):
-            # response_post = orthanc.RestApiPost('/tools/execute-script', 'UpdateLookupHTML()')
             status = update_lookup_html()
         else:
             return False
@@ -6007,10 +6519,9 @@ def OnChange(change_type, level, resource_id):
     if change_type == orthanc.ChangeType.STABLE_STUDY:
 
         # Auto anonymization
-        #response_post = orthanc.RestApiPost('/tools/execute-script', 'gFlagForceAnon=false')
-        #response_post = orthanc.RestApiPost('/tools/execute-script', 'gIndent=0')
         flag_anonymize_upon_stable = os.getenv('PYTHON_FLAG_AUTO_ANON_WHEN_STABLE', default='false') == 'true'
         if flag_anonymize_upon_stable:
+            global_var['log_indent_level'] = 0
             status = anonymize_study_init(resource_id, flag_force_anon=False, trigger_type='onchange')
             if status['status'] != 0:
                 orthanc.LogWarning('Auto anon failed: %s' % status['error_text'])
@@ -6469,6 +6980,8 @@ def UpdateLookupTable(output, uri, **request):
 # Main
 orthanc.RegisterIncomingHttpRequestFilter(IncomingFilter)
 orthanc.RegisterOnChangeCallback(OnChangeThreaded)
+orthanc.RegisterRestCallback('/anonymize_by_label', AnonymizeByLabel)
+orthanc.RegisterRestCallback('/anonymize_by_label_run', AnonymizeByLabelRun)
 orthanc.RegisterRestCallback('/construct_patient_name', ConstructPatientName)
 orthanc.RegisterRestCallback('/studies/(.*)/email_report', EmailStudyReport)
 #orthanc.RegisterRestCallback('/get_configuration', GetConfiguration)
