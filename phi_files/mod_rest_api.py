@@ -235,6 +235,7 @@ def anonymize_by_label_init():
 
     irb_re = re.compile('^irb.*', re.IGNORECASE)
     global_var['anonymization_queue'] = {} 
+    meta_system = json.loads(orthanc.RestApiGet('/system'))
 
     # Construct html headers
     answer_buffer = []
@@ -242,6 +243,7 @@ def anonymize_by_label_init():
     answer_buffer += ['<head>\n']
     answer_buffer += ['<link rel="stylesheet" href="./extra/lookup/master/style.css" type="text/css" id="" media="print, projection, screen" />\n']
     answer_buffer += ['<link rel="stylesheet" href="./extra/lookup/master/theme.blue.min.css">\n']
+    answer_buffer += ['<style>th,td { white-space: nowrap; }</style>']
     answer_buffer += ['<script type="text/javascript" src="./app/libs/jquery.min.js"></script>\n']
     answer_buffer += ['<script type="text/javascript" src="./extra/lookup/master/jquery.tablesorter.combined.min.js"></script>\n']
     answer_buffer += ['<script type="text/javascript">\n']
@@ -311,6 +313,12 @@ def anonymize_by_label_init():
         # Finish the HTML header
         if len(global_var['anonymization_queue']) > 0:
             answer_buffer += ['<script type="text/javascript">\n']
+            answer_buffer += ['var irb_label_map = {\n']
+            for irb_standard, irb_dict in global_var['irb_label_regex_map'].items():
+                answer_buffer += ['%s: "%s",\n' % (irb_standard, irb_dict['name_base'])]
+            for irb_standard, irb_dict in {'irbdefault' : {'name_base' : meta_system['Name']}}.items():
+                answer_buffer += ['%s: "%s"\n' % (irb_standard, irb_dict['name_base'])]
+            answer_buffer += ['};\n']
             answer_buffer += ["$( window ).on( 'load', function() {\n"]
             answer_buffer += ["   $( '#abl_initiate_anon' ).click( function() {\n"]
             answer_buffer += ["      var proceed = confirm('Proceed with anonymization?');\n"]
@@ -331,6 +339,39 @@ def anonymize_by_label_init():
             answer_buffer += ['         );\n']
             answer_buffer += ['     });\n']
             answer_buffer += ['});\n']
+            for orthanc_study_id, orthanc_study_dict in studies_with_labels.items():
+                if 'AnonymizedTo' in orthanc_study_dict:
+                    continue
+                answer_buffer += ['$( document ).ready(function() {\n']
+                answer_buffer += ['   $("#extra_%s").on(\'keyup\', function (e) {\n' % orthanc_study_id]
+                answer_buffer += ['       if (e.keyCode == 13) {\n']
+                answer_buffer += ['            $.post("./studies/%s/update_anonymization_queue", \n' % orthanc_study_id]
+                answer_buffer += ['                   JSON.stringify({ irb_standard : $( "#label_%s" ).text(), extra : $( "#extra_%s" ).val() })\n' % (orthanc_study_id, orthanc_study_id)]
+                answer_buffer += ['                  );\n']
+                answer_buffer += ['       }\n']
+                answer_buffer += ['   });\n']
+                answer_buffer += ['});\n']
+
+                answer_buffer += ['$( document ).ready(\n']
+                answer_buffer += ['   function() {\n']
+                answer_buffer += ['      $( "#select_%s" ).change(\n' % orthanc_study_id]
+                answer_buffer += ['         function() {\n']
+                answer_buffer += ['            $( "#label_%s" ).text(this.value);\n' % orthanc_study_id]
+                answer_buffer += ['            if (this.value == "irbdefault") {\n']
+                answer_buffer += ['               $( "#extra_%s" ).val(irb_label_map[this.value]);\n' % orthanc_study_id]
+                answer_buffer += ['               $( "#name_base_%s" ).text("");\n' % orthanc_study_id]
+                answer_buffer += ['            } else {\n']
+                answer_buffer += ['               $( "#extra_%s" ).val("");\n' % orthanc_study_id]
+                answer_buffer += ['               $( "#name_base_%s" ).text(irb_label_map[this.value]);\n' % orthanc_study_id]
+                answer_buffer += ['            }\n']
+                answer_buffer += ['            $.post("./studies/%s/update_anonymization_queue", \n' % orthanc_study_id]
+                answer_buffer += ['                   JSON.stringify({ irb_standard : $( "#label_%s" ).text(), extra : $( "#extra_%s" ).val() })\n' % (orthanc_study_id, orthanc_study_id)]
+                answer_buffer += ['                  );\n']
+                answer_buffer += ['         }\n']
+                answer_buffer += ['       );\n']
+                answer_buffer += ['     }\n']
+                answer_buffer += [');\n']
+
             answer_buffer += ['</script>\n']
             #answer_buffer += ['<script type="text/javascript">\n']
             #answer_buffer += ['</script>\n']
@@ -344,10 +385,11 @@ def anonymize_by_label_init():
         answer_buffer += ['<table class="tablesorter-blue" border=1>\n']
         answer_buffer += ['<thead>\n']
         answer_buffer += ['<tr>\n']
-        answer_buffer += ['<th>IRB Basename</th>\n']
         answer_buffer += ['<th>IRB Label</th>\n']
-        answer_buffer += ['<th>IRB Long Form</th>\n']
+        answer_buffer += ['<th>IRB Last Name</th>\n']
         answer_buffer += ['<th>Anonymization Status</th>\n']
+        answer_buffer += ['<th>IRB Extra</th>\n']
+        answer_buffer += ['<th>IRB Description</th>\n']
         answer_buffer += ['<th>PatientID</th>\n']
         answer_buffer += ['<th>Name</th>\n']
         answer_buffer += ['<th>Anon ID</th>\n']
@@ -374,13 +416,29 @@ def anonymize_by_label_init():
             accession_number = meta_study['MainDicomTags']['AccessionNumber'] if 'AccessionNumber' in meta_study['MainDicomTags'] else '&nbsp'
             study_instance_uid = meta_study['MainDicomTags']['StudyInstanceUID']
             answer_buffer += ['<tr>']
-            answer_buffer += ['<td>%s</td>' % parameters_irb['patient_name_base']]
-            answer_buffer += ['<td>%s %s</td>' % (parameters_irb['irb_standard'],orthanc_study_dict['label'])]
-            answer_buffer += ['<td>%s</td>' % parameters_irb['long_form']]
+            answer_buffer += ['<td><span id="label_%s">%s</span></td>' % (orthanc_study_id,parameters_irb['irb_standard'])]
+               
             if 'AnonymizedTo' in orthanc_study_dict:
+                answer_buffer += ['<td>%s</td>' % parameters_irb['patient_name_base']]
                 answer_buffer += ['<td>complete</td>']
+                answer_buffer += ['<td>%s</td>' % parameters_irb['extra']]
+                answer_buffer += ['<td>%s</td>' % parameters_irb['description']]
             else:
+                answer_buffer += ['<td><span id="name_base_%s">%s</span></td>' % (orthanc_study_id,parameters_irb['patient_name_base'])]
                 answer_buffer += ['<td>queued</td>']
+                answer_buffer += ['<td><input id="extra_%s" type="text" name="extra_%s", value="%s"></td>' % (orthanc_study_id,orthanc_study_id,parameters_irb['extra'])]
+                answer_buffer += ['<td><select id="select_%s">' % orthanc_study_id]
+                for irb_standard, irb_dict in global_var['irb_label_regex_map'].items():
+                    if irb_dict['description'] == parameters_irb['description']:
+                        answer_buffer += ['<option value="%s"  selected="selected">%s</option>' % (irb_standard, irb_dict['description'])]
+                    else:
+                        answer_buffer += ['<option value="%s">%s</option>' % (irb_standard, irb_dict['description'])]
+                for irb_standard, irb_dict in {'irbdefault' : {'description' : 'Default Orthanc name base'}}.items():
+                    if irb_dict['description'] == parameters_irb['description']:
+                        answer_buffer += ['<option value="%s"  selected="selected">%s</option>' % (irb_standard, irb_dict['description'])]
+                    else:
+                        answer_buffer += ['<option value="%s">%s</option>' % (irb_standard, irb_dict['description'])]
+                answer_buffer += ['</select></td>']
             answer_buffer += ['<td><a href="./app/explorer.html#patient?uuid=%s">%s</a></td>' % (orthanc_patient_id, patient_id)]
             answer_buffer += ['<td><a href="./app/explorer.html#patient?uuid=%s">%s</a></td>' % (orthanc_patient_id, patient_name)]
             orthanc_study_id_anon = None
@@ -404,12 +462,12 @@ def anonymize_by_label_init():
             answer_buffer += ['<td>%s</td>' % study_description]
             answer_buffer += ['<td><a href="./app/explorer.html#study?uuid=%s">%s</a></td>' % (orthanc_study_id,study_instance_uid)]
             answer_buffer += ['</tr>\n']
-            answer_buffer += ['</tbody>\n']
-            answer_buffer += ['</table>\n']
-            if len(global_var['anonymization_queue']) > 0:
-                answer_buffer += ['<button type="button" id="abl_initiate_anon">Initiate Anonymization</button>\n']
-            answer_buffer += ['</body>\n']
-            answer_buffer += ['</html>']
+        answer_buffer += ['</tbody>\n']
+        answer_buffer += ['</table>\n']
+        if len(global_var['anonymization_queue']) > 0:
+            answer_buffer += ['<button type="button" id="abl_initiate_anon">Initiate Anonymization</button>\n']
+        answer_buffer += ['</body>\n']
+        answer_buffer += ['</html>']
 
     if python_verbose_logwarning:
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
@@ -429,8 +487,8 @@ def anonymize_by_label_run(remote_user='None'):
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
         global_var['log_indent_level'] += 3
 
-    for orthanc_study_id, patient_name_base in global_var['anonymization_queue'].items():
-        set_patient_name_base(patient_name_base)
+    for orthanc_study_id, anon_dict in global_var['anonymization_queue'].items():
+        set_patient_name_base('%s%s' % (anon_dict['patient_name_base'].strip(),anon_dict['extra'].strip()))
         status = anonymize_study_init(orthanc_study_id, flag_force_anon=True, trigger_type='anonbylabel', remote_user=remote_user)
         reset_patient_name_base()
         if status['status'] != 0:
@@ -846,7 +904,6 @@ def anonymize_study(orthanc_study_id_parent, trigger_type, remote_user):
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Anonymizing %s' % orthanc_study_id_parent)
     if python_verbose_logwarning and global_var['flag_force_anon']:
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Forcing anonymization')
-    meta_system = json.loads(orthanc.RestApiGet('/system'))
     meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_parent))
     anonymization_history = anonymization_history_get(orthanc_study_id_parent)
     flag_images_sent = False
@@ -3817,27 +3874,28 @@ def get_remote_user(request_headers):
     return remote_user
 
 # ============================================================================
-def irb_label_regex_map(irb_label):
+def irb_label_regex_map(irb_label, extra=''):
     """Map the irb_label (from a study's label list) to associated irb parameters"""
 # ----------------------------------------------------------------------------
 
     global global_var
     irb_label_standard = None
-    long_form = None
+    description = None
     patient_name_base = None
     for irb_standard, irb_dict in global_var['irb_label_regex_map'].items():
         if re.match(irb_dict['label_re'], irb_label) is not None:
             patient_name_base = irb_dict['name_base']
-            long_form = irb_dict['long_form']
+            description = irb_dict['description']
             irb_label_standard = irb_standard
             break
     if patient_name_base is None:
         meta_system = json.loads(orthanc.RestApiGet('/system'))
-        patient_name_base = meta_system['Name']
-        long_form = 'Default Orthanc Basename'
+        patient_name_base = ''
+        extra = meta_system['Name']
+        description = 'Default Orthanc name base'
         irb_label_standard = "irbdefault"
 
-    return {'patient_name_base' : patient_name_base, 'irb_standard' : irb_label_standard, 'long_form' : long_form}
+    return {'patient_name_base' : patient_name_base, 'extra' : extra, 'irb_standard' : irb_label_standard, 'description' : description}
    
 # ============================================================================
 def load_lookup_table(file_lookup, make_backup=False):
@@ -6997,6 +7055,35 @@ def TogglePythonVerbose(output, uri, **request):
         python_verbose_logwarning = not python_verbose_logwarning 
 
 # ============================================================================
+def UpdateAnonymizationQueue(output, uri, **request):
+    """API interface to update the anonymization queue parameters"""
+# ----------------------------------------------------------------------------
+    global global_var
+    if request['method'] == 'POST':
+        orthanc_study_id = request['groups'][0]
+        if orthanc_study_id in global_var['anonymization_queue']:
+            parameters_incoming = json.loads(request['body'])
+            if 'extra' in parameters_incoming:
+                extra = parameters_incoming['extra'].strip()
+            else:
+                extra = ''
+            if 'irb_standard' in parameters_incoming:
+                parameters_standard = irb_label_regex_map(parameters_incoming['irb_standard'])
+                parameters_standard['extra'] = extra
+                # First the queue
+                global_var['anonymization_queue'][orthanc_study_id] = parameters_standard
+                # Then labels
+                irb_re = re.compile('^irb.*', re.IGNORECASE)
+                labels = json.loads(orthanc.RestApiGet('/studies/%s/labels' % orthanc_study_id))
+                for label in labels:
+                    if irb_re.match(label) is not None:
+                        orthanc.RestApiDelete('/studies/%s/labels/%s' % (orthanc_study_id, label))
+                orthanc.RestApiPut('/studies/%s/labels/%s' % (orthanc_study_id, parameters_standard['irb_standard']), json.dumps({}))
+        output.AnswerBuffer(json.dumps({}, indent = 3), 'application/json')
+    else:
+        output.SendMethodNotAllowed('POST')
+
+# ============================================================================
 def UpdateLookupTable(output, uri, **request):
     """ API to trigger update_lookup_table """
 # ----------------------------------------------------------------------------
@@ -7030,5 +7117,6 @@ orthanc.RegisterRestCallback('/studies/(.*)/set_screen_or_diagnostic', SetScreen
 orthanc.RegisterRestCallback('/toggle_python_flag_assume_original_primary', TogglePythonFlagAssumeOriginalPrimary)
 orthanc.RegisterRestCallback('/toggle_python_mail_auto', TogglePythonMailAuto)
 orthanc.RegisterRestCallback('/toggle_python_verbose', TogglePythonVerbose)
+orthanc.RegisterRestCallback('/studies/(.*)/update_anonymization_queue', UpdateAnonymizationQueue)
 orthanc.RegisterRestCallback('/update_lookup_table', UpdateLookupTable)
 
