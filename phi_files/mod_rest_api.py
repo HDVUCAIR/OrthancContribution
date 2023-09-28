@@ -40,7 +40,7 @@ global_var['address_constructor'] = []
 global_var['address_list'] = {}
 global_var['anonymization_queue'] = {}
 global_var['flag_force_anon'] = False
-global_var['irb_label_to_patient_name_base'] = json.loads(os.getenv('PYTHON_IRB_LABEL_TO_PATBASENAME', default='{}'))
+global_var['irb_label_regex_map'] = json.loads(os.getenv('PYTHON_IRB_LABEL_REGEXP_MAP', default='{}'))
 global_var['kept_uid'] = {}
 global_var['log_indent_level'] = 0
 global_var['max_recurse_depth'] = 20
@@ -233,7 +233,7 @@ def anonymize_by_label_init():
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Entering %s' % frame.f_code.co_name)
         global_var['log_indent_level'] += 3
 
-    irb_re = re.compile('irb[0-9]+', re.IGNORECASE)
+    irb_re = re.compile('^irb.*', re.IGNORECASE)
     global_var['anonymization_queue'] = {} 
 
     # Construct html headers
@@ -298,10 +298,15 @@ def anonymize_by_label_init():
                                     studies_with_labels[orthanc_study_id]['AnonymizedTo'][orthanc_study_id_anon] = []
                                 studies_with_labels[orthanc_study_id]['AnonymizedTo'][orthanc_study_id_anon] += anonymization_atoms
 
-        # Set up the queue 
+        # Set up the queue and normalize the labels
         for orthanc_study_id, orthanc_study_dict in studies_with_labels.items():
             if 'AnonymizedTo' not in orthanc_study_dict:
-                global_var['anonymization_queue'][orthanc_study_id] = irb_label_to_patient_name_base(orthanc_study_dict['label'])
+                parameters_irb = irb_label_regex_map(orthanc_study_dict['label'])
+                global_var['anonymization_queue'][orthanc_study_id] = parameters_irb
+                if parameters_irb['irb_standard'] != orthanc_study_dict['label']:
+                    orthanc.RestApiDelete('/studies/%s/labels/%s' % (orthanc_study_id, orthanc_study_dict['label']))
+                    orthanc.RestApiPut('/studies/%s/labels/%s' % (orthanc_study_id, parameters_irb['irb_standard']), json.dumps({}))
+                    studies_with_labels[orthanc_study_id]['label'] = parameters_irb['irb_standard']
  
         # Finish the HTML header
         if len(global_var['anonymization_queue']) > 0:
@@ -339,8 +344,9 @@ def anonymize_by_label_init():
         answer_buffer += ['<table class="tablesorter-blue" border=1>\n']
         answer_buffer += ['<thead>\n']
         answer_buffer += ['<tr>\n']
-        answer_buffer += ['<th>IRB Label</th>\n']
         answer_buffer += ['<th>IRB Basename</th>\n']
+        answer_buffer += ['<th>IRB Label</th>\n']
+        answer_buffer += ['<th>IRB Long Form</th>\n']
         answer_buffer += ['<th>Anonymization Status</th>\n']
         answer_buffer += ['<th>PatientID</th>\n']
         answer_buffer += ['<th>Name</th>\n']
@@ -355,6 +361,7 @@ def anonymize_by_label_init():
 
         # Create the output table
         for orthanc_study_id, orthanc_study_dict in studies_with_labels.items():
+            parameters_irb = irb_label_regex_map(orthanc_study_dict['label'])
             meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
             orthanc_patient_id = meta_study['ParentPatient']
             study_description = meta_study['MainDicomTags']['StudyDescription'] if 'StudyDescription' in meta_study['MainDicomTags'] else '&nbsp'
@@ -367,8 +374,9 @@ def anonymize_by_label_init():
             accession_number = meta_study['MainDicomTags']['AccessionNumber'] if 'AccessionNumber' in meta_study['MainDicomTags'] else '&nbsp'
             study_instance_uid = meta_study['MainDicomTags']['StudyInstanceUID']
             answer_buffer += ['<tr>']
-            answer_buffer += ['<td>%s</td>' % orthanc_study_dict['label']]
-            answer_buffer += ['<td>%s</td>' % irb_label_to_patient_name_base(orthanc_study_dict['label'])]
+            answer_buffer += ['<td>%s</td>' % parameters_irb['patient_name_base']]
+            answer_buffer += ['<td>%s %s</td>' % (parameters_irb['irb_standard'],orthanc_study_dict['label'])]
+            answer_buffer += ['<td>%s</td>' % parameters_irb['long_form']]
             if 'AnonymizedTo' in orthanc_study_dict:
                 answer_buffer += ['<td>complete</td>']
             else:
@@ -1049,15 +1057,22 @@ def anonymize_study(orthanc_study_id_parent, trigger_type, remote_user):
     
         # Send to receiving modality
         flag_by_instance = filter_what_instances_to_keep(orthanc_instance_ids=orthanc_instances_id_new)
-        
+        n_to_send = len(flag_by_instance)
+        ten_percent_to_send = n_to_send // 10
+        i_to_send = 0
         for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
             if flag_send_to_remote:
                 if not flag_force_anon:
+                    if not flag_images_sent and python_verbose_logwarning:
+                        orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Sending to remote.')
+                    if (i_to_send % 10) == 0 and python_verbose_logwarning:
+                        orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Sending %d of %d' % (i_to_send+1, n_to_send))
                     # orthanc.RestApiPost('/modalities/%s/store' % os.getenv('PYTHON_ANON_ORTHANC'), orthanc_instance_id)
                     flag_images_sent = True
             else:
                 orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
                 flag_non_original_detected = True
+            i_to_send += 1
 
         if python_verbose_logwarning:
             orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Updating lookup table')
@@ -1407,14 +1422,22 @@ def anonymize_study_by_series(orthanc_study_id, anonymization_history, anonymiza
                 anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, status=1, error_text = 'Problem calling send instances to remote filter')
                 anonymization_history = anonymization_history_modify(anonymization_history, 'AnonymizedTo', orthanc_study_id_anon_temp, anonymization_history_atom, orthanc_study_id)
                 return {'status' : 1, 'error_text' : 'Problem calling send_instances_to_remote_filter'}
+            n_to_send = len(flag_by_instance)
+            ten_percent_to_send = n_to_send // 10
+            i_to_send = 0
             for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
                 if flag_send_to_remote:
                     if not flag_force_anon:
+                        if not flag_images_sent and python_verbose_logwarning:
+                            orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Sending to remote.')
+                        if (i_to_send % 10) == 0 and python_verbose_logwarning:
+                            orthanc.LogWarning(' ' * (global_var['log_indent_level']+3) + 'Sending %d of %d' % (i_to_send+1, n_to_send))
                         # orthanc.RestApiPost('/modalities/%s/store' % os.getenv('PYTHON_ANON_ORTHANC'), orthanc_instance_id)
                         flag_images_sent = True
                 else:
                     orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
                     flag_non_original_detected = True
+                i_to_send += 1
 
         else: # existing patient/study combo
 
@@ -3794,20 +3817,27 @@ def get_remote_user(request_headers):
     return remote_user
 
 # ============================================================================
-def irb_label_to_patient_name_base(irb_label):
-    """Map the irb_label (from a study's label list) to a patient_name_base"""
+def irb_label_regex_map(irb_label):
+    """Map the irb_label (from a study's label list) to associated irb parameters"""
 # ----------------------------------------------------------------------------
 
     global global_var
+    irb_label_standard = None
+    long_form = None
     patient_name_base = None
-    for irb_basename, irb_re in global_var['irb_label_to_patient_name_base'].items():
-        if re.match(irb_re, irb_label) is not None:
-            patient_name_base = irb_basename
+    for irb_standard, irb_dict in global_var['irb_label_regex_map'].items():
+        if re.match(irb_dict['label_re'], irb_label) is not None:
+            patient_name_base = irb_dict['name_base']
+            long_form = irb_dict['long_form']
+            irb_label_standard = irb_standard
             break
     if patient_name_base is None:
-        patient_name_base = irb_label
+        meta_system = json.loads(orthanc.RestApiGet('/system'))
+        patient_name_base = meta_system['Name']
+        long_form = 'Default Orthanc Basename'
+        irb_label_standard = "irbdefault"
 
-    return patient_name_base
+    return {'patient_name_base' : patient_name_base, 'irb_standard' : irb_label_standard, 'long_form' : long_form}
    
 # ============================================================================
 def load_lookup_table(file_lookup, make_backup=False):

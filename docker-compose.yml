@@ -146,9 +146,12 @@ services:
       PYTHON_FLAG_SPLIT_2D_FROM_CVIEW_TOMO: "${PHI_FLAG_SPLIT_2D_FROM_CVIEW_TOMO}"
       PYTHON_FLAG_SPLIT_SCREEN_DIAG: "${PHI_FLAG_SPLIT_SCREEN_DIAG}"
       PYTHON_INTERNAL_NUMBER_TYPE: "${PHI_INTERNAL_NUMBER_TYPE}"
+      # Mapping irb labels to associated irbs using regular expressions
+      # Entries should be   "irbabbrev" : { "label_re" : "regular expression to uniquely identify this irb", "long_form" : "Human readable description of IRB", "name_base" : "Form taken by patient name base" }
       PYTHON_IRB_LABEL_TO_PATBASENAME: >
         {
-          "IRB_SevenTwoSeven" : "^irb727.*" 
+          "irbstandard1" : { "label_re" : "^irbREGEXP1", "Long_form" : "Long description 1", "name_base" : "patient_name_base1" }, 
+          "irbstandard2" : { "label_re" : "^irbREGEXP2", "Long_form" : "Long description 2", "name_base" : "patient_name_base2" }, 
         }
       PYTHON_MAIL_AUTO: "${PHI_MAIL_AUTO}"
       PYTHON_MAIL_ORIGIN: "${PHI_MAIL_ORIGIN}"
