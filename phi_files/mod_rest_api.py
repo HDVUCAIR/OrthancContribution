@@ -52,14 +52,13 @@ global_var['uid_map'] = None
 # ============================================================================
 # Modify the GUI
 # ============================================================================
-# Attempt to add systemstat button
+# Buttons on the main landing page
 # ----------------------------------------------------------------------------
 button_js_system_meta = "$('#lookup').live('pagebeforecreate', function() {" + \
                            " var b = $('<a>')" + \
                              " .attr('data-role', 'button')" + \
                              " .attr('href', '#')" + \
-                             " .attr('data-icon', 'action')" + \
-                             " .attr('data-theme', 'e')" + \
+                             " .attr('data-theme', 'b')" + \
                              " .text('System Settings');" + \
                            " b.insertAfter($('#content').parent());" + \
                            " b.click(function() {" + \
@@ -71,12 +70,12 @@ button_js_system_meta = "$('#lookup').live('pagebeforecreate', function() {" + \
                              "}" + \
                            ");" + \
                          "});"
+
 button_js_system_stats = "$('#lookup').live('pagebeforecreate', function() {" + \
                            " var b = $('<a>')" + \
                              " .attr('data-role', 'button')" + \
                              " .attr('href', '#')" + \
-                             " .attr('data-icon', 'action')" + \
-                             " .attr('data-theme', 'e')" + \
+                             " .attr('data-theme', 'b')" + \
                              " .text('System Stats');" + \
                            " b.insertAfter($('#content').parent());" + \
                            " b.click(function() {" + \
@@ -89,6 +88,23 @@ button_js_system_stats = "$('#lookup').live('pagebeforecreate', function() {" + 
                            ");" + \
                          "});"
 
+button_js_anonymize_by_label = "$('#lookup').live('pagebeforecreate', function() {" + \
+                           " var b = $('<a>')" + \
+                             " .attr('data-role', 'button')" + \
+                             " .attr('href', '#')" + \
+                             " .attr('data-theme', 'b')" + \
+                             " .text('Anonymize By Label');" + \
+                           " b.insertAfter($('#content').parent());" + \
+                           " b.click(function() {" + \
+                             " var uuid='none'; " + \
+                             " if ($.mobile.pageData) {" + \
+                             "   uuid = $.mobile.pageData.uuid" + \
+                             " };" + \
+                             " window.open('/%s/anonymize_by_label');" % global_var['website'] + \
+                             "}" + \
+                           ");" + \
+                         "});"
+
 # ----------------------------------------------------------------------------
 # Buttons on patient page
 # ----------------------------------------------------------------------------
@@ -97,8 +113,7 @@ button_js_patient_meta = "$('#patient').live('pagebeforecreate', function() {" +
                        " var b = $('<a>')" + \
                          " .attr('data-role', 'button')" + \
                          " .attr('href', '#')" + \
-                         " .attr('data-icon', 'action')" + \
-                         " .attr('data-theme', 'e')" + \
+                         " .attr('data-theme', 'b')" + \
                          " .text('Patient Metadata');" + \
                        " b.insertBefore($('#patient-delete').parent().parent());" + \
                        " b.click(function() {" + \
@@ -116,8 +131,7 @@ button_js_patient_stats = "$('#patient').live('pagebeforecreate', function() {" 
                        " var b = $('<a>')" + \
                          " .attr('data-role', 'button')" + \
                          " .attr('href', '#')" + \
-                         " .attr('data-icon', 'action')" + \
-                         " .attr('data-theme', 'e')" + \
+                         " .attr('data-theme', 'b')" + \
                          " .text('Patient Stats');" + \
                        " b.insertBefore($('#patient-delete').parent().parent());" + \
                        " b.click(function() {" + \
@@ -138,8 +152,7 @@ button_js_study_meta = "$('#study').live('pagebeforecreate', function() {" + \
                        " var b = $('<a>')" + \
                          " .attr('data-role', 'button')" + \
                          " .attr('href', '#')" + \
-                         " .attr('data-icon', 'action')" + \
-                         " .attr('data-theme', 'e')" + \
+                         " .attr('data-theme', 'b')" + \
                          " .text('Study Metadata');" + \
                        " b.insertBefore($('#study-delete').parent().parent());" + \
                        " b.click(function() {" + \
@@ -157,8 +170,7 @@ button_js_study_stats = "$('#study').live('pagebeforecreate', function() {" + \
                        " var b = $('<a>')" + \
                          " .attr('data-role', 'button')" + \
                          " .attr('href', '#')" + \
-                         " .attr('data-icon', 'action')" + \
-                         " .attr('data-theme', 'e')" + \
+                         " .attr('data-theme', 'b')" + \
                          " .text('Study Stats');" + \
                        " b.insertBefore($('#study-delete').parent().parent());" + \
                        " b.click(function() {" + \
@@ -179,8 +191,7 @@ button_js_series_meta = "$('#series').live('pagebeforecreate', function() {" + \
                        " var b = $('<a>')" + \
                          " .attr('data-role', 'button')" + \
                          " .attr('href', '#')" + \
-                         " .attr('data-icon', 'action')" + \
-                         " .attr('data-theme', 'e')" + \
+                         " .attr('data-theme', 'b')" + \
                          " .text('Series Metadata');" + \
                        " b.insertBefore($('#series-delete').parent().parent());" + \
                        " b.click(function() {" + \
@@ -198,8 +209,7 @@ button_js_series_stats = "$('#series').live('pagebeforecreate', function() {" + 
                        " var b = $('<a>')" + \
                          " .attr('data-role', 'button')" + \
                          " .attr('href', '#')" + \
-                         " .attr('data-icon', 'action')" + \
-                         " .attr('data-theme', 'e')" + \
+                         " .attr('data-theme', 'b')" + \
                          " .text('Series Stats');" + \
                        " b.insertBefore($('#series-delete').parent().parent());" + \
                        " b.click(function() {" + \
@@ -215,7 +225,7 @@ button_js_series_stats = "$('#series').live('pagebeforecreate', function() {" + 
 # ----------------------------------------------------------------------------
 # Inserting the above button definitions into the explorer
 # ----------------------------------------------------------------------------
-orthanc.ExtendOrthancExplorer(' '.join([button_js_system_meta, button_js_system_stats, \
+orthanc.ExtendOrthancExplorer(' '.join([button_js_system_meta, button_js_system_stats, button_js_anonymize_by_label, \
                                         button_js_patient_meta, button_js_patient_stats, \
                                         button_js_study_meta, button_js_study_stats, \
                                         button_js_series_meta, button_js_series_stats]))
@@ -276,7 +286,12 @@ def anonymize_by_label_init():
             studies_with_labels[orthanc_study_id] = {'label' : irb_label}
 
     # Determine if previously anonymized
-    if len(studies_with_labels) > 0:
+    if len(studies_with_labels) == 0:
+        answer_buffer += ['</head>\n']
+        answer_buffer += ['<body>\n']
+        answer_buffer += ['<a href="./app/explorer.html">Return to Orthanc home page</a></br>\n']
+        answer_buffer += ['No labeled studies to report.']
+    else:
         for orthanc_study_id, orthanc_study_dict in studies_with_labels.items():
             anonymization_history = anonymization_history_get(orthanc_study_id)
             if anonymization_history is not None:
@@ -319,9 +334,19 @@ def anonymize_by_label_init():
             for irb_standard, irb_dict in {'irbdefault' : {'name_base' : meta_system['Name']}}.items():
                 answer_buffer += ['%s: "%s"\n' % (irb_standard, irb_dict['name_base'])]
             answer_buffer += ['};\n']
+            answer_buffer_oid = []
+            for orthanc_study_id, orthanc_study_dict in studies_with_labels.items():
+                if 'AnonymizedTo' not in orthanc_study_dict:
+                    answer_buffer_oid += ['"%s"' % orthanc_study_id]
+            answer_buffer += ['var orthanc_study_ids = [%s];\n' % ','.join(answer_buffer_oid)]
             answer_buffer += ["$( window ).on( 'load', function() {\n"]
             answer_buffer += ["   $( '#abl_initiate_anon' ).click( function() {\n"]
-            answer_buffer += ["      var proceed = confirm('Proceed with anonymization?');\n"]
+            answer_buffer += ['      var text = "Anonymizations to perform:\\n\\n";\n']
+            answer_buffer += ['      for (let i = 0; i < orthanc_study_ids.length; i++) {\n']
+            answer_buffer += ['         text += "(Accession " + $( "#accession_" + orthanc_study_ids[i] ).text()+ ", Date " + $( "#date_" + orthanc_study_ids[i] ).text() + ") : " + $( "#name_base_" + orthanc_study_ids[i] ).text() + $( "#extra_" + orthanc_study_ids[i] ).val() + "^ID######^^^\\n\\n";\n']
+            answer_buffer += ['      }\n']
+            answer_buffer += ['      text += "Proceed with anonymization?"\n']
+            answer_buffer += ["      var proceed = confirm(text);\n"]
             answer_buffer += ['      if (proceed == false) {\n']
             answer_buffer += ['         return;\n']
             answer_buffer += ['      } \n']
@@ -407,21 +432,34 @@ def anonymize_by_label_init():
             meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
             orthanc_patient_id = meta_study['ParentPatient']
             study_description = meta_study['MainDicomTags']['StudyDescription'] if 'StudyDescription' in meta_study['MainDicomTags'] else '&nbsp'
-            study_date = meta_study['MainDicomTags']['StudyDate'] if 'StudyDate' in meta_study['MainDicomTags'] else '&nbsp'
+            study_date = meta_study['MainDicomTags']['StudyDate'] if 'StudyDate' in meta_study['MainDicomTags'] else 'NO DATE'
             patient_name = meta_study['PatientMainDicomTags']['PatientName'] if 'PatientName' in meta_study['PatientMainDicomTags'] else '&nbsp'
             patient_id = meta_study['PatientMainDicomTags']['PatientID']
             status, internal_numbers = get_internal_numbers_by_patient_id(patient_id)
             if status['status'] != 0 and python_verbose_logwarning:
                 orthanc.LogWarning('Error retrieving internal numbers: %d %s' % (status['status'], status['error_text']))
-            accession_number = meta_study['MainDicomTags']['AccessionNumber'] if 'AccessionNumber' in meta_study['MainDicomTags'] else '&nbsp'
+            accession_number = meta_study['MainDicomTags']['AccessionNumber'] if 'AccessionNumber' in meta_study['MainDicomTags'] and len(meta_study['MainDicomTags']['AccessionNumber'].strip()) > 0 else 'BLANK'
             study_instance_uid = meta_study['MainDicomTags']['StudyInstanceUID']
             answer_buffer += ['<tr>']
             answer_buffer += ['<td><span id="label_%s">%s</span></td>' % (orthanc_study_id,parameters_irb['irb_standard'])]
                
             if 'AnonymizedTo' in orthanc_study_dict:
-                answer_buffer += ['<td>%s</td>' % parameters_irb['patient_name_base']]
+                answer_buffer += ['<td>']
+                patient_name_bases = []
+                for orthanc_study_id_anon, atom_list in orthanc_study_dict['AnonymizedTo'].items():
+                    for atom in atom_list:
+                        if 'patient_name_base' in atom:
+                            patient_name_bases += [atom['patient_name_base']]
+                if len(patient_name_bases) > 0:
+                    answer_buffer += ['<br>'.join(patient_name_bases)]
+                else:
+                    answer_buffer += [parameters_irb['patient_name_base']]
+                answer_buffer += ['</td>']
                 answer_buffer += ['<td>complete</td>']
-                answer_buffer += ['<td>%s</td>' % parameters_irb['extra']]
+                if len(patient_name_bases) > 0:
+                    answer_buffer += ['<td>&nbsp</td>']
+                else:
+                    answer_buffer += ['<td>%s</td>' % parameters_irb['extra']]
                 answer_buffer += ['<td>%s</td>' % parameters_irb['description']]
             else:
                 answer_buffer += ['<td><span id="name_base_%s">%s</span></td>' % (orthanc_study_id,parameters_irb['patient_name_base'])]
@@ -457,8 +495,8 @@ def anonymize_by_label_init():
                     answer_buffer += ['<td><a href="./app/explorer.html#study?uuid=%s">%s</a></td>' % (orthanc_study_id_anon, ','.join([str(item) for item in internal_numbers]))]
                 else:
                     answer_buffer += ['<td><a href="./app/explorer.html#study?uuid=%s">anon</a></td>' % orthanc_study_id_anon]
-            answer_buffer += ['<td>%s</td>' % study_date]
-            answer_buffer += ['<td>%s</td>' % accession_number]
+            answer_buffer += ['<td><span id="date_%s">%s</span></td>' % (orthanc_study_id, study_date)]
+            answer_buffer += ['<td><span id="accession_%s">%s</span></td>' % (orthanc_study_id, accession_number)]
             answer_buffer += ['<td>%s</td>' % study_description]
             answer_buffer += ['<td><a href="./app/explorer.html#study?uuid=%s">%s</a></td>' % (orthanc_study_id,study_instance_uid)]
             answer_buffer += ['</tr>\n']
@@ -466,8 +504,8 @@ def anonymize_by_label_init():
         answer_buffer += ['</table>\n']
         if len(global_var['anonymization_queue']) > 0:
             answer_buffer += ['<button type="button" id="abl_initiate_anon">Initiate Anonymization</button>\n']
-        answer_buffer += ['</body>\n']
-        answer_buffer += ['</html>']
+    answer_buffer += ['</body>\n']
+    answer_buffer += ['</html>']
 
     if python_verbose_logwarning:
         orthanc.LogWarning(' ' * global_var['log_indent_level'] + 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
@@ -3414,8 +3452,8 @@ def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=Non
     
         #Exception for HIFU and Dynacad
         flag_dynacad = False
-        #flag_dynacad = flag_dynacad or ('SeriesDescription' in meta_instance and meta_instance['SeriesDescription'].find('DCAD') >= 0
-        #flag_dynacad = flag_dynacad or ('0073,1003' in meta_instance and meta_instance['0073,1003']find('DYNACAD') >= 0)
+        #flag_dynacad = flag_dynacad or ('SeriesDescription' in meta_instance and meta_instance['SeriesDescription'].find('DCAD') >= 0)
+        #flag_dynacad = flag_dynacad or ('0073,1003' in meta_instance and meta_instance['0073,1003'].find('DYNACAD') >= 0)
         
         #Checking for non-mammo images
         flag_screen_for_reports = os.getenv('PYTHON_FLAG_SCREEN_FOR_REPORTS',default='true') == 'true' #turn on to weed out reports
