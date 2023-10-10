@@ -187,6 +187,10 @@ services:
         target: /etc/orthanc/rest.py
         read_only: true
       - type: bind
+        source: ${PHI_ANON_PROFILE_JSON}
+        target: /etc/orthanc/anon_profile.json
+        read_only: true
+      - type: bind
         source: ${PHI_HOST_DATA_DIR_ORTHANC}
         target: /media
       - type: bind
