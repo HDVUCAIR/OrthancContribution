@@ -6812,9 +6812,11 @@ def OnChange(change_type, level, resource_id):
         flag_anonymize_upon_stable = os.getenv('PYTHON_FLAG_AUTO_ANON_WHEN_STABLE', default='false') == 'true'
         if flag_anonymize_upon_stable:
             global_var['log_indent_level'] = 0
-            status = anonymize_study_init(resource_id, flag_force_anon=False, trigger_type='onchange')
-            if status['status'] != 0:
-                log_message(python_verbose_logwarning, global_var['log_indent_level'], 'Auto anon failed: %s' % status['error_text'])
+            #status = anonymize_study_init(resource_id, flag_force_anon=False, trigger_type='onchange')
+            #if status['status'] != 0:
+            #    log_message(python_verbose_logwarning, global_var['log_indent_level'], 'Auto anon failed: %s' % status['error_text'])
+            t = threading.Timer(0, function=anonymize_study_init, args=(resource_id,), kwargs={'flag_force_anon':False, 'trigger_type':'onchange'})
+            t.start()
 
         # Email updates
         if os.getenv('PYTHON_MAIL_AUTO', default='false') == 'true':
