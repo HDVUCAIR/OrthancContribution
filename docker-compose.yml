@@ -30,7 +30,7 @@ services:
       # Orthanc settings
       # --------------------------------
       # Basics
-      BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
+      #BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
       ORTHANC__EXECUTE_LUA_ENABLED: "false"
       ORTHANC__HTTP_PORT: "8042"
       ORTHANC__HTTP_TIMEOUT: "10"
