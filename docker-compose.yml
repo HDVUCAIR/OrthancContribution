@@ -151,7 +151,7 @@ services:
       PYTHON_IRB_LABEL_REGEXP_MAP: >
         {
           "irbstandard1" : { "label_re" : "^irbREGEXP1", "description" : "Long description 1", "name_base" : "patient_name_base1" }, 
-          "irbstandard2" : { "label_re" : "^irbREGEXP2", "description" : "Long description 2", "name_base" : "patient_name_base2" }, 
+          "irbstandard2" : { "label_re" : "^irbREGEXP2", "description" : "Long description 2", "name_base" : "patient_name_base2" }
         }
       PYTHON_MAIL_AUTO: "${PHI_MAIL_AUTO}"
       PYTHON_MAIL_ORIGIN: "${PHI_MAIL_ORIGIN}"
