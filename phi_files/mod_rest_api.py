@@ -41,6 +41,7 @@ global_var['address_list'] = {}
 global_var['anonymization_queue'] = {}
 global_var['flag_force_anon'] = False
 global_var['irb_label_regex_map'] = json.loads(os.getenv('PYTHON_IRB_LABEL_REGEXP_MAP', default='{}'))
+global_var['irb_re'] = re.compile('^irb.*', re.IGNORECASE)
 global_var['kept_uid'] = {}
 global_var['log_indent_level'] = 0
 global_var['max_recurse_depth'] = 20
@@ -245,7 +246,6 @@ def anonymize_by_label_init():
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Entering %s' % frame.f_code.co_name)
         global_var['log_indent_level'] += 3
 
-    irb_re = re.compile('^irb.*', re.IGNORECASE)
     global_var['anonymization_queue'] = {} 
     meta_system = json.loads(orthanc.RestApiGet('/system'))
 
@@ -284,7 +284,7 @@ def anonymize_by_label_init():
         labels = json.loads(orthanc.RestApiGet('/studies/%s/labels' % orthanc_study_id))
         irb_label = None
         for label in labels:
-            if irb_re.match(label) is not None:
+            if global_var['irb_re'].match(label) is not None:
                 irb_label = label
                 break
         if irb_label is not None:
@@ -299,7 +299,7 @@ def anonymize_by_label_init():
     else:
         for orthanc_study_id, orthanc_study_dict in studies_with_labels.items():
             anonymization_history = anonymization_history_get(orthanc_study_id)
-            if anonymization_history is not None:
+            if len(anonymization_history) > 0:
                 if 'AnonymizedTo' in anonymization_history:
                     for orthanc_study_id_anon, anonymization_atoms in anonymization_history['AnonymizedTo'].items():
                         if orthanc_study_id_anon in orthanc_study_ids:
@@ -310,7 +310,7 @@ def anonymize_by_label_init():
                             studies_with_labels[orthanc_study_id]['AnonymizedTo'][orthanc_study_id_anon] += anonymization_atoms
             for orthanc_study_id_anon in orthanc_study_ids:
                 anonymization_history_anon = anonymization_history_get(orthanc_study_id_anon)
-                if anonymization_history_anon is not None:
+                if len(anonymization_history_anon) > 0:
                     if 'AnonymizedFrom' in anonymization_history_anon:
                         for orthanc_study_id_parent, anonymization_atoms in anonymization_history_anon['AnonymizedFrom'].items():
                             if orthanc_study_id_parent == orthanc_study_id:
@@ -535,8 +535,6 @@ def anonymize_by_label_inherit_from_patient():
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Entering %s' % frame.f_code.co_name)
         global_var['log_indent_level'] += 3
 
-    irb_re = re.compile('^irb.*', re.IGNORECASE)
-
     # Find patients with irb labels
     patients_with_labels = {}
     orthanc_patient_ids = json.loads(orthanc.RestApiGet('/patients'))
@@ -544,7 +542,7 @@ def anonymize_by_label_inherit_from_patient():
         labels = json.loads(orthanc.RestApiGet('/patients/%s/labels' % orthanc_patient_id))
         irb_label = None
         for label in labels:
-            if irb_re.match(label) is not None:
+            if global_var['irb_re'].match(label) is not None:
                 irb_label = label
                 break
         if irb_label is not None:
@@ -605,33 +603,26 @@ def anonymization_history_get(orthanc_study_id):
     if 'AnonymizationHistory' in meta_list:
         try:
             anonymization_history = json.loads(orthanc.RestApiGet('/studies/%s/metadata/AnonymizationHistory' % orthanc_study_id))
+            if anonymization_history is None:
+                anonymization_history = {}
         except:
-            anonymization_history = None
+            anonymization_history = {}
     else:
-        anonymization_history = None
+        anonymization_history = {}
 
     return anonymization_history
 
  # ============================================================================
-def anonymization_history_modify(anonymization_history=None, type_insert=None, orthanc_study_id=None, atom=None, store_in=None):
+def anonymization_history_modify(anonymization_history={}, type_insert=None, orthanc_study_id=None, atom=None, store_in=None):
 # ----------------------------------------------------------------------------
-    if anonymization_history is None:
-        anonymization_history = {}
-        if type_insert is not None:
+    if type_insert is not None:
+        if type_insert not in anonymization_history:
             anonymization_history[type_insert] = {}
-            if orthanc_study_id is not None:
+        if orthanc_study_id is not None:
+            if orthanc_study_id not in anonymization_history[type_insert]:
                 anonymization_history[type_insert][orthanc_study_id] = []
-                if atom is not None:
-                    anonymization_history[type_insert][orthanc_study_id] += [atom]
-    else:
-        if type_insert is not None:
-            if type_insert not in anonymization_history:
-                anonymization_history[type_insert] = {}
-            if orthanc_study_id is not None:
-                if orthanc_study_id not in anonymization_history[type_insert]:
-                    anonymization_history[type_insert][orthanc_study_id] = []
-                if atom is not None:
-                    anonymization_history[type_insert][orthanc_study_id] += [atom]
+            if atom is not None:
+                anonymization_history[type_insert][orthanc_study_id] += [atom]
 
     if store_in is not None:
         response_store = orthanc.RestApiPut('/studies/%s/metadata/AnonymizationHistory' % store_in, json.dumps(anonymization_history))
@@ -7290,10 +7281,9 @@ def UpdateAnonymizationQueue(output, uri, **request):
                 # First the queue
                 global_var['anonymization_queue'][orthanc_study_id] = parameters_standard
                 # Then labels
-                irb_re = re.compile('^irb.*', re.IGNORECASE)
                 labels = json.loads(orthanc.RestApiGet('/studies/%s/labels' % orthanc_study_id))
                 for label in labels:
-                    if irb_re.match(label) is not None:
+                    if global_var['irb_re'].match(label) is not None:
                         if log_message_bitflag:
                             log_message(log_message_bitflag, global_var['log_indent_level'], 'Deleting irb: %s' % label)
                         orthanc.RestApiDelete('/studies/%s/labels/%s' % (orthanc_study_id, label))

@@ -13,6 +13,7 @@ services:
       args:
         PROCESS_UID: ${ORTHANC_UID}
         PROCESS_GID: ${ORTHANC_GID}
+        TZ: ${ORTHANC_TIMEZONE}
     user: "${ORTHANC_UID}:${ORTHANC_GID}"
     environment:
       # ================================
@@ -198,10 +199,10 @@ services:
         source: ./shared_files/make_certs_orthanc.sh
         target: /scripts/make_certs_orthanc.sh
         read_only: true
-      - type: bind
-        source: /etc/localtime
-        target: /etc/localtime
-        read_only: true
+    #  - type: bind
+    #    source: /etc/localtime
+    #    target: /etc/localtime
+    #    read_only: true
     networks:
       - nw_phi
 
@@ -261,13 +262,14 @@ services:
       - nw_phi
 
   anon_orthanc:
-    image: dcorthanc:python.uid1004
+    image: dcorthanc:python.uid${ORTHANC_UID}gid${ORTHANC_GID}
     build:
       context: .
       dockerfile: Dockerfile.orthanc
       args:
         PROCESS_UID: ${ORTHANC_UID}
         PROCESS_GID: ${ORTHANC_GID}
+        TZ: ${ORTHANC_TIMEZONE}
     user: "${ORTHANC_UID}:${ORTHANC_GID}"
 #    entrypoint: 
 #       - tail
@@ -421,11 +423,11 @@ services:
         volume:
           read_only: true
         #target: /usr/lib/orthanc/setup.d/make_certs_orthanc.sh
-      - type: bind
-        source: /etc/localtime
-        target: /etc/localtime
-        volume:
-          read_only: true
+      #- type: bind
+      #  source: /etc/localtime
+      #  target: /etc/localtime
+      #  volume:
+      #    read_only: true
     networks:
       - nw_anon
       - nw_phi
@@ -456,7 +458,7 @@ services:
       - nw_anon
 
   disk_orthanc:
-    image: dcorthanc:python.uid1004
+    image: dcorthanc:python.uid${ORTHANC_UID}gid${ORTHANC_GID}
 #    entrypoint: 
 #       - tail
 #       - -f 
@@ -467,6 +469,7 @@ services:
       args:
         PROCESS_UID: ${ORTHANC_UID}
         PROCESS_GID: ${ORTHANC_GID}
+        TZ: ${ORTHANC_TIMEZONE}
     user: "${ORTHANC_UID}:${ORTHANC_GID}"
     environment:
       # ================================
@@ -607,11 +610,11 @@ services:
         target: /scripts/make_certs_orthanc.sh
         volume:
           read_only: true
-      - type: bind
-        source: /etc/localtime
-        target: /etc/localtime
-        volume:
-          read_only: true
+      #- type: bind
+      #  source: /etc/localtime
+      #  target: /etc/localtime
+      #  volume:
+      #    read_only: true
       - type: bind
         source: ${DISK_HOST_DATA_DIR_DICOM}
         target: /dicomout
