@@ -3323,6 +3323,10 @@ def email_study_report(orthanc_study_id):
 
     flag_anonymized = 'AnonymizedFrom' in meta_study
 
+    flag_check_remote_aet = os.getenv('PYTHON_FLAG_CHECK_INCOMING_STUDIES_FOR_COMPLETENESS', default='false') == 'true' and not flag_anonymized
+    if flag_check_remote_aet:
+        remote_stats = get_metadata_from_remote_aet(orthanc_study_id, meta_study=meta_study)
+
     if flag_anonymized and \
         ('PatientName' in meta_study['PatientMainDicomTags'] and \
          len(meta_study['PatientMainDicomTags']['PatientName'].strip()) > 0):
@@ -3339,6 +3343,10 @@ def email_study_report(orthanc_study_id):
     message_body += [' '*4 + '<h2>Study Info</h2>']
     if flag_anonymized:
         message_body += [' '*4 + '<p style="color:green">This study is the result of an anonymization!</p>']
+
+    if flag_check_remote_aet:
+        if remote_stats['RemoteNotOnLocal'] > 0:
+            message_body += [' '*4 + '<p style="color:red"><em>ATTENTION!</em> Some series may NOT have transferred from the scanner.  See <a href="#NotOnLocal">notes below</a>!</p>']
  
     # Main study info
     message_body += [' '*4 + '<table border=1>']
@@ -3358,13 +3366,16 @@ def email_study_report(orthanc_study_id):
     # Series info
     message_body += [' '*4 + '<h2>Series Info</h2>']
     message_body += [' '*4 + '<table border=1>']
-    message_body += [' '*6 + '<tr><th>Series</th><th>Instances</th><th>Station</th><th>Anatomy</th><th>Description</th></tr>']
+    if flag_check_remote_aet:
+        message_body += [' '*6 + '<tr><th>Series</th><th>Instances</th><th>Station</th><th>Anatomy</th><th>Description</th><th>Scanner</th><th>Comment</th></tr>']
+    else:
+        message_body += [' '*6 + '<tr><th>Series</th><th>Instances</th><th>Station</th><th>Anatomy</th><th>Description</th></tr>']
     series_data = {}
     for orthanc_series_id in meta_study['Series']:
         response_series = orthanc.RestApiGet('/series/%s' % orthanc_series_id)
         meta_series = json.loads(response_series)
         series_number = int(meta_series['MainDicomTags']['SeriesNumber'])
-        for key in ['Instances', 'StationName', 'BodyPartExamined', 'SeriesDescription']:
+        for key in ['Instances', 'StationName', 'BodyPartExamined', 'SeriesDescription', 'SeriesInstanceUID']:
             if series_number not in series_data:
                 series_data[series_number] = {'orthanc_series_id':orthanc_series_id}
             if key == 'Instances':
@@ -3387,8 +3398,42 @@ def email_study_report(orthanc_study_id):
                 line_of_text += '<td><a href="https://%s/%s/app/explorer.html#series?uuid=%s">%s</a></td>' % (global_var['fqdn'], global_var['website'], series_data[series_number]['orthanc_series_id'],series_data[series_number][key])
             else:
                 line_of_text += '<td>%s</td>' % series_data[series_number][key]
+        if flag_check_remote_aet:
+            series_instance_uid = series_data[series_number]['SeriesInstanceUID']
+            if 'RemoteModality' in remote_stats['Series'][series_instance_uid]:
+                color = 'lightgreen' if remote_stats['Series'][series_instance_uid]['remote'] else 'pink'
+                line_of_text += '<td style="background-color:%s">%s</td>' % (color,remote_stats['Series'][series_instance_uid]['RemoteModality'])
+                remote_modality = remote_stats['Series'][series_instance_uid]['RemoteModality']
+                if remote_stats['RemoteModality'][remote_modality]['responsive']:
+                    line_of_text += '<td></td>'
+                else:
+                    line_of_text += '<td style="background-color:pink">Unresponsive</td>'
+            else:
+                line_of_text += '<td style="background-color:pink">Unknown Origin</td><td></td>'
+
         line_of_text += '</tr>'
         message_body += [line_of_text]
+
+    message_body += [' '*4 + '</table>']
+
+    if flag_check_remote_aet and remote_stats['RemoteNotOnLocal'] > 0:
+        email_subject = 'PHI Study Report (Missing Series) from %s' % aet
+        message_body += [' '*4 + '<h2 style="color:red" id="NotOnLocal">Series on Scanner But Missing From This Orthanc</h2>']
+        message_body += [' '*4 + '<table border=1>']
+        message_body += [' '*6 + '<tr><th>Series</th><th>Description</th><th>Scanner</th></tr>']
+        for series_instance_uid, dict_series in remote_stats['Series'].items():
+            if not dict_series['local']:
+                series_number = dict_series['number']
+                series_desctription = dict_series['description']
+                line_of_text = ' '*6 + '<tr>'
+                line_of_text += '<td align="center">%s</td>' % dict_series['number']
+                line_of_text += '<td align="center">%s</td>' % dict_series['description']
+                line_of_text += '<td align="center">%s</td>' % dict_series['RemoteModality']
+                line_of_text += '</tr>'
+                message_body += [line_of_text]
+        message_body += [' '*4 + '</table>']
+    else:
+        email_subject = 'PHI Study Report from %s' % aet
 
     message_body += [' '*2 + '</body>', '</html>']
 
@@ -3397,7 +3442,7 @@ def email_study_report(orthanc_study_id):
         global_var['log_indent_level'] = log_indent_level_prev
 
     kwargs = {'subtype' : 'html' }
-    return email_message('PHI Study Report from %s' % aet, '\n'.join( message_body), **kwargs)
+    return email_message(email_subject, '\n'.join( message_body), **kwargs)
 
 # ============================================================================
 def filter_and_delete_instances(orthanc_study_id, **kwargs):
@@ -3911,6 +3956,134 @@ def get_internal_numbers_by_patient_id(patient_id,
 
     return {'status': 0}, internal_numbers
  
+# ============================================================================
+def get_metadata_from_remote_aet(orthanc_study_id, meta_study=None):
+    """Determine if RemoteAET exists and query it about the current study.
+       Return meta data gathered from remote AET"""
+# ----------------------------------------------------------------------------
+
+    global global_var
+    log_message_bitflag = python_verbose_logwarning
+    if log_message_bitflag:
+        log_indent_level_prev = global_var['log_indent_level']
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
+    output = {}
+
+    if meta_study is None:
+        response_study = orthanc.RestApiGet('/studies/%s' % orthanc_study_id)
+        meta_study = json.loads(response_study)
+
+    study_instance_uid = meta_study['MainDicomTags']['StudyInstanceUID']
+
+    # Map the modalities
+    response_modalities = orthanc.RestApiGet('/modalities')
+    modality_aet_map = {}
+    for modality_name in json.loads(response_modalities):
+        meta_modality = json.loads(orthanc.RestApiGet('/modalities/%s/configuration' % modality_name))
+        modality_aet_map[meta_modality['AET']] = modality_name
+    modality_store_to_query = json.loads(os.getenv('PYTHON_MAP_SENDING_TO_QUERY', default='{}'))
+    #modality_store_to_query = {'PrismaOld' : 'PrismaQuery', 'PrismaStore' : 'PrismaQuery', 
+    #                            'UUHSC' : 'UUHSCQ', 'UUHSCU' : 'UUHSCQ',
+    #                            'VidaStore' : 'VidaMain', 'VidaQuery' : 'VidaMain'}
+
+    # Check remote for matching series
+    output['RemoteModality'] = {}
+    output['Series'] = {}
+    output['LocalOnRemote'] = 0
+    output['RemoteNotOnLocal'] = 0
+    for orthanc_series_id in meta_study['Series']:
+
+        response_series = orthanc.RestApiGet('/series/%s' % orthanc_series_id)
+        meta_series = json.loads(response_series)
+        series_instance_uid = meta_series['MainDicomTags']['SeriesInstanceUID']
+        response_series = orthanc.RestApiGet('/series/%s/metadata' % orthanc_series_id)
+        meta_series = json.loads(response_series)
+        if series_instance_uid not in output['Series']:
+            output['Series'][series_instance_uid] = {'local' : True, 'remote' : False}
+        remote_modality = None
+        if 'RemoteAET' in meta_series:
+            response_remote_modality = orthanc.RestApiGet('/series/%s/metadata/RemoteAET' % orthanc_series_id)
+            if len(response_remote_modality.strip()) > 0:
+                remote_aet = response_remote_modality.strip().decode('utf-8')
+                remote_modality = modality_aet_map[remote_aet] if remote_aet in modality_aet_map else None
+                if remote_modality in modality_store_to_query:
+                    remote_modality = modality_store_to_query[remote_modality]
+                if remote_modality is not None and remote_modality not in output['RemoteModality']:
+                    output['RemoteModality'][remote_modality] = {}
+                    try:
+                        response_echo = orthanc.RestApiPost('/modalities/%s/echo' % remote_modality, json.dumps({'Timeout' : 10}))
+                        output['RemoteModality'][remote_modality]['responsive'] = True
+                    except:
+                        output['RemoteModality'][remote_modality]['responsive'] = False
+                
+        if remote_modality is not None:
+            output['Series'][series_instance_uid]['RemoteModality'] = remote_modality
+            if not output['RemoteModality'][remote_modality]['responsive']:
+                output['Series'][series_instance_uid]['RemoteModalityResponsive'] = False
+            else:
+                query_dicom = {'StudyInstanceUID' : study_instance_uid, 
+                               'SeriesInstanceUID' : series_instance_uid}
+                query_series = {'Level' : 'Series',
+                                'Query' : query_dicom}
+                response_query_series = orthanc.RestApiPost('/modalities/%s/query' % remote_modality, json.dumps(query_series))
+                remote_found = False
+                meta_query_series = json.loads(response_query_series) if len(response_query_series.strip()) > 0 else {}
+                if 'ID' in meta_query_series:
+                    response_query_id = orthanc.RestApiGet('/queries/' + meta_query_series['ID'])
+                    if len(response_query_id.strip()) > 0:
+                        meta_query_id = json.loads(response_query_id)
+                        if meta_query_id[0] == "answers":
+                            response_query_id_answer = orthanc.RestApiGet('/queries/' + meta_query_series['ID'] + '/answers')
+                            if len(response_query_id_answer.strip()) > 0:
+                                meta_query_id_answer = json.loads(response_query_id_answer)
+                                if meta_query_id_answer[0] == "0":
+                                    response_query_id_answer_zero = orthanc.RestApiGet('/queries/' + meta_query_series['ID'] + '/answers/0')
+                                    if len(response_query_id_answer_zero.strip()) > 0:
+                                        meta_query_id_answer_zero = json.loads(response_query_id_answer_zero)
+                                        if meta_query_id_answer_zero[0] == "content":
+                                            response_content = orthanc.RestApiGet('/queries/' + meta_query_series['ID'] + '/answers/0/content')
+                                            if len(response_content.strip()) > 0:
+                                                remote_found = True
+                output['Series'][series_instance_uid]['remote'] = remote_found
+                output['LocalOnRemote'] += 1
+
+    # Since RemoteAET is stored at the series or lower level, only after querying series can we now query at the study level
+    for remote_modality, remote_dict in output['RemoteModality'].items():
+        if remote_dict['responsive']:
+            query_series = {'Level': 'Series', 
+                            'Query': {'StudyInstanceUID': study_instance_uid,
+                                      'SeriesNumber' : '*', 'SeriesDescription' : '*'}}
+            response_query_series = orthanc.RestApiPost('/modalities/%s/query' % remote_modality, json.dumps(query_series))
+            meta_query_series = json.loads(response_query_series) if len(response_query_series.strip()) > 0 else {}
+            if 'ID' in meta_query_series:
+                response_answer_series = orthanc.RestApiGet('%s/answers' % meta_query_series['Path'])
+                meta_answer_series = json.loads(response_answer_series) if len(response_answer_series.strip()) > 0 else []
+                for answer_id_series in meta_answer_series:
+                    response_answer_id_series = orthanc.RestApiGet('%s/answers/%s' % (meta_query_series['Path'],answer_id_series))
+                    meta_answer_id_series = json.loads(response_answer_id_series) if len(response_answer_id_series.strip()) > 0 else {}
+                    if 'content' in meta_answer_id_series:
+                        response_answer_content_series = orthanc.RestApiGet('%s/answers/%s/content' % (meta_query_series['Path'],answer_id_series))
+                        meta_answer_content_series = json.loads(response_answer_content_series) if len(response_answer_content_series.strip()) > 0 else {}
+                        series_number = meta_answer_content_series[u'0020,0011']['Value'] if u'0020,0011' in meta_answer_content_series else ''
+                        series_description = meta_answer_content_series[u'0008,103e']['Value'] if u'0008,103e' in meta_answer_content_series else ''
+                        series_instance_uid = meta_answer_content_series[u'0020,000e']['Value']
+                        if series_instance_uid not in output['Series']:
+                            output['Series'][series_instance_uid] = {'local' : False, 'remote' : True, 
+                                                                     'number' : series_number, 'description' : series_description}
+                            output['Series'][series_instance_uid]['RemoteModality'] = remote_modality
+                            output['Series'][series_instance_uid]['RemoteModalityResponsive'] = True
+                            output['RemoteNotOnLocal'] += 1
+        
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] = log_indent_level_prev
+                
+    return output
+
 # ============================================================================
 def get_patient_ids(orthanc_study_id=None,
                     meta_study=None,
@@ -5931,11 +6104,13 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
         radio_sequence = 'RadiopharmaceuticalInformationSequence'
         if radio_sequence in dicom_tags:
             replace_dict[radio_sequence] = copy.copy(dicom_tags[radio_sequence])
-            for seq_item, seq_tags in dicom_tags[radio_sequence].items():
+            i_seq_tag = 0
+            for seq_tags in dicom_tags[radio_sequence]:
                 for date_time_field_radio in date_time_fields_radio:
-                    if date_time_Field_radio in seq_tags and len(seq_tags[date_time_field_radio].strip()) > 0:
+                    if date_time_field_radio in seq_tags and len(seq_tags[date_time_field_radio].strip()) > 0:
                         date_string_new = shift_date_time_string(shift_epoch, seq_tags[date_time_field_radio])
-                        replace_dict[radio_sequence][seq_item][date_time_field_radio] = date_string_new
+                        replace_dict[radio_sequence][i_seq_tag][date_time_field_radio] = date_string_new
+                i_seq_tag += 1
 
         # Handle birthdate / age
         if 'PatientBirthDate' in dicom_tags:
@@ -7271,13 +7446,12 @@ def UpdateAnonymizationQueue(output, uri, **request):
                 if log_message_bitflag:
                     log_message(log_message_bitflag, global_var['log_indent_level'], 'Updating extra: %s' % parameters_incoming['extra'])
                 extra = parameters_incoming['extra'].strip()
-            else:
-                extra = ''
+                global_var['anonymization_queue'][orthanc_study_id]['extra'] = extra
             if 'irb_standard' in parameters_incoming:
                 if log_message_bitflag:
                     log_message(log_message_bitflag, global_var['log_indent_level'], 'Updating irb: %s' % parameters_incoming['irb_standard'])
                 parameters_standard = irb_label_regex_map(parameters_incoming['irb_standard'])
-                parameters_standard['extra'] = extra
+                parameters_standard['extra'] = global_var['anonymization_queue'][orthanc_study_id]['extra'] if 'extra' in global_var['anonymization_queue'][orthanc_study_id] else ''
                 # First the queue
                 global_var['anonymization_queue'][orthanc_study_id] = parameters_standard
                 # Then labels
