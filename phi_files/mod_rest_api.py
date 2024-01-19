@@ -3986,9 +3986,6 @@ def get_metadata_from_remote_aet(orthanc_study_id, meta_study=None):
         meta_modality = json.loads(orthanc.RestApiGet('/modalities/%s/configuration' % modality_name))
         modality_aet_map[meta_modality['AET']] = modality_name
     modality_store_to_query = json.loads(os.getenv('PYTHON_MAP_SENDING_TO_QUERY', default='{}'))
-    #modality_store_to_query = {'PrismaOld' : 'PrismaQuery', 'PrismaStore' : 'PrismaQuery', 
-    #                            'UUHSC' : 'UUHSCQ', 'UUHSCU' : 'UUHSCQ',
-    #                            'VidaStore' : 'VidaMain', 'VidaQuery' : 'VidaMain'}
 
     # Check remote for matching series
     output['RemoteModality'] = {}
