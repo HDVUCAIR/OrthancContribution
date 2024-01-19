@@ -87,6 +87,7 @@ button_js_system_stats = "$('#lookup').live('pagebeforecreate', function() {" + 
                            ");" + \
                          "});"
 
+# ----------------------------------------------------------------------------
 # Buttons on patient page
 # ----------------------------------------------------------------------------
 # Same as API patients/uid
