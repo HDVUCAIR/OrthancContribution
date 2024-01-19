@@ -3,6 +3,11 @@ FROM osimis/orthanc:latest
 
 ARG PROCESS_UID
 ARG PROCESS_GID
+ARG TZ=America/Denver
+
+# Setup time zone
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+ && echo $TZ > /etc/timezone
 
 # We need to add extra repositories to get 
 #    lua-sql-postgres to match the Orthanc 
@@ -12,10 +17,11 @@ RUN echo "deb http://deb.debian.org/debian bullseye-backports main" >> /etc/apt/
 # We need to add the lua postgres interface
 RUN apt-get update \
     && apt-get install -y \
+       tzdata \
        apt-utils \
        lua-sql-postgres* lua-socket lua-posix \
        html2text net-tools \
-       python3-bs4 python3-psycopg2 python3-pydicom \
+       python3-bs4 python3-psycopg2 python3-pydicom python3-requests \
     && apt-get install -y \
        -t bullseye-backports \
        lua-sql-postgres* lua-socket lua-posix \

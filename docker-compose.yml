@@ -13,6 +13,7 @@ services:
       args:
         PROCESS_UID: ${ORTHANC_UID}
         PROCESS_GID: ${ORTHANC_GID}
+        TZ: ${ORTHANC_TIMEZONE}
     user: "${ORTHANC_UID}:${ORTHANC_GID}"
     environment:
       # ================================
@@ -26,48 +27,24 @@ services:
       CERT_ORGANIZATION: "${CERT_ORGANIZATION}"
       CERT_STATE_REGION: "${CERT_STATE_REGION}"
       CERT_SURNAME: "${CERT_SURNAME}"
-      # Lua control
-      LUA_ALLOWED_MODALITIES: "${PHI_LUA_ALLOWED_MODALITIES}"
-      LUA_ANON_ORTHANC: "${COMMON_BASENAME}_anon_orthanc"
-      LUA_COLLECT_HOLOGIC: "${PHI_LUA_COLLECT_HOLOGIC}"
-      LUA_DENIED_MODALITIES: "${PHI_LUA_DENIED_MODALITIES}"
-      LUA_FLAG_ANON_BY_SERIES: "${PHI_LUA_FLAG_ANON_BY_SERIES}"
-      LUA_FLAG_ASSUME_ORIGINAL_PRIMARY: "${PHI_LUA_FLAG_ASSUME_ORIGINAL_PRIMARY}"
-      LUA_FLAG_AUTO_ANON_WHEN_STABLE: "${PHI_FLAG_AUTO_ANON_WHEN_STABLE}"
-      LUA_FLAG_EVERY_ACCESSION_A_PATIENT: "${PHI_LUA_FLAG_EVERY_ACCESSION_A_PATIENT}"
-      LUA_FLAG_KEEP_ORIGINAL_DATES: "${PHI_LUA_FLAG_KEEP_ORIGINAL_DATES}"
-      LUA_FLAG_KEEP_SIEMENS_MR_TAGS: "${PHI_LUA_FLAG_KEEP_SIEMENS_MR_TAGS}"
-      LUA_FLAG_MUST_BE_ORIGINAL: "${PHI_LUA_FLAG_MUST_BE_ORIGINAL}"
-      LUA_FLAG_PRESCREEN_BY_MODALITY: "${PHI_LUA_FLAG_PRESCREEN_BY_MODALITY}"
-      LUA_FLAG_PRESCREEN_ORIGINAL_PRIMARY: "${PHI_LUA_FLAG_PRESCREEN_ORIGINAL_PRIMARY}"
-      LUA_FLAG_REMOVE_PRIVATE_TAGS: "${PHI_LUA_FLAG_REMOVE_PRIVATE_TAGS}"
-      LUA_FLAG_SAVE_PATIENTNAME_ANON: "${PHI_LUA_FLAG_SAVE_PATIENTNAME_ANON}"
-      LUA_FLAG_SCREEN_FOR_REPORTS: "${PHI_LUA_FLAG_SCREEN_FOR_REPORTS}"
-      LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO: "${PHI_LUA_FLAG_SPLIT_2D_FROM_CVIEW_TOMO}"
-      LUA_FLAG_SPLIT_SCREEN_DIAG: "${PHI_LUA_FLAG_SPLIT_SCREEN_DIAG}"
-      LUA_INTERNAL_NUMBER_TYPE: "${PHI_LUA_INTERNAL_NUMBER_TYPE}"
-      LUA_MAIL_ORIGIN: "${PHI_MAIL_ORIGIN}"
-      LUA_MAIL_AUTO: "${PHI_LUA_MAIL_AUTO}"
-      LUA_MAIL_SERVER: "${PHI_MAIL_SERVER}"
-      LUA_MAIL_TO: "${PHI_LUA_MAIL_TO}"
-      LUA_XREF_MODALITY: "AET_OF_MAIN_PACS"
-      LUA_X_REMOTE_IP_ALLOWED_TO_TRIGGER: "${PHI_X_REMOTE_IP_ALLOWED_TO_TRIGGER}"
-      LUA_X_REMOTE_USER_ALLOWED_TO_TRIGGER: "${PHI_X_REMOTE_USER_ALLOWED_TO_TRIGGER}"
       # ================================
       # Orthanc settings
       # --------------------------------
       # Basics
-      BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
-      #Lua scripts now converted to python
+      #BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
       ORTHANC__EXECUTE_LUA_ENABLED: "false"
       ORTHANC__HTTP_PORT: "8042"
       ORTHANC__HTTP_TIMEOUT: "10"
-      #Lua scripts now converted to python
-      #ORTHANC__LUA_SCRIPTS: '["/etc/orthanc/phi_scripts.lua"]'
       ORTHANC__NAME: "${PHI_ORTHANC_WEBSITE_NAME}"
       ORTHANC__SAVE_JOBS: "false"
       ORTHANC__STABLE_AGE: "600"
       ORTHANC__STORAGE_DIRECTORY: "/media/storage/OrthancDB"
+      # Meta data
+      ORTHANC__USER_METADATA: >
+        { 
+          "AnonymizationHistory" : 1029,
+          "ExportHistory" : 1030
+        }
       LOGDIR: "/media/logs"
       #LOGFILE: "/media/logs/orthanc.log"
       TRACE_ENABLED: "false"
@@ -151,14 +128,48 @@ services:
       # Python
       ORTHANC__PYTHON_SCRIPT: "/etc/orthanc/rest.py"
       ORTHANC__PYTHON_VERBOSE: "false"
+      PYTHON_ALLOWED_MODALITIES: "${PHI_ALLOWED_MODALITIES}"
+      PYTHON_ANON_ORTHANC: "${COMMON_BASENAME}_anon_orthanc"
+      PYTHON_COLLECT_HOLOGIC: "${PHI_COLLECT_HOLOGIC}"
+      PYTHON_DENIED_MODALITIES: "${PHI_DENIED_MODALITIES}"
+      PYTHON_FLAG_ANON_BY_SERIES: "${PHI_FLAG_ANON_BY_SERIES}"
+      PYTHON_FLAG_ASSUME_ORIGINAL_PRIMARY: "${PHI_FLAG_ASSUME_ORIGINAL_PRIMARY}"
+      PYTHON_FLAG_AUTO_ANON_WHEN_STABLE: "${PHI_FLAG_AUTO_ANON_WHEN_STABLE}"
+      PYTHON_FLAG_CHECK_INCOMING_STUDIES_FOR_COMPLETENESS: "${PHI_FLAG_CHECK_INCOMING_STUDIES_FOR_COMPLETENESS}"
+      PYTHON_FLAG_EVERY_ACCESSION_A_PATIENT: "${PHI_FLAG_EVERY_ACCESSION_A_PATIENT}"
+      PYTHON_FLAG_KEEP_ORIGINAL_DATES: "${PHI_FLAG_KEEP_ORIGINAL_DATES}"
+      PYTHON_FLAG_KEEP_SIEMENS_MR_TAGS: "${PHI_FLAG_KEEP_SIEMENS_MR_TAGS}"
+      PYTHON_FLAG_MUST_BE_ORIGINAL: "${PHI_FLAG_MUST_BE_ORIGINAL}"
+      PYTHON_FLAG_PRESCREEN_BY_MODALITY: "${PHI_FLAG_PRESCREEN_BY_MODALITY}"
+      PYTHON_FLAG_PRESCREEN_ORIGINAL_PRIMARY: "${PHI_FLAG_PRESCREEN_ORIGINAL_PRIMARY}"
+      PYTHON_FLAG_REMOVE_PRIVATE_TAGS: "${PHI_FLAG_REMOVE_PRIVATE_TAGS}"
+      PYTHON_FLAG_SAVE_PATIENTNAME_ANON: "${PHI_FLAG_SAVE_PATIENTNAME_ANON}"
+      PYTHON_FLAG_SCREEN_FOR_REPORTS: "${PHI_FLAG_SCREEN_FOR_REPORTS}"
+      PYTHON_FLAG_SPLIT_2D_FROM_CVIEW_TOMO: "${PHI_FLAG_SPLIT_2D_FROM_CVIEW_TOMO}"
+      PYTHON_FLAG_SPLIT_SCREEN_DIAG: "${PHI_FLAG_SPLIT_SCREEN_DIAG}"
+      PYTHON_INTERNAL_NUMBER_TYPE: "${PHI_INTERNAL_NUMBER_TYPE}"
+      # Mapping irb labels to associated irbs using regular expressions
+      # Entries should be   "irbabbrev" : { "label_re" : "regular expression to uniquely identify this irb", "long_form" : "Human readable description of IRB", "name_base" : "Form taken by patient name base" }
+      PYTHON_IRB_LABEL_REGEXP_MAP: >
+        {
+          "irbstandard1" : { "label_re" : "^irbREGEXP1", "description" : "Long description 1", "name_base" : "patient_name_base1" }, 
+          "irbstandard2" : { "label_re" : "^irbREGEXP2", "description" : "Long description 2", "name_base" : "patient_name_base2" }
+        }
+      PYTHON_MAIL_AUTO: "${PHI_MAIL_AUTO}"
+      PYTHON_MAIL_ORIGIN: "${PHI_MAIL_ORIGIN}"
+      PYTHON_MAIL_SENDER: "${PHI_MAIL_SENDER}"
+      PYTHON_MAIL_SERVER: "${PHI_MAIL_SERVER}"
+      PYTHON_MAIL_TO: "${PHI_MAIL_TO}"
+      # The following maps the sending DICOM nodes defined above to their counterpart query nodes
+      PYTHON_MAP_SENDING_TO_QUERY: >
+        {
+          "irbsender" : "irbquery"
+        }
+      PYTHON_MAX_DATE_SHIFT_IN_YEARS: "${PHI_MAX_DATE_SHIFT_IN_YEARS}"
+      PYTHON_VERBOSE_LOGWARNING: "false"
+      PYTHON_XREF_MODALITY: "AET_OF_MAIN_PACS"
       PYTHON_X_REMOTE_IP_ALLOWED_TO_TRIGGER: "${PHI_X_REMOTE_IP_ALLOWED_TO_TRIGGER}"
       PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER: "${PHI_X_REMOTE_USER_ALLOWED_TO_TRIGGER}"
-      PYTHON_MAIL_SENDER: "${PHI_MAIL_SENDER}"
-      PYTHON_MAIL_ORIGIN: "${PHI_MAIL_ORIGIN}"
-      PYTHON_MAIL_AUTO: "${PHI_PYTHON_MAIL_AUTO}"
-      PYTHON_MAIL_SERVER: "${PHI_MAIL_SERVER}"
-      PYTHON_MAIL_TO: "${PHI_PYTHON_MAIL_TO}"
-      PYTHON_VERBOSE_LOGWARNING: "false"
       # Serve Folders
       ORTHANC__SERVE_FOLDERS__FOLDERS: '{ "/extra" : "/media/html" }'
       # Web viewer
@@ -184,20 +195,20 @@ services:
         target: /etc/orthanc/rest.py
         read_only: true
       - type: bind
+        source: ${PHI_ANON_PROFILE_JSON}
+        target: /etc/orthanc/anon_profile.json
+        read_only: true
+      - type: bind
         source: ${PHI_HOST_DATA_DIR_ORTHANC}
         target: /media
-      #- type: bind
-      #  source: ./phi_files/phi_scripts.lua
-      #  target: /etc/orthanc/phi_scripts.lua
-      #  read_only: true
       - type: bind
         source: ./shared_files/make_certs_orthanc.sh
         target: /scripts/make_certs_orthanc.sh
         read_only: true
-      - type: bind
-        source: /etc/localtime
-        target: /etc/localtime
-        read_only: true
+    #  - type: bind
+    #    source: /etc/localtime
+    #    target: /etc/localtime
+    #    read_only: true
     networks:
       - nw_phi
 
@@ -257,13 +268,14 @@ services:
       - nw_phi
 
   anon_orthanc:
-    image: dcorthanc:python.uid1004
+    image: dcorthanc:python.uid${ORTHANC_UID}gid${ORTHANC_GID}
     build:
       context: .
       dockerfile: Dockerfile.orthanc
       args:
         PROCESS_UID: ${ORTHANC_UID}
         PROCESS_GID: ${ORTHANC_GID}
+        TZ: ${ORTHANC_TIMEZONE}
     user: "${ORTHANC_UID}:${ORTHANC_GID}"
 #    entrypoint: 
 #       - tail
@@ -417,11 +429,11 @@ services:
         volume:
           read_only: true
         #target: /usr/lib/orthanc/setup.d/make_certs_orthanc.sh
-      - type: bind
-        source: /etc/localtime
-        target: /etc/localtime
-        volume:
-          read_only: true
+      #- type: bind
+      #  source: /etc/localtime
+      #  target: /etc/localtime
+      #  volume:
+      #    read_only: true
     networks:
       - nw_anon
       - nw_phi
@@ -452,7 +464,7 @@ services:
       - nw_anon
 
   disk_orthanc:
-    image: dcorthanc:python.uid1004
+    image: dcorthanc:python.uid${ORTHANC_UID}gid${ORTHANC_GID}
 #    entrypoint: 
 #       - tail
 #       - -f 
@@ -463,6 +475,7 @@ services:
       args:
         PROCESS_UID: ${ORTHANC_UID}
         PROCESS_GID: ${ORTHANC_GID}
+        TZ: ${ORTHANC_TIMEZONE}
     user: "${ORTHANC_UID}:${ORTHANC_GID}"
     environment:
       # ================================
@@ -481,7 +494,7 @@ services:
       # --------------------------------
       # Basics
       BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
-      #ORTHANC__EXECUTE_LUA_ENABLED: "true"
+      ORTHANC__EXECUTE_LUA_ENABLED: "false"
       ORTHANC__HTTP_PORT: "8042"
       ORTHANC__HTTP_TIMEOUT: "10"
       ORTHANC__NAME: "${DISK_ORTHANC_WEBSITE_NAME}"
@@ -603,11 +616,11 @@ services:
         target: /scripts/make_certs_orthanc.sh
         volume:
           read_only: true
-      - type: bind
-        source: /etc/localtime
-        target: /etc/localtime
-        volume:
-          read_only: true
+      #- type: bind
+      #  source: /etc/localtime
+      #  target: /etc/localtime
+      #  volume:
+      #    read_only: true
       - type: bind
         source: ${DISK_HOST_DATA_DIR_DICOM}
         target: /dicomout
@@ -640,9 +653,16 @@ services:
       - nw_disk
 
 secrets:
-   phi.orthanc.secret.json:
-      file: ./phi_files/orthanc.secret.json
-
+  phi.orthanc.secret.json:
+    file: ./phi_files/orthanc.secret.json
+  #phi.pg.user:
+  #  file: ./phi_files/pg.user
+  #phi.pg.db:
+  #  file: ./phi_files/pg.db
+  #phi.postgres.password:
+  #  environment: PHI_PASSWORD_FOR_PG_USER_POSTGRES 
+  #phi.pg.orthanc.password:
+  #  environment: PHI_PASSWORD_FOR_PG_USER_ORTHANC
 networks:
 
   nw_anon:
