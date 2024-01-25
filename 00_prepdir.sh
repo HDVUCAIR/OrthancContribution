@@ -58,7 +58,7 @@ if test -d "$PHI_HOST_DATA_DIR_POSTGRE"; then
    echo "$PHI_HOST_DATA_DIR_POSTGRE exists."
 else
    echo "Creating $PHI_HOST_DATA_DIR_POSTGRE"
-   mkdir -p $PHI_HOST_DATA_DIR_POSTGRE/main
+   mkdir -p $PHI_HOST_DATA_DIR_POSTGRE/$PG_VERSION_TAG
    mkdir -p $PHI_HOST_DATA_DIR_POSTGRE/backup
    /bin/cp -pf phi_files/backup_philookup.sh $PHI_HOST_DATA_DIR_POSTGRE/backup
    chown -R $POSTGRES_UID:$POSTGRES_GID $PHI_HOST_DATA_DIR_POSTGRE

@@ -1,4 +1,5 @@
 import datetime
+import inspect
 import io
 import json
 import orthanc
@@ -802,7 +803,7 @@ def ManualSendToDisk(output, uri, **request):
 
         if status['status'] != 0:
             status_email = email_message('Failed to send to disk', '<a href="https://%s/%s/app/explorer.html#study?uuid=%s">Study</a> failed to send to disk for %s from %s: %s' % (global_var['fqdn'], global_var['website'], orthanc_id, remote_user, remote_ip, status['error_text']), subtype='html')
-            output.LogWarning('Failed to send to disk')
+            orthanc.LogWarning('Failed to send to disk')
             output.AnswerBuffer('Failed to send to disk', 'text/plain')
             if python_verbose_logwarning:
                 global_var['log_indent_level'] -= 3
