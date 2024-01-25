@@ -19,7 +19,7 @@ def email_message(subject, message_body, subtype='plain',  email_recipients = No
 # -------------------------------------------------------
 
     if email_recipients is None or len(email_recipients) == 0:
-        email_recipients = 'PHI_PYTHON_MAIL_TO'.split(',')
+        email_recipients = 'PHI_MAIL_TO'.split(',')
                         
     email_sender = 'PHI_MAIL_SENDER'
     email_origin = 'PHI_MAIL_ORIGIN'
@@ -172,6 +172,8 @@ if flag_error_report:
             lines_of_text = lines_of_text_new
             user_ip = None
             user_date_entry = None
+            month_prev = None
+            year_offset = 0
             for line_of_text in lines_of_text:
                 res_skip = re_skip.match(line_of_text)
                 if res_skip is not None:
@@ -181,9 +183,16 @@ if flag_error_report:
                 res_warning = re_warning.match(line_of_text)
                 if res_error is not None:
                     month, day = int(res_error.group(1)[0:2]), int(res_error.group(1)[2:])
+                    if month_prev is None:
+                        month_prev = month
+                    elif month_prev == 12 and month == 1:
+                        month_prev = month
+                        year_offset += 1
+                    else:
+                        month_prev = month
                     hour, minute, second = int(res_error.group(2)[0:2]), int(res_error.group(2)[3:5]), int(res_error.group(2)[6:])
                     milliseconds = int(res_error.group(3))
-                    date_entry = datetime.datetime(file_start_time.year, month, day, hour, minute, second, milliseconds)
+                    date_entry = datetime.datetime(file_start_time.year + year_offset, month, day, hour, minute, second, milliseconds)
                     if date_entry < audit_bucket['range']['start']:
                         continue
                     program_name = res_error.group(4).strip()
@@ -340,7 +349,7 @@ if flag_error_report:
     html_body += [' '*2 + '</body>']
     html_body += ['</html>']
     html_body = '\n'.join(html_body)
-    file_html_base = 'error_log_report_%s.html' % datetime.datetime.now().strftime('%Y%m%s%H%M%S')
+    file_html_base = 'error_log_report_%s.html' % datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     file_html = '%s/%s' % (orthanc_info['directory']['reports'], file_html_base)
     with open(file_html, 'wb') as lun:
         lun.write(html_body)
@@ -444,6 +453,8 @@ if flag_user_report:
             lines_of_text = lines_of_text_new
             user_ip = None
             user_date_entry = None
+            month_prev = None
+            year_offset = 0
             for line_of_text in lines_of_text:
                 res_error = re_error.match(line_of_text)
                 res_user_api = re_user_api.match(line_of_text)
@@ -452,9 +463,16 @@ if flag_user_report:
                     continue
                 elif res_user_api is not None:
                     month, day = int(res_user_api.group(1)[0:2]), int(res_user_api.group(1)[2:])
+                    if month_prev is None:
+                        month_prev = month
+                    elif month_prev == 12 and month == 1:
+                        month_prev = month
+                        year_offset += 1
+                    else:
+                        month_prev = month
                     hour, minute, second = int(res_user_api.group(2)[0:2]), int(res_user_api.group(2)[3:5]), int(res_user_api.group(2)[6:])
                     milliseconds = int(res_user_api.group(3))
-                    user_date_entry = datetime.datetime(file_start_time.year, month, day, hour, minute, second, milliseconds)
+                    user_date_entry = datetime.datetime(file_start_time.year + year_offset, month, day, hour, minute, second, milliseconds)
                     if user_date_entry < audit_bucket['range']['start']:
                         continue
                     program_name = res_user_api.group(4).strip()
@@ -512,9 +530,16 @@ if flag_user_report:
                         log_id[user_id] += [user_ip]
                 elif res_warning is not None:
                     month, day = int(res_warning.group(1)[0:2]), int(res_warning.group(1)[2:])
+                    if month_prev is None:
+                        month_prev = month
+                    elif month_prev == 12 and month == 1:
+                        month_prev = month
+                        year_offset += 1
+                    else:
+                        month_prev = month
                     hour, minute, second = int(res_warning.group(2)[0:2]), int(res_warning.group(2)[3:5]), int(res_warning.group(2)[6:])
                     milliseconds = int(res_warning.group(3))
-                    date_entry = datetime.datetime(file_start_time.year, month, day, hour, minute, second, milliseconds)
+                    date_entry = datetime.datetime(file_start_time.year + year_offset, month, day, hour, minute, second, milliseconds)
                     if date_entry < audit_bucket['range']['start']:
                         continue
                     program_name = res_warning.group(4).strip()
@@ -754,7 +779,7 @@ if flag_user_report:
         message_body = message_body[0:insert_user_ip_message] + table_user_ip + message_body[insert_user_ip_message:]
     
     html_body = '\n'.join(html_body)
-    file_html_base = 'user_log_report_%s.html' % datetime.datetime.now().strftime('%Y%m%s%H%M%S')
+    file_html_base = 'user_log_report_%s.html' % datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     file_html = '%s/%s' % (orthanc_info['directory']['reports'], file_html_base)
     with open(file_html, 'wb') as lun:
         lun.write(html_body)
