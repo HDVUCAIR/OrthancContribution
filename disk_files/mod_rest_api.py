@@ -452,7 +452,7 @@ def series_to_disk(orthanc_series_id, study_data=None, flag_write_dicom=global_v
     if 'SeriesDescription' in meta_series['MainDicomTags']:
         series_description = meta_series['MainDicomTags']['SeriesDescription'].strip().replace('/',':')
     series_description = series_description.replace('*','_star')
-    series_time = meta_series['MainDicomTags']['SeriesTime'].strip()
+    #series_time = meta_series['MainDicomTags']['SeriesTime'].strip()
 
     # Construct the output paths
     dir_path = '/dicomout' 
