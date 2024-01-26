@@ -2314,7 +2314,7 @@ def base_tag_handling(**kwargs):
         table_from_ctp['0018-9067'] = {'en' : False, 'op' : '',        'name' : 'BaselineCorrection',                           'comment' : ''}
         table_from_ctp['0018-9070'] = {'en' : False, 'op' : '',        'name' : 'CardiacRRIntervalSpecified',                   'comment' : ''}
         table_from_ctp['0018-9073'] = {'en' : False, 'op' : '',        'name' : 'AcquisitionDuration',                          'comment' : ''}
-        table_from_ctp['0018-9074'] = {'en' : True,  'op' : 'keep',    'name' : 'FrameAcquisitionDatetime',                     'comment' : 'Per Clunie validator'}
+        table_from_ctp['0018-9074'] = {'en' : True,  'op' : 'keep',    'name' : 'FrameAcquisitionDateTime',                     'comment' : 'Per Clunie validator'}
         table_from_ctp['0018-9075'] = {'en' : False, 'op' : '',        'name' : 'DiffusionDirectionality',                      'comment' : ''}
         table_from_ctp['0018-9076'] = {'en' : False, 'op' : '',        'name' : 'DiffusionGradientDirectionSeq',                'comment' : ''}
         table_from_ctp['0018-9077'] = {'en' : False, 'op' : '',        'name' : 'ParallelAcquisition',                          'comment' : ''}
@@ -2351,7 +2351,7 @@ def base_tag_handling(**kwargs):
         table_from_ctp['0018-9126'] = {'en' : False, 'op' : '',        'name' : 'VolumeLocalizationSeq',                        'comment' : ''}
         table_from_ctp['0018-9127'] = {'en' : False, 'op' : '',        'name' : 'SpectroscopyAcquisitionDataColumns',           'comment' : ''}
         table_from_ctp['0018-9147'] = {'en' : False, 'op' : '',        'name' : 'DiffusionAnisotropyType',                      'comment' : ''}
-        table_from_ctp['0018-9151'] = {'en' : True,  'op' : 'keep',    'name' : 'FrameReferenceDatetime',                       'comment' : 'Per Clunie validator'}
+        table_from_ctp['0018-9151'] = {'en' : True,  'op' : 'keep',    'name' : 'FrameReferenceDateTime',                       'comment' : 'Per Clunie validator'}
         table_from_ctp['0018-9152'] = {'en' : False, 'op' : '',        'name' : 'MetaboliteMapSeq',                             'comment' : ''}
         table_from_ctp['0018-9155'] = {'en' : False, 'op' : '',        'name' : 'ParallelReductionFactorOutOfPlane',            'comment' : ''}
         table_from_ctp['0018-9159'] = {'en' : False, 'op' : '',        'name' : 'SpectroscopyAcquisitionOutOfPlanePhaseSteps',  'comment' : ''}
@@ -4789,13 +4789,13 @@ def on_orthanc(pg_connection=None, pg_cursor=None, **kwargs):
         if status['status'] != 0:
             if pg_connection is not None:
                 pg_connection.close()
-            if log_message_bitflag:
+            if python_verbose_local:
                 log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
                 global_var['log_indent_level'] = log_indent_level_prev
             return status, None
     else:
         if pg_connection is None or pg_cursor is None:
-            if log_message_bitflag:
+            if python_verbose_local:
                 log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
                 global_var['log_indent_level'] = log_indent_level_prev
             return {'status':1, 'error_text': 'on_orthanc:Must provide both con and cur'}, None
@@ -4807,13 +4807,13 @@ def on_orthanc(pg_connection=None, pg_cursor=None, **kwargs):
         if flag_local_db:
             pg_cursor.close()
             pg_connection.close()
-        if log_message_bitflag:
+        if python_verbose_local:
             log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
             global_var['log_indent_level'] = log_indent_level_prev
         return status, None
 
     # Collect orthanc patientids
-    if log_message_bitflag:
+    if python_verbose_local:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Assembling all patient ids', **kwargs)
     orthanc_patient_ids = json.loads(orthanc.RestApiGet('/patients'))
     n_patients = len(orthanc_patient_ids)
@@ -4824,18 +4824,18 @@ def on_orthanc(pg_connection=None, pg_cursor=None, **kwargs):
     meta_system = json.loads(orthanc.RestApiGet('/system'))
 
     # Assemble dict
-    if log_message_bitflag:
+    if python_verbose_local:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Assembling now_on_orthanc dict', **kwargs)
     now_on_orthanc = {}
     for dict_str in ['ByPatientID', 'StudyInstanceUID2PatientID', 'PatientID2oPatientID', 'StudyUID2oStudyUID']:
         now_on_orthanc[dict_str] = {}
-    if log_message_bitflag:
+    if python_verbose_local:
         global_var['log_indent_level'] += 3
     i_patient = 0
     n_patients = len(orthanc_patient_ids)
     for orthanc_patient_id in orthanc_patient_ids:
         i_patient += 1
-        if log_message_bitflag:
+        if python_verbose_local:
             log_message(log_message_bitflag, global_var['log_indent_level'], 'Patient %d of %d: %s' % (i_patient, n_patients, orthanc_patient_id), **kwargs)
         row_of_data = {}
         meta_patient = json.loads(orthanc.RestApiGet('/patients/%s' % orthanc_patient_id))
@@ -4846,7 +4846,7 @@ def on_orthanc(pg_connection=None, pg_cursor=None, **kwargs):
         patient_id = meta_patient['MainDicomTags']['PatientID']
         patient_id_temp = meta_patient['MainDicomTags']['PatientID']
         sql_query = "SELECT value FROM patientid WHERE pid IN (SELECT parent_pid FROM patientid WHERE value = %s)"
-        if log_message_bitflag:
+        if python_verbose_local:
             log_message(log_message_bitflag, global_var['log_indent_level']+3,'Querying sql', **kwargs)
         try:
             pg_cursor.execute(sql_query, (patient_id_temp,))
@@ -4854,26 +4854,26 @@ def on_orthanc(pg_connection=None, pg_cursor=None, **kwargs):
             if flag_local_db:
                 pg_cursor.close()
                 pg_connection.close()
-            if log_message_bitflag:
+            if python_verbose_local:
                 log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
                 global_var['log_indent_level'] = log_indent_level_prev
             return {'status': 2, 'error_text' : 'on_orthanc:Problem querying pid'}, None
-        if log_message_bitflag:
+        if python_verbose_local:
             log_message(log_message_bitflag, global_var['log_indent_level']+3,'Examining results', **kwargs)
         row = pg_cursor.fetchone()
         while row is not None:
             patient_id = row[0]
             row = pg_cursor.fetchone()
-        if log_message_bitflag:
+        if python_verbose_local:
             log_message(log_message_bitflag, global_var['log_indent_level']+3,'Patient ID selected', **kwargs)
         for dict_str in ['StudyDate', 'AccessionNumber', 'StudyInstanceUID']:
             row_of_data[dict_str] = []
-        if log_message_bitflag:
+        if python_verbose_local:
             log_message(log_message_bitflag, global_var['log_indent_level']+3,'Querying studies', **kwargs)
         meta_studies = json.loads(orthanc.RestApiGet('/patients/%s/studies' % orthanc_patient_id))
         for meta_study in meta_studies:
             orthanc_study_id = meta_study['ID']
-            if log_message_bitflag:
+            if python_verbose_local:
                 log_message(log_message_bitflag, global_var['log_indent_level']+6,'Processing study %s' % orthanc_study_id, **kwargs)
             patient_id_modifier = ''
             if flag_split_screen_from_diagnostic and row_of_data['PatientName'].lower().find(meta_system['Name'].lower()) < 0:
@@ -5012,7 +5012,7 @@ def recursive_replace_uid(parent, level_entry=None):
                 value, level_out = recursive_replace_uid(child, level_in-1)
                 if level_out < 0:
                     break
-                if len(value) > 0:
+                if value is not None and len(value) > 0:
                     element[key] = value
         elif parent_type == type_list:
             log_message(log_message_bitflag, global_var['log_indent_level'], 'Should not reach this point\n%s' % json.dumps(parent,indent=3))
@@ -6046,6 +6046,7 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
                           'PerformedProcedureStepStart' ]
     date_time_fields = [ 'AcquisitionDateTime' ]
     date_time_fields_radio = [ 'RadiopharmaceuticalStartDateTime', 'RadiopharmaceuticalStopDateTime' ]
+    date_time_fields_frame = [ 'FrameAcquisitionDateTime', 'FrameReferenceDateTime' ]
     orthanc_instance_ids_new = []
     n_instances = len(meta_instances)
     ten_percent = n_instances // 10
@@ -6108,6 +6109,23 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
                         date_string_new = shift_date_time_string(shift_epoch, seq_tags[date_time_field_radio])
                         replace_dict[radio_sequence][i_seq_tag][date_time_field_radio] = date_string_new
                 i_seq_tag += 1
+
+        # Loop over frame fields
+        per_frame_functional_groups_sequence = 'PerFrameFunctionalGroupsSequence'
+        frame_content_sequence = 'FrameContentSequence'
+        if per_frame_functional_groups_sequence in dicom_tags:
+            replace_dict[per_frame_functional_groups_sequence] = copy.copy(dicom_tags[per_frame_functional_groups_sequence])
+            i_group = 0
+            for functional_group_dict in dicom_tags[per_frame_functional_groups_sequence]:
+                if frame_content_sequence in functional_group_dict:
+                    i_content = 0
+                    for frame_content_dict in functional_group_dict[frame_content_sequence]:
+                        for date_time_field_frame in date_time_fields_frame:
+                            if date_time_field_frame in frame_content_dict and len(frame_content_dict[date_time_field_frame].strip()) > 0:
+                                date_string_new = shift_date_time_string(shift_epoch, frame_content_dict[date_time_field_frame])
+                                replace_dict[per_frame_functional_groups_sequence][i_group][frame_content_sequence][i_content][date_time_field_frame] = date_string_new
+                        i_content += 1
+                i_group += 1
 
         # Handle birthdate / age
         if 'PatientBirthDate' in dicom_tags:
