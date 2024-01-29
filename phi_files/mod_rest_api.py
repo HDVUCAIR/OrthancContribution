@@ -4983,7 +4983,7 @@ def recursive_replace_uid(parent, level_entry=None):
                 value, level_out = recursive_replace_uid(child, level_in-1)
                 if level_out < 0:
                     break 
-                if len(value) > 0:
+                if value is not None and len(value) > 0:
                     element[k] = value
                 global_var['address_constructor'].pop()
         else:
