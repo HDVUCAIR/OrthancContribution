@@ -1,5 +1,5 @@
 # Start with osimis orthanc with plugins
-FROM osimis/orthanc:latest
+FROM orthancteam/orthanc
 
 ARG PROCESS_UID
 ARG PROCESS_GID
