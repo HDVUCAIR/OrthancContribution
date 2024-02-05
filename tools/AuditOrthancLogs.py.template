@@ -23,7 +23,7 @@ def email_message(subject, message_body, subtype='plain',  email_recipients = No
                         
     email_sender = 'PHI_MAIL_SENDER'
     email_origin = 'PHI_MAIL_ORIGIN'
-    email_from = 'PHI_MAIL_SENDER <PHI_MAIL_SENDER@PHI_MAIL_ORIGION>'
+    email_from = 'PHI_MAIL_SENDER <PHI_MAIL_SENDER@PHI_MAIL_ORIGIN>'
 
     if files_csv is None or len(files_csv) == 0:
         msg = MIMEText(message_body, subtype)
@@ -53,8 +53,8 @@ def email_message(subject, message_body, subtype='plain',  email_recipients = No
 orthanc_info = {'url'  : 'https://HOST_FQDN/PHI_ORTHANC_WEBSITE_NAME',
                 'name' : 'PHI_ORTHANC_WEBSITE_NAME',
                 'directory' : {'data' : 'PHI_HOST_DATA_DIR_ORTHANC'},
-                'email' : {'error' : ['PHI_MAIL_SENDER <PHI_MAIL_SENDER@PHI_MAIL_ORIGION>'],
-                           'usage' : ['PHI_MAIL_SENDER <PHI_MAIL_SENDER@PHI_MAIL_ORIGION>']}
+                'email' : {'error' : ['PHI_MAIL_SENDER <PHI_MAIL_SENDER@PHI_MAIL_ORIGIN>'],
+                           'usage' : ['PHI_MAIL_SENDER <PHI_MAIL_SENDER@PHI_MAIL_ORIGIN>']}
                 }
 orthanc_info['directory']['logs'] = '%s/logs' % orthanc_info['directory']['data']
 orthanc_info['directory']['reports'] = '%s/html/reports' % orthanc_info['directory']['data']
