@@ -228,6 +228,7 @@ services:
       POSTGRES_PASSWORD: "${PHI_PASSWORD_FOR_PG_USER_POSTGRES}"
       PG_ORTHANC_PASSWORD: "${PHI_PASSWORD_FOR_PG_USER_ORTHANC}"
       #POSTGRES_PASSWORD_FILE: "/run/secrets/phi.pg.orthanc.password"
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
     # Secrets does not currently work here because of a problem with docker https://github.com/moby/moby/issues/45719
     #secrets:
     #  - source: phi.pg.user 
@@ -249,8 +250,11 @@ services:
     container_name: ${COMMON_BASENAME}_phi_postgres
     volumes:
       - type: bind
+        source: ./phi_files/postgres.conf
+        target: /etc/postgresql/postgresql.conf
+      - type: bind
         source: ./phi_files/pg_hba.conf
-        target: /var/lib/postgresql/data/pgdata/pg_hba.conf
+        target: /etc/postgresql/pg_hba.conf
       - type: bind
         source: ./phi_files/postgresql-create-orthanc-user.sh
         target: /docker-entrypoint-initdb.d/postgresql-create-orthanc-user.sh
