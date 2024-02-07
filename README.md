@@ -8,9 +8,11 @@ The anonymization was created to maintain reference links between series within 
 # Status
 I built a lot of this setup in the days when Lua was the only [embedded scripting language](https://book.orthanc-server.com/users/lua.html) available to the Orthanc.  This setup is currently in flux as I convert my old Lua scripts to use the more powerful [Python plugin](https://book.orthanc-server.com/plugins/python.html?highlight=python) capability.  Eventually, I plan to replace all the Lua scripts with Python.
 
+Update Fall 2023: I completed the conversion to python.  The Lua scripts are no longer needed.
+
 # Current Issues
 - The anonymizing Orthanc can be run with or without OnStableStudy detection (whether in the original Lua or newer Pyton scripts).  I sometimes see ongoing anonymizations fail when interrupted by the OnStableStudy of another recently uploaded study.  I suspect this has to do with job collisions on the back end.  I hope to address this with better job management in the future.  For the moment, if I plan on running multiple anonymizations, I turn off the OnStableStudy feature.
-- The output DICOM are currently not completely DICOM compliant, based on [Dave Clunie's DICOM validator](https://www.dclunie.com/dicom3tools/dciodvfy.html).  This is mainly a problem of deleting one or two DICOM key/value pairs that are required, but can be set to blank values.
+- The output DICOM are currently not completely DICOM compliant, based on [Dave Clunie's DICOM validator](https://www.dclunie.com/dicom3tools/dciodvfy.html).  This is mainly a problem of deleting one or two DICOM key/value pairs that are required, but can be set to blank values.  Update Fall 2023: I seem to have resolved most of the DICOM issues that my codes create.  The remaining DICOM inconsistencies (as measured by the validator) seem to be due to inconsistencies created by the manufacturer and not me.
 
 # Goals
 - Fix the job (collision?) problems with better use of [Orthanc's job management](https://book.orthanc-server.com/users/advanced-rest.html?highlight=jobs#jobs)

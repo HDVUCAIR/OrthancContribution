@@ -3,16 +3,17 @@ Latest Instructions
 -----------------------------------------------
 Osimis
 
-The osimis docker images for Orthanc have many hooks that 
-permit the tailoring of the Orthanc at launch, as opposed to the 
-several cycles of local docker-compose necessary in the past to get
-the image to the desired end state.
+The osimis docker images for Orthanc have many hooks that permit
+the tailoring of the Orthanc at launch, as opposed to the
+several cycles of local docker-compose necessary in the past to
+get the image to the desired end state.
 
 Description
 
-These files help set up a dual Orthanc anonymizer/anonymized docker
-configuration.  Both Orthancs spin up their own postgres sql databases.
-Configuration is controlled by way of a .env file and addendum scripts.
+These files help set up a dual Orthanc anonymizer/anonymized
+docker configuration.  Both Orthancs spin up their own postgres
+sql databases.  Configuration is controlled by way of a .env
+file and addendum scripts.
 
 ===============================================
 Steps
@@ -20,122 +21,180 @@ Steps
 
 0) System preparation
 
-0a) Orthanc uid/gid: Out of the box, osimis runs their container as root (or
-used to).  For security, we create a local user on the host to use instead.
-The gid/uid in the .env file should reflect this user.
+0a) Orthanc uid/gid: Out of the box, osimis runs their container
+as root (or used to).  For security, we create a local user on
+the host to use instead.  The gid/uid in the .env file should
+reflect this user.
 
-0b) Postgres uid/gid: The postgres container runs as 999:999 or some
-variation.  It is not necessary to create this user, but important
-to have the addendum files mounted into the postgres container have
-the same uid/gid.  This is partly managed by maintaining ownership
-of the files and by chmod in the 00_prepdir.sh folder.
+0b) Postgres uid/gid: The postgres container runs as 999:999 or
+some variation.  It is not necessary to create this user, but
+important to have the addendum files mounted into the postgres
+container have the same uid/gid.  This is partly managed by
+maintaining ownership of the files and by chmod in the
+00_prepdir.sh folder.
 
 -----------------------------------------------
 .env file
 -----------------------------------------------
-1) Edit the .env file to add your site specific settings
+1) Edit the .env file to add your site specific settings.  I am
+often setting up only one of the three possibilities (Anon, Disk
+or PHI) and typically delete all the entries for the systems I
+am NOT setting up.
 
 1a) Basename, Orthanc uid/gid, host IP
 
 1b) Certificate values
 
 1c) Anon orthanc settings.  This orthanc stores only the final
-anonymized data.  Note that the DATA_DIR must reside on the system
-and are created by the 00_prepdir.sh script based on the values
-defined here.  This Orthanc usually does NOT write its anonymous
-data to disk.  See the Disk Orthanc for that.
+anonymized data.  Note that the DATA_DIR must reside on the
+system and are created by the 00_prepdir.sh script based on the
+values defined here.  This Orthanc usually does NOT write its
+anonymous data to disk.  See the Disk Orthanc for that.
 
-1d) Disk orthanc settings.  This orthanc is meant to write the 
-anonymized DICOM it receives to a disk in a structured 
-hierarchy with directory names taken from the DICOM meta data
-itself.  Same requirements as 1c Anon orthanc.
+1d) Disk orthanc settings.  This orthanc is meant to write the
+anonymized DICOM it receives to a disk in a structured hierarchy
+with directory names taken from the DICOM meta data itself.
+Same requirements as 1c Anon orthanc.
 
-1e) PHI orthanc settings.  These are much more involved since they
-control the anonymization process.  Note that for the email settings
-to work, you will need to connect a container running exim 
-to your Orthanc PHI network.  This is NOT DONE by default.
+1e) PHI orthanc settings.  These are much more involved since
+they control the anonymization process.  Note that for the email
+settings to work, you will need to connect a container running
+exim to your Orthanc PHI network.  This is NOT DONE by default.
 
 -----------------------------------------------
 Edit: docker-compose.yml
 -----------------------------------------------
-2) Edit the docker-compose.yml file
+2) Edit the docker-compose.yml file.  Remove any of the sytems
+(Disk,Anon,PHI) that you are NOT setting up.
 
-2a) Dicom modalities - may want to modify these.  This is what defines the
-DICOM PACS nodes which the Orthanc will be able to query or push to.
+2a) Dicom modalities - may want to modify these.  This is what
+defines the DICOM PACS nodes which the Orthanc will be able to
+query or push to.
 
-2b) Misc settings.  There are some settings not set in the .env file.
-Mostly the defaults in the docker-compose file are fine.
+2b) Misc settings.  There are some settings not set in the .env
+file.  Mostly the defaults in the docker-compose file are fine.
 
 -----------------------------------------------
 phi_files
 -----------------------------------------------
-3) The lua script.  Look at the BaseTagHandling function.  It is here that
-you can tweak which tags will be removed, kept, deleted, modified, etc.  
+3) The anonymization script
 
-Orthanc out-of-the-box anonymizes based on the DICOM standard defining
-private tags.  These are only a subset of what HIPAA considers private, 
-so it is necessary to go above and beyond the default Orthanc by controlling
-the tags in this function.
+3a) (Deprecated) The lua script.  Look at the BaseTagHandling
+function.  It is here that you can tweak which tags will be
+removed, kept, deleted, modified, etc.  
 
-By default, we aim for fully cleaned HIPAA free data and the settings in
-BaseTagHandling are defined to try to accomplish that.
+3b) The python script, mod_phi.py, now contains the
+BaseTagHandling function.  You will want to survey the various
+DICOM fields (adapted from the list used by CTP) to determine
+what you want to keep or remove.
 
-Note that as of 11/21/22, these DICOM are not fully compliant.  I believe
-some tags are missing in the output that I need to fix and test again
-against David Clunie's DICOM validator.
+Orthanc out-of-the-box anonymizes based on the DICOM standard
+defining private tags.  These are only a subset of what HIPAA
+considers private, so it is necessary to go above and beyond the
+default Orthanc by controlling the tags in this function.
 
-4) The python script. I am gradually replacing the LUA script, which I 
-developed first, with python routines.  At this point, however, the
-setup is a mix/match of LUA and python with LUA performing the main
-part of the anonymization and python performing auxiliary parts.
+By default, we aim for fully cleaned HIPAA free data and the
+settings in BaseTagHandling are defined to try to accomplish
+that.
 
-5) Misc files for the postgres setup and the auxiliary HTML 
+Note that as of 11/21/22, these DICOM are not fully compliant.
+I believe some tags are missing in the output that I need to fix
+and test again against David Clunie's DICOM validator.
+
+Update 2/7/24.  I worked on creating valid DICOM according to
+the validator and seem to have found a compromise.  Most of the
+remaining problematic fields were problematic in the original
+manufacturer DICOM that I started with and not apparently
+something that I broke myself.
+
+4) The python script. I am gradually replacing the LUA script
+(Completed fall 2023), which I developed first, with python
+routines.  (Deprecated) At this point, however, the setup is a
+mix/match of LUA and python with LUA performing the main part of
+the anonymization and python performing auxiliary parts.
+
+5) Misc files for the postgres setup and the auxiliary HTML
 served directories associted with the PHI orthanc. You should
 not need to edit these.
 
 -----------------------------------------------
 anon_files
 -----------------------------------------------
-6) The python script. I have replaced my older LUA scripts for the
-anon Orthanc with python drop ins.
+6) The python script. I have replaced my older LUA scripts for
+the anon Orthanc with python drop ins.
 
 7) Misc files.  Should not need to edit.
 
 -----------------------------------------------
 disk_files
 -----------------------------------------------
-8) The python script. I have replaced my older LUA scripts for the
-anon Orthanc with python drop ins.  This code defines how the 
-Orthanc writes the files to disk using meta data taken from the
-DICOM themselves.
+8) The python script. I have replaced my older LUA scripts for
+the anon Orthanc with python drop ins.  This code defines how
+the Orthanc writes the files to disk using meta data taken from
+the DICOM themselves.
 
 9) Misc files.  Should not need to edit.
 
 -----------------------------------------------
 00_prepdir.sh
 -----------------------------------------------
-10) Run 00_prepdir.sh as root, or at least with an account that can 
-create directories defined in your .env file and change ownership
-uid/gid as necessary.
+10) Run 00_prepdir.sh as root, or at least with an account that
+can create directories defined in your .env file and change
+ownership uid/gid as necessary.
 
-This script creates directories on the host to map into mount points
-on the Orthanc and postgres containers.
+10a) First edit the script to remove any of the settings (Anon,
+Disk, PHI) that you will not be using
 
-Several files are copied into these directories and the uid/gid set 
-to match the Orthanc/Postgres uid/gid.
+10b) Run the script.  This script creates directories on the
+host to map into mount points on the Orthanc and postgres
+containers.  As of fall 2023, it also creates the Orthanc self
+signed SSL certs (rather than having the Orthanc create them
+internally).
+
+Several files are copied into these directories and the uid/gid
+set to match the Orthanc/Postgres uid/gid.
+
+Note that this script will change file ownership of some of the
+files to match the UID/GID specified for both the Orthanc and
+Postgre users.
+
+-----------------------------------------------
+10_generate_secret_files.py
+-----------------------------------------------
+11) A python script for manipulating several *.template files to
+update them with your local settings that you defined in the
+.env file.  This includes secret files to be passed by
+docker-compose to the containers - rather than passing passwords
+by way of environmental variables.
+
+At the moment, this step is necessary but still in flux.  Docker
+compose itself was having a problem passing secrets to the
+postgres container based on either how postgres was set up or
+the current state of docker compose.  I am still waiting for the
+docker compose creators to fix that issue.  So postgres secrets
+are passed the old fashioned way while some orthanc secrets use
+a secrets file.
 
 -----------------------------------------------
 99_make_apache_conf.sh
 -----------------------------------------------
-11) Run to make a sample proxy file for dropping into the apache 
-host.d folder.  Among other things, it is necessary to include a
-base64 hashed user/password which matches the user/password set
-up in the .env and docker-compose files.  Orthanc now implements
-authentication out of the box and we have to pass along 
-credentials from the proxy.  
+12) We run our Orthancs proxied behind apache.  It is necessary
+to create apache style conf files to be loaded at runtime with
+the necessary Orthanc passwords baked into the proxy call.
 
-At my campus, I use the campus single-sign on to authenticate and only then
-route the authenticated user via the base64 hashed user into the Orthanc.
+12a) Edit the file to remove any unwanted PHI, Disk or Anon
+settings.
+
+12b) Run to make a sample proxy file for dropping into the
+apache host.d folder.  Among other things, it is necessary to
+include a base64 hashed user/password which matches the
+user/password set up in the .env and docker-compose files.
+Orthanc now implements authentication out of the box and we have
+to pass along credentials from the proxy.  
+
+At my campus, I use the campus single-sign on to authenticate
+and only then route the authenticated user via the base64 hashed
+user into the Orthanc.
 
 In the future, the plan is to manage access control by routing
 incoming users into different accounts on the Orthanc with
@@ -144,45 +203,46 @@ different associated access controls.
 -----------------------------------------------
 iptables.sh
 -----------------------------------------------
-12) Addendum script for manipulating iptables to expose/block
+13) Addendum script for manipulating iptables to expose/block
 the incoming ports used by the Orthancs.  
 
-These include the DICOM node ports as well as the incoming
-web proxy ports.  Since I route users through our Apache
-proxy, I use iptables to limit access to the Orthancs to
-the Apache user (48).  
+These include the DICOM node ports as well as the incoming web
+proxy ports.  Since I route users through our Apache proxy, I
+use iptables to limit access to the Orthancs to the Apache user
+(48).  
 
-You may also want to limit cross talk between different 
+You may also want to limit cross talk between different
 Orthancs.  Docker does not do this sort of isolation between
 containers.
 
 -----------------------------------------------
 Run docker-compose.yml
 -----------------------------------------------
-13) docker-compose up -d
+14) docker-compose up -d
 
-13a) Run the docker-compose.yml file to launch the containers
+14a) Run the docker-compose.yml file to launch the containers
 
-13b) I have a backup script on the PHI Postgres container.
-This requires invoking cron on that container in order to 
-perform regular backups of the PHI lookup table.  
+14b) I have a backup script on the PHI Postgres container.  This
+requires invoking cron on that container in order to perform
+regular backups of the PHI lookup table.  
 
-docker -exec --ti --user 0:0 pg_container_name service cron start
+docker -exec --ti --user 0:0 pg_container_name service cron
+start
 
-13c) Postgres issues.  Most often, what seems to go wrong is the
+14c) Postgres issues.  Most often, what seems to go wrong is the
 creation of the Orthanc postgres account on the postgres
 container.  Prior to the new osimis images, I used to have to
-log into the postgres and manually run the orthanc user 
+log into the postgres and manually run the orthanc user
 creation.
 
-13d) A further stumbling block is the creation of the internal
+14d) A further stumbling block is the creation of the internal
 ssl certs that Orthanc uses to encrypt its traffic locally.
 These are shared with the apache proxy.
 
-13e) Orthanc will crash if it either can't reach the postgres
-(failed 13c) or could not create its certificates (13d).
+14e) Orthanc will crash if it either can't reach the postgres
+(failed 14c) or could not create its certificates (14d).
 
-Currently, 13c-13d seem to be a problem of the past, given the
+Currently, 14c-14d seem to be a problem of the past, given the
 latest osimis images.
 
 ===============================================
@@ -190,54 +250,61 @@ Old Instructions for prior setup
 -----------------------------------------------
 Description
 
-These files help set up a dual Orthanc anonymizer/anonymized docker
-configuration.  Both Orthancs spin up their own postgres sql databases.
-Configuration is controlled by way of a .env file.
+These files help set up a dual Orthanc anonymizer/anonymized
+docker configuration.  Both Orthancs spin up their own postgres
+sql databases.  Configuration is controlled by way of a .env
+file.
 
 Steps
 
-0) Use git to download the Osimis docker setup for building their image.  They
-build on an Ubuntu 16.04 base, but we need 18.04 for updated Lua functions used
-by the anonymization script.
+0) Use git to download the Osimis docker setup for building
+their image.  They build on an Ubuntu 16.04 base, but we need
+18.04 for updated Lua functions used by the anonymization
+script.
 
-0a) git pull https://bitbucket.org/osimis/orthanc-builder/src/master/ 
+0a) git pull
+https://bitbucket.org/osimis/orthanc-builder/src/master/ 
 
-0b) Edit orthanc-builder/docker/orthanc/Dockerfile to replace Ubuntu 16.04 base
-with 18.04
+0b) Edit orthanc-builder/docker/orthanc/Dockerfile to replace
+Ubuntu 16.04 base with 18.04
 
-0c) Rebuild docker image locally: docker build -t local/osimis/orthanc-18.04 .
+0c) Rebuild docker image locally: docker build -t
+local/osimis/orthanc-18.04 .
 
 1) Edit the .env file.  Fill in details specific to your setup.
 
 2) Edit the docker-compose file.  i
 
-2a) Most settings are pulled from the .env file, but a few, such as the orthanc
-container names as well as network names are managed in the docker-compose
-file.
+2a) Most settings are pulled from the .env file, but a few, such
+as the orthanc container names as well as network names are
+managed in the docker-compose file.
 
-2b) Port mapping of the host machine to the containers.  These settings will
-control whether the host machine responds to particular ports and routes them
-to the docker Orthanc containers.  You want to leave these maps in place if you
-want to send DICOM from another machine (ex. a scanner).  I tend to comment out
-the ports for the anonymous Orthanc because I only want the PHI orthanc to send
-images to the anonymous orthanc.
+2b) Port mapping of the host machine to the containers.  These
+settings will control whether the host machine responds to
+particular ports and routes them to the docker Orthanc
+containers.  You want to leave these maps in place if you want
+to send DICOM from another machine (ex. a scanner).  I tend to
+comment out the ports for the anonymous Orthanc because I only
+want the PHI orthanc to send images to the anonymous orthanc.
 
-3) Run the 00_prepdir.sh file to prepare the storage areas you defined in the
-.env file (step #1)
+3) Run the 00_prepdir.sh file to prepare the storage areas you
+defined in the .env file (step #1)
 
-4) Edit the phi_scripts.lua file in the phi_files folder.  Uncomment
-RestApiPost fields to automatically send anonymized DICOM from the PHI Orthanc
-to the Anon Orthanc once anonymization is performed.  By default, it is assumed
-the user will transfer DICOM manually using the Orthanc web browser following 
-anonymization.
+4) Edit the phi_scripts.lua file in the phi_files folder.
+Uncomment RestApiPost fields to automatically send anonymized
+DICOM from the PHI Orthanc to the Anon Orthanc once
+anonymization is performed.  By default, it is assumed the user
+will transfer DICOM manually using the Orthanc web browser
+following anonymization.
 
 5) Run docker-compose up -d to launch
 
-6) Adjust your firewall rules as necessary to route in coming ports (see 2b
-above)
+6) Adjust your firewall rules as necessary to route in coming
+ports (see 2b above)
 
-7) Access lookup table and anonymization pages on the PHI Orthanc at (URL and
-HOST based on names in .env and docker-compose files):
+7) Access lookup table and anonymization pages on the PHI
+Orthanc at (URL and HOST based on names in .env and
+docker-compose files):
 
 https://URL.OF.HOST/PHIORTHANCNAME/extra/scrub/study_anonymize.html
 https://URL.OF.HOST/PHIORTHANCNAME/extra/lookup/master/lookuptable.html
