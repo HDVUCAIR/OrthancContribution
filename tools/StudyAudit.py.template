@@ -1,0 +1,191 @@
+#!/bin/python
+import requests
+import sys
+import os
+import warnings
+import dicom as pydicom
+import datetime
+from dateutil.relativedelta import relativedelta 
+from email.mime.text import MIMEText
+import smtplib
+import pickle
+
+sys.path.append('PATH_TO_PARSE_APACHE_INC')
+import parse_apache_inc
+server_list = ['main']
+
+file_size_on_disk = 'PATH_TO_THIS_APACHE_SCRIPT'
+if os.path.exists(file_size_on_disk):
+    with open(file_size_on_disk, 'rb') as lun:
+        map_size_on_disk = pickle.load(lun)
+else:
+    map_size_on_disk = {}
+
+orthanc_map = parse_apache_inc.get_map()
+ip = {'main' : orthanc_map['ORTHANC_DOCKER_NAME']}
+aet_str = {'main' : 'ORTHANC_AET'}
+headers = {'x-remote-user' : 'ALLOWED_USER', 'x-forwarded-for' : 'ORTHANC_DOCKER_NAME.StudyAudit'}
+
+warnings.filterwarnings("ignore")
+url_orthanc = {}
+for server in server_list:
+    url_orthanc[server] = 'https://%s:8042' % ip[server]
+
+# =======================================================
+def email_message(subject, message_body, subtype='plain'):
+# -------------------------------------------------------
+
+    email_recipients = ['Some User <some.user@some.mailplace.com>']
+                        
+    email_sender = 'FROM_USER'
+    email_origin = 'FROM_ORIGIN'
+    email_from = 'Some User <some.user@some.mailplace.com>'
+
+    msg = MIMEText(message_body, subtype)
+    msg['Subject'] = subject
+    msg['From'] = email_from 
+    msg['To'] = ','.join(email_recipients)
+
+    smtp_server = 'localhost' 
+    s = smtplib.SMTP(smtp_server)
+    s.sendmail(email_from, email_recipients, msg.as_string())
+    s.quit()
+
+    return {'status':0}
+
+def server_is_ready(req_session, url_orthanc):
+
+    n_try = 0
+    r_timeout = 300
+    m_try = 60*30/r_timeout
+    flag_healthy = False
+    while n_try < m_try:
+        try:
+            local_response = req_session.get('%s/studies' % url_orthanc, timeout = r_timeout, headers=headers)
+            if local_response.status_code != 200:
+                sys.exit('Problem with local request')
+        except requests.exceptions.Timeout:
+            print('   Remote Orthanc appears busy.  Waited %d of %d' % ((n_try+1)*r_timeout,m_try*r_timeout))
+            n_try = n_try + 1
+            continue
+        except:
+            import pdb; pdb.set_trace()
+            sys.exit('Unexpected error')
+        flag_healthy = True
+        break
+    return flag_healthy
+
+# Create a session
+req_session = {}
+for server in server_list:
+    req_session[server] = requests.session()
+    req_session[server].verify = False
+    req_session[server].timeout=300
+req_session['main'].auth=('USER_WITH_RIGHTS','PASSWORD_OF_USER')
+
+for server in server_list:
+    if not server_is_ready(req_session[server],url_orthanc[server]):
+        sys.exit('%s appears to be down' % server)
+
+# Make sure it's the orthanc we want
+for server in server_list:
+    system_response = req_session[server].get('%s/system' % url_orthanc[server], headers=headers)
+    if system_response.status_code != 200:
+        sys.exit('Problem with server request: %s' % server)
+    if system_response.json()['DicomAet'] != aet_str[server]:
+        sys.exit('Mismatching phi AET: %s ' % system_response.json()['DicomAet'])
+
+
+# Audit buckets
+date_today = datetime.datetime.strptime(datetime.datetime.now().strftime('%Y%m%d'),'%Y%m%d')
+audit_buckets = {0  : {'type' : 'Previous week'       , 'range' : {'start' : date_today - relativedelta(days=7), 'end' : date_today + relativedelta(days=1)}},
+                 10 : {'type' : 'Previous month'      , 'range' : {'start' : date_today - relativedelta(months=1), 'end' : date_today + relativedelta(days=1)}},
+                 20 : {'type' : 'Previous 3 months'   , 'range' : {'start' : date_today - relativedelta(months=3), 'end' : date_today + relativedelta(days=1)}},
+                 30 : {'type' : 'Older than 3 months' , 'range' : {'start' : datetime.datetime(1950,1,1), 'end' : date_today - relativedelta(months=3)}}}
+order_bucket = list(audit_buckets.keys())
+order_bucket.sort()
+audit_last_update = {}
+audit_study_date = {}
+for index_bucket in order_bucket:
+    type_bucket = audit_buckets[index_bucket]['type']
+    range_bucket = audit_buckets[index_bucket]['range']
+    audit_last_update[type_bucket] = {'count' : 0, 'size': 0.0}
+    audit_study_date[type_bucket] = {'count' : 0, 'size': 0.0}
+
+# Pull studies
+response_studies = req_session['main'].get('%s/studies' % url_orthanc['main'], headers=headers)
+if response_studies.status_code != 200:
+    sys.exit('Problem querying %s/studies' % url_orthanc['main'])
+
+orthanc_study_ids = response_studies.json()
+n_study = len(orthanc_study_ids)
+i_study = 0
+for orthanc_study_id in orthanc_study_ids:
+
+    i_study += 1
+    print('%d of %d' % (i_study, n_study))
+    response_study = req_session['main'].get('%s/studies/%s' % (url_orthanc['main'], orthanc_study_id), headers=headers)
+    if response_study.status_code != 200:
+        continue
+    meta_study = response_study.json()
+    last_update = meta_study['LastUpdate']
+
+    # The size on disk
+    flag_in_map = orthanc_study_id in map_size_on_disk
+    if flag_in_map:
+        flag_in_map = last_update in map_size_on_disk[orthanc_study_id]
+    if not flag_in_map:
+        response_stats = req_session['main'].get('%s/studies/%s/statistics' % (url_orthanc['main'], orthanc_study_id), headers=headers)
+        if response_study.status_code != 200:
+            continue
+        meta_stats = response_stats.json()
+        if orthanc_study_id not in map_size_on_disk:
+            map_size_on_disk[orthanc_study_id] = {}
+        map_size_on_disk[orthanc_study_id][last_update] = float(meta_stats['DicomDiskSizeMB'])
+    size_in_mb = map_size_on_disk[orthanc_study_id][last_update]
+
+    # Bin the study
+    last_update = datetime.datetime.strptime(meta_study['LastUpdate'], '%Y%m%dT%H%M%S')
+    study_date = datetime.datetime.strptime(meta_study['MainDicomTags']['StudyDate'], '%Y%m%d')
+    for index_bucket in order_bucket:
+        type_bucket = audit_buckets[index_bucket]['type']
+        range_bucket = audit_buckets[index_bucket]['range']
+        if last_update > range_bucket['start'] and last_update <= range_bucket['end']:
+            audit_last_update[type_bucket]['count'] += 1
+            audit_last_update[type_bucket]['size'] += size_in_mb / 1024.0
+        if study_date > range_bucket['start'] and study_date <= range_bucket['end']:
+            audit_study_date[type_bucket]['count'] += 1
+            audit_study_date[type_bucket]['size'] += size_in_mb / 1024.0
+
+# Update the map file
+with open(file_size_on_disk, 'wb') as lun:
+    pickle.dump(map_size_on_disk, lun)
+
+# Report
+message_body = ['<html>', ' '*2 + '<head></head>', ' '*2 + '<body>']
+message_body += [' '*4 + '<h1>Study Audit for <a href="https://APACHE_HOST/%s/">%s</a></h1>' % ('ORTHANC_NAME',aet_str['main'])]
+message_body += [' '*4 + '<p>Weekly report of study ages and sizes on the <a href="https://APACHE_HOST/%s/">%s</a></p>' % ('ORTHANC_NAME',aet_str['main'])] 
+message_body += [' '*4 + '<table border=1>']
+message_body += [' '*6 + '<tr><th rowspan=2 bgcolor="lightyellow">Description</th><th colspan=2 bgcolor="lightgray">Dates</th><th colspan=2 bgcolor="lightgray">Count</th><th colspan=2 bgcolor="lightgray">Size (GB)</th></tr>']
+message_body += [' '*6 + '<tr><th bgcolor="lightgreen">Start</th><th bgcolor="pink">End</th><th bgcolor="lavender">By Upload Date</th><th>By Study Date</th><th bgcolor="lavender">By Upload Date</th><th>By Study Date</th></tr>']
+for index_bucket in order_bucket:
+    type_bucket = audit_buckets[index_bucket]['type']
+    range_bucket = audit_buckets[index_bucket]['range']
+    line_of_text = ' '*6 + '<tr>'
+    line_of_text += '<td style="text-align:center">%s</td>' % type_bucket
+    line_of_text += '<td bgcolor="lightgreen" style="text-align:center">%s</td>' % range_bucket['start'].strftime('%Y%m%d')
+    line_of_text += '<td bgcolor="pink" style="text-align:center">%s</td>' % range_bucket['end'].strftime('%Y%m%d')
+    line_of_text += '<td bgcolor="lavender" style="text-align:center">%d</td>' % audit_last_update[type_bucket]['count']
+    line_of_text += '<td style="text-align:center">%d</td>' % audit_study_date[type_bucket]['count']
+    line_of_text += '<td bgcolor="lavender" style="text-align:center">%d</td>' % audit_last_update[type_bucket]['size']
+    line_of_text += '<td style="text-align:center">%d</td>' % audit_study_date[type_bucket]['size']
+    line_of_text += '</tr>'
+    message_body += [line_of_text]
+message_body += [' '*4 + '</table>']
+message_body += [' '*2 + '</body>']
+message_body += ['</html>']
+
+response_email = email_message('PHI Audit Report from %s' % aet_str['main'], '\n'.join(message_body), subtype='html')
+if response_email['status'] != 0:
+    sys.exit('Email problem: %s' % response_email['error_text'])
+
