@@ -46,7 +46,7 @@ def email_message(subject, message_body, subtype='plain'):
     msg['From'] = email_from 
     msg['To'] = ','.join(email_recipients)
 
-    smtp_server = 'localhost' 
+    smtp_server = 'SMTP_SERVER' 
     s = smtplib.SMTP(smtp_server)
     s.sendmail(email_from, email_recipients, msg.as_string())
     s.quit()
