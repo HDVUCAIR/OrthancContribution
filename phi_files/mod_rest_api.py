@@ -4200,10 +4200,16 @@ def irb_label_regex_map(irb_label, extra=''):
     description = None
     patient_name_base = None
     for irb_standard, irb_dict in global_var['irb_label_regex_map'].items():
-        if re.match(irb_dict['label_re'], irb_label) is not None:
-            patient_name_base = irb_dict['name_base']
-            description = irb_dict['description']
-            irb_label_standard = irb_standard
+        res = re.match(irb_dict['label_re'], irb_label, re.ignorecase)
+        if res is not None:
+            if irb_standard == 'other':
+                patient_name_base = res.group(1)
+                description = irb_dict['description']
+                irb_label_standard = res.group(1)
+            else:
+                patient_name_base = irb_dict['name_base']
+                description = irb_dict['description']
+                irb_label_standard = irb_standard
             break
     if patient_name_base is None:
         meta_system = json.loads(orthanc.RestApiGet('/system'))
