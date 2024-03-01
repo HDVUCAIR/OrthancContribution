@@ -152,9 +152,9 @@ services:
       # Entries should be   "irbabbrev" : { "label_re" : "regular expression to uniquely identify this irb", "long_form" : "Human readable description of IRB", "name_base" : "Form taken by patient name base" }
       PYTHON_IRB_LABEL_REGEXP_MAP: >
         {
-          "irbstandard1" : { "label_re" : "^irbREGEXP1", "description" : "Long description 1",    "name_base" : "patient_name_base1" }, 
-          "irbstandard2" : { "label_re" : "^irbREGEXP2", "description" : "Long description 2",    "name_base" : "patient_name_base2" }, 
-          "other"        : { "label_re" : "^other(.*)",  "description" : "User designated other", "name_base" : "other" }
+          "irbstandard1" : { "label_re" : "^irbREGEXP1",   "description" : "Long description 1",    "name_base" : "patient_name_base1" }, 
+          "irbstandard2" : { "label_re" : "^irbREGEXP2",   "description" : "Long description 2",    "name_base" : "patient_name_base2" }, 
+          "other"        : { "label_re" : "^irbother(.*)", "description" : "User designated other", "name_base" : "other" }
         }
       PYTHON_MAIL_AUTO: "${PHI_MAIL_AUTO}"
       PYTHON_MAIL_ORIGIN: "${PHI_MAIL_ORIGIN}"
