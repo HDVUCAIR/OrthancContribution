@@ -4205,7 +4205,7 @@ def irb_label_regex_map(irb_label, extra=''):
             if irb_standard == 'other':
                 patient_name_base = res.group(1)
                 description = irb_dict['description']
-                irb_label_standard = res.group(1)
+                irb_label_standard = irb_label
             else:
                 patient_name_base = irb_dict['name_base']
                 description = irb_dict['description']
