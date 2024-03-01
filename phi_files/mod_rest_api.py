@@ -4200,7 +4200,7 @@ def irb_label_regex_map(irb_label, extra=''):
     description = None
     patient_name_base = None
     for irb_standard, irb_dict in global_var['irb_label_regex_map'].items():
-        res = re.match(irb_dict['label_re'], irb_label, re.ignorecase)
+        res = re.match(irb_dict['label_re'], irb_label, re.IGNORECASE)
         if res is not None:
             if irb_standard == 'other':
                 patient_name_base = res.group(1)
