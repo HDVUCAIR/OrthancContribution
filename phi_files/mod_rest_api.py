@@ -4068,7 +4068,7 @@ def get_metadata_from_remote_aet(orthanc_study_id, meta_study=None):
                         series_number = meta_answer_content_series[u'0020,0011']['Value'] if u'0020,0011' in meta_answer_content_series else ''
                         series_description = meta_answer_content_series[u'0008,103e']['Value'] if u'0008,103e' in meta_answer_content_series else ''
                         series_instance_uid = meta_answer_content_series[u'0020,000e']['Value']
-                        if series_instance_uid not in output['Series']:
+                        if series_instance_uid not in output['Series'] and series_description.lower().find('phoenix') < 0:
                             output['Series'][series_instance_uid] = {'local' : False, 'remote' : True, 
                                                                      'number' : series_number, 'description' : series_description}
                             output['Series'][series_instance_uid]['RemoteModality'] = remote_modality
