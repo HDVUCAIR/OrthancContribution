@@ -1698,7 +1698,8 @@ def anonymize_study_init(orthanc_study_id, flag_force_anon=global_var['flag_forc
     status = {'status' : 0}
     if trigger_type == 'onchange' and log_message_bitflag:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Non-anonymized study stable.  Initiating auto anon', **kwargs)
-    email_message('%s Triggered Anonymization' % aet, 'Anonymization (%s) triggered.  Look for an update upon completion.' % trigger_type, **kwargs)
+    #email_message('%s Triggered Anonymization' % aet, 'Anonymization (%s) triggered.  Look for an update upon completion.' % trigger_type, **kwargs)
+    auto_email('%s Triggered Anonymization' % aet, 'Anonymization (%s) triggered.  Look for an update upon completion.' % trigger_type, **kwargs)
     status = anonymize_study(orthanc_study_id, trigger_type, remote_user, **kwargs)
     if status['status'] != 0:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Auto anon failed: %s' % status['error_text'], **kwargs)
@@ -3442,7 +3443,8 @@ def email_study_report(orthanc_study_id):
         global_var['log_indent_level'] = log_indent_level_prev
 
     kwargs = {'subtype' : 'html' }
-    return email_message(email_subject, '\n'.join( message_body), **kwargs)
+    #return email_message(email_subject, '\n'.join( message_body), **kwargs)
+    return auto_email(email_subject, '\n'.join( message_body), **kwargs)
 
 # ============================================================================
 def filter_and_delete_instances(orthanc_study_id, **kwargs):
