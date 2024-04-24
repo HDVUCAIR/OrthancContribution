@@ -786,6 +786,7 @@ def anonymize_instances_at_level(anon_at_level, orthanc_level_id, flag_first_cal
     patient_name_anon = construct_patient_name(internal_number, **kwargs)
 
     if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Anon patient name: %s ' % patient_name_anon, **kwargs)
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Time so far (2) in %s: %d ' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
 
     # Tags to be replaced
@@ -1102,6 +1103,7 @@ def anonymize_study(orthanc_study_id_parent, trigger_type, remote_user, **kwargs
 
         # Update the parent history
         if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Anon patient name: %s ' % patient_name_anon, **kwargs)
             log_message(log_message_bitflag, global_var['log_indent_level'], 'Updating child anonymization history.', **kwargs)
         anonymization_history_atom = anonymization_history_atom_modify(anonymization_history_atom, make_date_time='completed')
             
