@@ -2703,7 +2703,7 @@ def base_tag_handling(**kwargs):
         table_from_ctp['0040-1400'] = {'en' : True,  'op' : 'remove',  'name' : 'RequestedProcedureComments',                   'comment' : ''}
         table_from_ctp['0040-2001'] = {'en' : True,  'op' : 'remove',  'name' : 'ReasonForTheImagingServiceRequest',            'comment' : ''}
         table_from_ctp['0040-2004'] = {'en' : True,  'op' : 'remove',  'name' : 'IssueDateOfImagingServiceRequest',             'comment' : ''}
-        table_from_ctp['0040-2005'] = {'en' : False, 'op' : '',        'name' : 'IssueTimeOfImagingServiceRequest',             'comment' : ''}
+        table_from_ctp['0040-2005'] = {'en' : False, 'op' : 'remove',  'name' : 'IssueTimeOfImagingServiceRequest',             'comment' : ''}
         table_from_ctp['0040-2008'] = {'en' : True,  'op' : 'remove',  'name' : 'OrderEnteredBy',                               'comment' : ''}
         table_from_ctp['0040-2009'] = {'en' : True,  'op' : 'remove',  'name' : 'OrderEntererLocation',                         'comment' : ''}
         table_from_ctp['0040-2010'] = {'en' : True,  'op' : 'remove',  'name' : 'OrderCallbackPhoneNumber',                     'comment' : ''}
@@ -5058,8 +5058,11 @@ def recursive_search_dicom_dict_for_group_element(gggg_comma_eeee_tag, value_dic
     if type_match == 'gggg-odd':
         if int(group,16) % 2 == 1:
             return [gggg_dash_eeee_tag], [gggg_dash_eeee_tag]
-    elif type_match in ['gggg-eeee', 'gggg']:
+    elif type_match ==  'gggg-eeee':
         if gggg_dash_eeee_tag in match_list:
+            return [gggg_dash_eeee_tag], [gggg_dash_eeee_tag]
+    elif type_match == 'gggg':
+        if group in match_list:
             return [gggg_dash_eeee_tag], [gggg_dash_eeee_tag]
     elif type_match == 'gggg-regexp':
         for gggg_re in match_list:
@@ -6081,8 +6084,8 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
         for replace_root_key, replace_root_val in replace_root.items():
             replace_dict[replace_root_key] = replace_root_val
         
-        # Gather Dicom meta
-        if flag_send_to_remote:
+        # Gather Dicom meta (I used to save time by not working on files not meant to be sent, but almost everyone sends the files manually if they want)
+        if True or flag_send_to_remote:
             dicom_tags = json.loads(orthanc.RestApiGet('/instances/%s/simplified-tags' % orthanc_instance_id))
         else:
             dicom_tags = {}
@@ -6124,7 +6127,7 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
         per_frame_functional_groups_sequence = 'PerFrameFunctionalGroupsSequence'
         frame_content_sequence = 'FrameContentSequence'
         if per_frame_functional_groups_sequence in dicom_tags:
-            replace_dict[per_frame_functional_groups_sequence] = copy.copy(dicom_tags[per_frame_functional_groups_sequence])
+            #replace_dict[per_frame_functional_groups_sequence] = copy.copy(dicom_tags[per_frame_functional_groups_sequence])
             i_group = 0
             for functional_group_dict in dicom_tags[per_frame_functional_groups_sequence]:
                 if frame_content_sequence in functional_group_dict:
@@ -6133,7 +6136,9 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
                         for date_time_field_frame in date_time_fields_frame:
                             if date_time_field_frame in frame_content_dict and len(frame_content_dict[date_time_field_frame].strip()) > 0:
                                 date_string_new = shift_date_time_string(shift_epoch, frame_content_dict[date_time_field_frame])
-                                replace_dict[per_frame_functional_groups_sequence][i_group][frame_content_sequence][i_content][date_time_field_frame] = date_string_new
+                                key_str = '%s[%d].%s[%d].%s' % (per_frame_functional_groups_sequence, i_group, frame_content_sequence, i_content, date_time_field_frame)
+                                #replace_dict[per_frame_functional_groups_sequence][i_group][frame_content_sequence][i_content][date_time_field_frame] = date_string_new
+                                replace_dict[key_str] = date_string_new
                         i_content += 1
                 i_group += 1
 
@@ -6156,21 +6161,21 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
                 sop_instance_uid_new = global_var['uid_map'][sop_instance_uid_new]
             replace_dict['SOPInstanceUID'] = sop_instance_uid_new
 
-        # Need to work through numeric tags now
-        if flag_send_to_remote:
-            dicom_tags = json.loads(orthanc.RestApiGet('/instances/%s/tags' % orthanc_instance_id))
+        # Need to work through numeric tags now (now, regardless of send status)
+        if True or flag_send_to_remote:
+            dicom_tags_numeric = json.loads(orthanc.RestApiGet('/instances/%s/tags' % orthanc_instance_id))
             for tag_key, tag_val in global_var['top_level_tag_to_keep'].items():
-                if tag_key in dicom_tags:
-                    if type(dicom_tags[tag_key]['Value']) in [type_dict, type_list]:
-                        iReplaceValue, lLevelOut = recursive_replace_uid(dicom_tags[tag_key])
+                if tag_key in dicom_tags_numeric:
+                    if type(dicom_tags_numeric[tag_key]['Value']) in [type_dict, type_list]:
+                        iReplaceValue, lLevelOut = recursive_replace_uid(dicom_tags_numeric[tag_key])
                         if global_var['address_list'] is not None:
                             for address_key, address_val in global_var['address_list'].items():
                                 replace_dict[address_key] = address_val
                     else:
-                        if dicom_tags[tag_key]['Value'] not in global_var['uid_map']:
+                        if dicom_tags_numeric[tag_key]['Value'] not in global_var['uid_map']:
                             log_message(log_message_bitflag, global_var['log_indent_level'], json.dumps(global_var['uid_map'],indent=3), **kwargs)
-                            log_message(log_message_bitflag, global_var['log_indent_level'], json.dumps(dicom_tags,indent=3), **kwargs)
-                        uid_new = global_var['uid_map'][dicom_tags[tag_key]['Value']]
+                            log_message(log_message_bitflag, global_var['log_indent_level'], json.dumps(dicom_tags_numeric,indent=3), **kwargs)
+                        uid_new = global_var['uid_map'][dicom_tags_numeric[tag_key]['Value']]
                         while uid_new in global_var['uid_map']:
                             if uid_new == global_var['uid_map'][uid_new]:
                                 break
