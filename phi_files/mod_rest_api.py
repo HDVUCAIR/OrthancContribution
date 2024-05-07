@@ -1666,8 +1666,8 @@ def anonymize_study_init(orthanc_study_id, flag_force_anon=global_var['flag_forc
             for orthanc_study_id_other in json.loads(orthanc.RestApiGet('/studies')):
                 meta_study_other = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_other))
                 anonymization_history_other = anonymization_history_get(orthanc_study_id_other)
-                if ('AnonymizedFrom' in meta_study_other and meta_study_other['AnonymizedFrom'] == orthanc_study_id_parent) or \
-                   ('ModifiedFrom' in meta_study_other and meta_study_other['ModifiedFrom'] == orthanc_study_id_parent):
+                if ('AnonymizedFrom' in meta_study_other and meta_study_other['AnonymizedFrom'] == orthanc_study_id) or \
+                   ('ModifiedFrom' in meta_study_other and meta_study_other['ModifiedFrom'] == orthanc_study_id):
                     flag_skip = True
                     if log_message_bitflag:
                         log_message(log_message_bitflag, global_var['log_indent_level'], 'Appears to be already anonymized (orthanc history prior)', **kwargs)
