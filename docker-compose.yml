@@ -649,6 +649,12 @@ services:
     container_name: ${COMMON_BASENAME}_disk_postgres
     volumes: 
       - type: bind
+        source: ./disk_files/postgres.conf
+        target: /etc/postgresql/postgresql.conf
+      - type: bind
+        source: ./disk_files/pg_hba.conf
+        target: /etc/postgresql/pg_hba.conf
+      - type: bind
         source: ./disk_files/postgresql-create-orthanc-user.sh
         target: /docker-entrypoint-initdb.d/postgresql-create-orthanc-user.sh
       - type: bind
