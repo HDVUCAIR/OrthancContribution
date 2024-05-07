@@ -132,4 +132,5 @@ chown $ORTHANC_UID:$ORTHANC_GID ./shared_files/make_certs_orthanc.sh
 chmod ug+rx ./shared_files/make_certs_orthanc.sh
 chown $ORTHANC_UID:$ORTHANC_GID ./disk_files/mod_rest_api.py
 chown $POSTGRES_UID:$POSTGRES_GID ./disk_files/postgresql-create-orthanc-user.sh
+chown $POSTGRES_UID:$POSTGRES_GID ./disk_files/*.conf
 
