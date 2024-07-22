@@ -4032,23 +4032,27 @@ def get_metadata_from_remote_aet(orthanc_study_id, meta_study=None):
                                 'Query' : query_dicom}
                 response_query_series = orthanc.RestApiPost('/modalities/%s/query' % remote_modality, json.dumps(query_series))
                 remote_found = False
-                meta_query_series = json.loads(response_query_series) if len(response_query_series.strip()) > 0 else {}
+                meta_query_series = json.loads(response_query_series.strip()) if len(response_query_series.strip()) > 0 else {}
                 if 'ID' in meta_query_series:
                     response_query_id = orthanc.RestApiGet('/queries/' + meta_query_series['ID'])
                     if len(response_query_id.strip()) > 0:
-                        meta_query_id = json.loads(response_query_id)
+                        meta_query_id = json.loads(response_query_id.strip())
                         if meta_query_id[0] == "answers":
                             response_query_id_answer = orthanc.RestApiGet('/queries/' + meta_query_series['ID'] + '/answers')
                             if len(response_query_id_answer.strip()) > 0:
-                                meta_query_id_answer = json.loads(response_query_id_answer)
+                                meta_query_id_answer = json.loads(response_query_id_answer.strip())
                                 if meta_query_id_answer[0] == "0":
                                     response_query_id_answer_zero = orthanc.RestApiGet('/queries/' + meta_query_series['ID'] + '/answers/0')
                                     if len(response_query_id_answer_zero.strip()) > 0:
-                                        meta_query_id_answer_zero = json.loads(response_query_id_answer_zero)
-                                        if meta_query_id_answer_zero[0] == "content":
-                                            response_content = orthanc.RestApiGet('/queries/' + meta_query_series['ID'] + '/answers/0/content')
-                                            if len(response_content.strip()) > 0:
-                                                remote_found = True
+                                        meta_query_id_answer_zero = json.loads(response_query_id_answer_zero.strip())
+                                        if len(meta_query_id_answer_zero) > 0 and meta_query_id_answer_zero[0] == "content":
+                                            try:
+                                                response_content = orthanc.RestApiGet('/queries/' + meta_query_series['ID'] + '/answers/0/content')
+                                                if len(response_content.strip()) > 0:
+                                                    remote_found = True
+                                            except:
+                                                orthanc.LogWarning('Error querying remote %s' % series_instance_uid)
+                                                
                 output['Series'][series_instance_uid]['remote'] = remote_found
                 output['LocalOnRemote'] += 1
 
