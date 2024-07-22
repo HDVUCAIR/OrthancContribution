@@ -94,6 +94,7 @@ chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/orthanc.secret.json.template
 chown $ORTHANC_UID:$ORTHANC_GID ${PHI_ANON_PROFILE_JSON}
 chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/postgresql-create-orthanc-user.sh
 chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/postgres.cron
+chmod 600 ./phi_files/postgres.cron
 chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/pg*
 
 # ------------------------------------------------------
