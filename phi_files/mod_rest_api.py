@@ -6433,7 +6433,10 @@ def update_lookup_html(**kwargs):
                         lun.write('%d' % patient_map[pid]['InternalNumber'])
                         lun.write('</a>\n')
                     else:
-                        lun.write('%d' % patient_map[pid]['InternalNumber'])
+                        if 'InternalNumber' in patient_map[pid]:
+                            lun.write('%d' % patient_map[pid]['InternalNumber'])
+                        else:
+                            lun.write('&nbsp')
                     lun.write('</td>\n')
                     if flag_siuid_to_anon:
                         if study_instance_uid in patient_map[pid]['SIUID2NameAnonMap']:
