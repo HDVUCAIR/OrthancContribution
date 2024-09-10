@@ -29,6 +29,7 @@ except:
 
 # Regular expressions
 global_var['regexp']['address'] = re.compile('([^<]+)<([^@]+)@([^>]+)>.*')
+global_var['regexp']['search_patient_min'] = re.compile('.*[a-z0-9]{4,4}.*', re.I)
 
 # Global variables
 python_verbose_logwarning = 1 if os.getenv('PYTHON_VERBOSE_LOGWARNING', default='false') == 'true' or os.getenv('ORTHANC__PYTHON_VERBOSE', default='false') == 'true' else 0
@@ -3622,7 +3623,7 @@ def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=Non
                                                                       'SeriesDescription' : ['screen *s[a-z]*er', 'dose report', 'screen snapshot', 
                                                                                              'no rpt', 'summary', 'vpct', 'history', 'rapid', 
                                                                                              'securview', 'patient protocol', 'phoenix', 
-                                                                                             'carestream', 'req', 'report', 'blackford']}.items():
+                                                                                             'carestream', 'req', 'report', 'blackford','topo']}.items():
                 if flag_non_report and field_type in meta_instance:
                     for field_item in field_items:
                         flag_non_report = flag_non_report and re.match('.*%s.*' % field_item, meta_instance[field_type], re.IGNORECASE) is None
@@ -4918,6 +4919,550 @@ def on_orthanc(pg_connection=None, pg_cursor=None, **kwargs):
     return {'status': 0}, now_on_orthanc
 
 # ============================================================================
+def patient_registration_web():
+# ----------------------------------------------------------------------------
+    """
+    PURPOSE: Set up HTML page for registering pagient.  Any subjects not 
+                (already registered or anonymzied) are presented for
+                registration
+    OUTPUT:  HTML of web form for performing registration.
+    HISTORY: 04 Sep 2024, John.Roberts@hsc.utah.edu
+             Dept Radis, UofU, SLC Utah
+    """
+# ----------------------------------------------------------------------------
+
+    global global_var
+    log_message_bitflag = python_verbose_logwarning
+    if log_message_bitflag:
+        log_indent_level_prev = global_var['log_indent_level']
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
+    # Construct html headers
+    answer_buffer = []
+    answer_buffer += ['<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">']
+    answer_buffer += [' '*2 + '<head>']
+    answer_buffer += [' '*2 + '</head>']
+    answer_buffer += [' '*2 + '<body>']
+    answer_buffer_close = [' '*2 + '</body', '</html>']
+
+    # Scan for non-anonymized subjects
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Scanning for non-anonymized subjects')
+    response_studies = orthanc.RestApiGet('/studies')
+    map_study_to_patient = {}
+    map_primary_to_secondary = {}
+    patient_stats = {}
+    for orthanc_study_id in json.loads(response_studies):
+        response_study = orthanc.RestApiGet('/studies/%s' % orthanc_study_id)
+        meta_study = json.loads(response_study)
+        if 'AnonymizedFrom' in meta_study or 'ModifiedFrom' in meta_study:
+            continue
+        patient_name = meta_study['PatientMainDicomTags']['PatientName'] if 'PatientName' in meta_study['PatientMainDicomTags'] else 'unidentified'
+        patient_dob = meta_study['PatientMainDicomTags']['PatientBirthDate'] if 'PatientBirthDate' in meta_study['PatientMainDicomTags'] else 'unknown'
+        anonymization_history = anonymization_history_get(orthanc_study_id)
+        if len(anonymization_history) > 0:
+            continue
+        status, patient_ids_temp = get_patient_ids(meta_study=meta_study)
+        if status['status'] != 0:
+            if log_message_bitflag:
+                log_message(log_message_bitflag, global_var['log_indent_level'], 'Problem getting patient ids')
+                global_var['log_indent_level'] -= 3
+            return '\n'.join(answer_buffer + ['Problem getting patient ids'] + answer_buffer_close)
+        patient_id_alt = []
+        i_patient = 0
+        for index, patient_id_local in patient_ids_temp.items():
+            if index == 1 or i_patient == 0:
+                patient_id = patient_id_local
+            else:
+                patient_id_alt += [patient_id_local]
+            i_patient += 1
+        map_study_to_patient[orthanc_study_id] = {'id' : patient_id, 'alt': patient_id_alt}
+        if patient_id not in map_primary_to_secondary:
+            map_primary_to_secondary[patient_id] = patient_id_alt
+        else:
+            map_primary_to_secondary[patient_id] = list(set(map_primary_to_secondary[patient_id] + patient_id_alt))
+        if patient_id not in patient_stats:
+            patient_stats[patient_id] = {'name': [patient_name], 'dob' : [patient_dob]}
+        else:
+            if patient_name not in patient_stats[patient_id]['name']:
+                patient_stats[patient_name]['name'] += [patient_name]
+            if patient_dob not in patient_stats[patient_id]['dob']:
+                patient_stats[patient_dob]['dob'] += [patient_dob]
+    
+    # Check database for already registered subjects
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Checking database for registered subjects')
+    status, patient_map, patient_reverse_map, flag_siuid_to_anon = load_phi_to_anon_map()
+    if status['status'] != 0:
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], status['error_text'])
+            global_var['log_indent_level'] = log_indent_level_prev
+        return '\n'.join(answer_buffer + [status['error_text']] + answer_buffer_close)
+    map_registered = {}
+    for orthanc_study_id, dict_patient in map_study_to_patient.items():
+        flag_registered = False
+        for patient_id in [dict_patient['id']] + dict_patient['alt']:
+            if patient_id not in map_registered:
+                map_registered[patient_id] = False
+            for reverse_type, reverse_map in patient_reverse_map.items():
+                flag_registered = flag_registered or patient_id in reverse_map
+        for patient_id in [dict_patient['id']] + dict_patient['alt']:
+            map_registered[patient_id] = flag_registered
+    flag_changed = True
+    while flag_changed:
+        flag_changed = False
+        for patient_id, flag_registered in map_registered.items():
+            if patient_id in map_primary_to_secondary:
+                for patient_id_alt in map_primary_to_secondary[patient_id]:
+                    if patient_id_alt not in map_registered:
+                        map_registered[patient_id_alt] = flag_registered
+                        flag_changed = True
+                        break
+                    elif map_registered[patient_id_alt] != flag_registered:
+                        if flag_registered:
+                            map_registered[patient_id_alt] = True
+                        else:
+                            map_registered[patient_id] = True
+                        flag_changed = True
+                        break
+            if flag_changed:
+                break
+
+    # Collect the unregistered patient_id that are primary (not alternates)
+    unregistered = []
+    for patient_id, flag_registered in map_registered.items():
+        if not flag_registered and patient_id in map_primary_to_secondary:
+            if patient_id not in unregistered:
+                unregistered += [patient_id]
+
+    if len(unregistered) == 0:
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'No unregistered subjects')
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] = log_indent_level_prev
+        return '\n'.join(answer_buffer + ['No unregistered subjects'] + answer_buffer_close)
+
+    # Javascript
+    answer_scripts = [' '*4 + '<script type="text/javascript" src="./app/libs/jquery.min.js"></script>']
+    # Variables
+    answer_scripts += [' '*4 + '<script type="text/javascript">']
+    answer_scripts += [' '*6 + 'var n_sel=%d;' % len(unregistered)]
+    answer_scripts += [' '*6 + 'var patient_ids = {};']
+    answer_scripts += [' '*6 + 'var map_pid2mrn = {};']
+    answer_scripts += [' '*6 + 'var state_registration = {selected: "div_0", register_as : "", associate : 0, register_as_valid: false};']
+    i_patient = 0
+    for patient_id in unregistered:
+        answer_scripts += [' '*6 + 'patient_ids["div_%d"] = \'%s\';' % (i_patient, patient_id)]
+        i_patient += 1
+    # Event for patient drop down selection
+    answer_scripts += [' '*6 + '$( window ).on( \'load\', function() {']
+    answer_scripts += [' '*8 + '$( \'#sel_patient\' ).change( function () {']
+    answer_scripts += [' '*10 + 'state_registration.selected = this.value;']
+    answer_scripts += [' '*10 + 'state_registration.register_as = "";']
+    answer_scripts += [' '*10 + 'state_registration.register_as_valid = false;']
+    answer_scripts += [' '*10 + '$( "#button_register_as" ).css("background-color", "yellow");']
+    answer_scripts += [' '*10 + '$( "#button_register_as" ).text("Click to accept");']
+    answer_scripts += [' '*10 + 'document.getElementById("checkbox_register_as").checked = false;']
+    answer_scripts += [' '*10 + 'document.getElementById("div_register_as").style.display="none";']
+    answer_scripts += [' '*10 + 'state_registration.associate = 0;']
+    answer_scripts += [' '*10 + '$( \'#table_associate_results tbody\').remove();']
+    answer_scripts += [' '*10 + 'document.getElementById("checkbox_associate").checked = false;']
+    answer_scripts += [' '*10 + 'document.getElementById("div_associate").style.display="none";']
+    answer_scripts += [' '*10 + 'for (let i_sel = 0; i_sel < n_sel; i_sel++) {']
+    answer_scripts += [' '*12 + 'selection_local = "div_" + i_sel;']
+    answer_scripts += [' '*12 + 'if (selection_local.localeCompare(state_registration.selected) == 0) {']
+    answer_scripts += [' '*14 + 'document.getElementById(selection_local).style.display = "block";']
+    answer_scripts += [' '*12 + '} else {']
+    answer_scripts += [' '*14 + 'document.getElementById(selection_local).style.display = "none";']
+    answer_scripts += [' '*12 + '}']
+    answer_scripts += [' '*10 + '}']
+    answer_scripts += [' '*8 + '});']
+    answer_scripts += [' '*6 + '});']
+    # Event for final register button
+    answer_scripts += [' '*6 + '$( window ).on( \'load\', function() {']
+    answer_scripts += [' '*8 + '$( \'#button_register\' ).click( function () {']
+    answer_scripts += [' '*10 + 'var submission = {};']
+    answer_scripts += [' '*10 + 'if (document.getElementById("checkbox_register_as").checked) {']
+    answer_scripts += [' '*12 + 'if (state_registration.register_as_valid) {']
+    answer_scripts += [' '*14 + 'submission["Primary"] = state_registration.register_as;']
+    answer_scripts += [' '*14 + 'submission["Secondary"] = patient_ids[state_registration.selected];']
+    answer_scripts += [' '*12 + '} else {']
+    answer_scripts += [' '*14 + 'alert("Invalid register as value");']
+    answer_scripts += [' '*14 + 'return;']
+    answer_scripts += [' '*12 + '}']
+    answer_scripts += [' '*10 + '} else if (document.getElementById("checkbox_associate").checked) {']
+    answer_scripts += [' '*12 + 'if (state_registration.associate != 0) {']
+    answer_scripts += [' '*14 + 'submission["pid"] = state_registration.associate;']
+    answer_scripts += [' '*14 + 'submission["Primary"] = map_pid2mrn[state_registration.associate];']
+    answer_scripts += [' '*14 + 'submission["Secondary"] = patient_ids[state_registration.selected];']
+    answer_scripts += [' '*12 + '} else {']
+    answer_scripts += [' '*14 + 'alert("Invalid associate");']
+    answer_scripts += [' '*14 + 'return;']
+    answer_scripts += [' '*12 + '}']
+    answer_scripts += [' '*10 + '}']
+    answer_scripts += [' '*10 + 'if (Object.keys(submission).length == 0) {']
+    answer_scripts += [' '*12 + 'submission["Primary"] = patient_ids[state_registration.selected];']
+    answer_scripts += [' '*10 + '}']
+    answer_scripts += [' '*10 + 'alert(JSON.stringify(submission));']
+    answer_scripts += [' '*10 + 'var request = $.ajax({']
+    answer_scripts += [' '*10 + '    url:\'./patient_registration_final\', ']
+    answer_scripts += [' '*10 + '    type: \'POST\',']
+    answer_scripts += [' '*10 + '    contentType: \'application/json\', ']
+    answer_scripts += [' '*10 + '    data: JSON.stringify(submission),']
+    answer_scripts += [' '*10 + '    dataType: "json",']
+    answer_scripts += [' '*10 + '    success : function( msg ) {']
+    answer_scripts += [' '*10 + '       if ( msg.status == 0 ) { ']
+    answer_scripts += [' '*10 + '          alert(msg.result);']
+    answer_scripts += [' '*10 + '       } else { ']
+    answer_scripts += [' '*10 + '          alert(msg.error_text);']
+    answer_scripts += [' '*10 + '       }']
+    answer_scripts += [' '*10 + '    },']
+    answer_scripts += [' '*10 + '    error: function( jqXHR, text_status ) {']
+    answer_scripts += [' '*10 + '       if (jqXHR.status == 0) {']
+    answer_scripts += [' '*10 + '          alert(jqXHR.result);']
+    answer_scripts += [' '*10 + '       } else {']
+    answer_scripts += [' '*10 + '          alert(jzXHR.error_text);']
+    answer_scripts += [' '*10 + '       }']
+    answer_scripts += [' '*10 + '    }']
+    answer_scripts += [' '*10 + '});']
+    answer_scripts += [' '*8 + '});']
+    answer_scripts += [' '*6 + '});']
+    # Event for checkbox for register_as
+    answer_scripts += [' '*6 + '$( window ).on( \'load\', function() {']
+    answer_scripts += [' '*8 + '$( \'#checkbox_register_as\' ).change( function () {']
+    answer_scripts += [' '*10 + 'if (this.checked) {']
+    answer_scripts += [' '*12 + 'document.getElementById("div_register_as").style.display="block";']
+    answer_scripts += [' '*12 + 'state_registration.associate = 0;']
+    answer_scripts += [' '*12 + 'state_registration.register_as = "";']
+    answer_scripts += [' '*12 + 'state_registration.register_as_valid = false;']
+    answer_scripts += [' '*12 + '$( "#button_register_as" ).css("background-color", "yellow");']
+    answer_scripts += [' '*12 + '$( "#button_register_as" ).text("Click to accept");']
+    answer_scripts += [' '*12 + '$( \'#table_associate_results tbody\').remove();']
+    answer_scripts += [' '*12 + 'document.getElementById("checkbox_associate").checked = false;']
+    answer_scripts += [' '*12 + 'document.getElementById("div_associate").style.display="none";']
+    answer_scripts += [' '*10 + '} else {']
+    answer_scripts += [' '*12 + 'document.getElementById("div_register_as").style.display="none";']
+    answer_scripts += [' '*10 + '}']
+    answer_scripts += [' '*8 + '});']
+    answer_scripts += [' '*6 + '});']
+    # Event for register_as accept button
+    answer_scripts += [' '*6 + '$( window ).on( \'load\', function() {']
+    answer_scripts += [' '*8 + '$( \'#button_register_as\' ).click( function () {']
+    answer_scripts += [' '*10 + 'var register_as = $( "#entry_register_as" ).val().trim();']
+    answer_scripts += [' '*10 + 'if ( register_as.length > 0 ) {']
+    answer_scripts += [' '*12 + '$( "#entry_register_as" ).val(register_as);']
+    answer_scripts += [' '*12 + 'var request = $.ajax({']
+    answer_scripts += [' '*12 + '    url:\'./search_patient\', ']
+    answer_scripts += [' '*12 + '    type: \'POST\',']
+    answer_scripts += [' '*12 + '    contentType: \'application/json\', ']
+    answer_scripts += [' '*12 + '    data: JSON.stringify({ SearchString : register_as }),']
+    answer_scripts += [' '*12 + '    dataType: "json",']
+    answer_scripts += [' '*12 + '    success : function( msg ) {']
+    answer_scripts += [' '*12 + '       if ( msg.status == 0 ) { ']
+    answer_scripts += [' '*12 + '          if (Object.keys(msg.patients).length > 0 ) {']
+    answer_scripts += [' '*12 + '             alert(register_as + " exists.  Consider associating with existing patient.");']
+    answer_scripts += [' '*12 + '             document.getElementById("register_as").checked = false;']
+    answer_scripts += [' '*12 + '             $( "#entry_register_as" ).val("");']
+    answer_scripts += [' '*12 + '             document.getElementById("div_register_as").style.display="none";']
+    answer_scripts += [' '*12 + '             $( "#entry_associate" ).val(register_as);']
+    answer_scripts += [' '*12 + '             state_registration.register_as = "";']
+    answer_scripts += [' '*12 + '             state_registration.register_as_valid = false;']
+    answer_scripts += [' '*12 + '          } else {']
+    answer_scripts += [' '*12 + '             state_registration.register_as = register_as;']
+    answer_scripts += [' '*12 + '             state_registration.register_as_valid = true;']
+    answer_scripts += [' '*12 + '             $( "#button_register_as" ).css("background-color", "lightgreen");']
+    answer_scripts += [' '*12 + '             $( "#button_register_as" ).text("Accepted.");']
+    answer_scripts += [' '*12 + '          }']
+    answer_scripts += [' '*12 + '       } else { ']
+    answer_scripts += [' '*12 + '          alert(msg.error_text);']
+    answer_scripts += [' '*12 + '       }']
+    answer_scripts += [' '*12 + '    },']
+    answer_scripts += [' '*12 + '    error: function( jqXHR, text_status ) {']
+    answer_scripts += [' '*12 + '       state_registration.register_as = "";']
+    answer_scripts += [' '*12 + '       state_registration.register_as_valid = false;']
+    answer_scripts += [' '*12 + '       var dumby=1;']
+    answer_scripts += [' '*12 + '       if (jqXHR.status == 0) {']
+    answer_scripts += [' '*12 + '          alert(JSON.stringify(jqXHR.patients));']
+    answer_scripts += [' '*12 + '       } else {']
+    answer_scripts += [' '*12 + '          alert(jzXHR.error_text);']
+    answer_scripts += [' '*12 + '       }']
+    answer_scripts += [' '*12 + '    }']
+    answer_scripts += [' '*12 + '});']
+    answer_scripts += [' '*10 + '}']
+    answer_scripts += [' '*8 + '});']
+    answer_scripts += [' '*6 + '});']
+    # Event for checkbox for associate with
+    answer_scripts += [' '*6 + '$( window ).on( \'load\', function() {']
+    answer_scripts += [' '*8 + '$( \'#checkbox_associate\' ).change( function () {']
+    answer_scripts += [' '*10 + 'state_registration.associate = 0;']
+    answer_scripts += [' '*10 + '$( \'#table_associate_results tbody\').remove();']
+    answer_scripts += [' '*10 + 'if (this.checked) {']
+    answer_scripts += [' '*12 + 'document.getElementById("div_associate").style.display="block";']
+    answer_scripts += [' '*12 + 'state_registration.register_as = "";']
+    answer_scripts += [' '*12 + 'state_registration.register_as_valid = false;']
+    answer_scripts += [' '*12 + '$( "#button_register_as" ).css("background-color", "yellow");']
+    answer_scripts += [' '*12 + '$( "#button_register_as" ).text("Click to accept");']
+    answer_scripts += [' '*12 + 'document.getElementById("checkbox_register_as").checked = false;']
+    answer_scripts += [' '*12 + 'document.getElementById("div_register_as").style.display="none";']
+    answer_scripts += [' '*10 + '} else {']
+    answer_scripts += [' '*12 + 'document.getElementById("div_associate").style.display="none";']
+    answer_scripts += [' '*10 + '}']
+    answer_scripts += [' '*8 + '});']
+    answer_scripts += [' '*6 + '});']
+    # Event for associate search button
+    answer_scripts += [' '*6 + '$( window ).on( \'load\', function() {']
+    answer_scripts += [' '*8 + '$( \'#button_associate\' ).click( function () {']
+    answer_scripts += [' '*10 + 'state_registration.associate = 0;']
+    answer_scripts += [' '*10 + 'var associate_search = $( "#entry_associate" ).val().trim();']
+    answer_scripts += [' '*10 + 'if ( associate_search.length > 0 ) {']
+    answer_scripts += [' '*12 + '$( "#entry_associate" ).val(associate_search);']
+    answer_scripts += [' '*12 + 'var request = $.ajax({']
+    answer_scripts += [' '*12 + '    url:\'./search_patient\', ']
+    answer_scripts += [' '*12 + '    type: \'POST\',']
+    answer_scripts += [' '*12 + '    contentType: \'application/json\', ']
+    answer_scripts += [' '*12 + '    data: JSON.stringify({ SearchString : associate_search }),']
+    answer_scripts += [' '*12 + '    dataType: "json",']
+    answer_scripts += [' '*12 + '    success : function( msg ) {']
+    answer_scripts += [' '*12 + '       if ( msg.status == 0 ) { ']
+    answer_scripts += [' '*12 + '          fillSearch(msg.patients);']
+    answer_scripts += [' '*12 + '       } else { ']
+    answer_scripts += [' '*12 + '          alert(msg.error_text);']
+    answer_scripts += [' '*12 + '       }']
+    answer_scripts += [' '*12 + '    },']
+    answer_scripts += [' '*12 + '    error: function( jqXHR, text_status ) {']
+    answer_scripts += [' '*12 + '       var dumby=1;']
+    answer_scripts += [' '*12 + '       if (jqXHR.status == 0) {']
+    answer_scripts += [' '*12 + '          alert(JSON.stringify(jqXHR.patients));']
+    answer_scripts += [' '*12 + '       } else {']
+    answer_scripts += [' '*12 + '          alert(jzXHR.error_text);']
+    answer_scripts += [' '*12 + '       }']
+    answer_scripts += [' '*12 + '    }']
+    answer_scripts += [' '*12 + '});']
+    answer_scripts += [' '*10 + '}']
+    answer_scripts += [' '*8 + '});']
+    answer_scripts += [' '*6 + '});']
+    # Process search results
+    answer_scripts += [' '*6 + 'function associate_check(pid) {']
+    answer_scripts += [' '*8 + 'if (state_registration.associate != 0) {']
+    answer_scripts += [' '*10 + 'var row_id_old = "#arr_" + state_registration.associate + " td";']
+    answer_scripts += [' '*10 + 'var row_td_old = $(row_id_old);']
+    answer_scripts += [' '*10 + 'for (var i=0; i < row_td_old.length; i++) {']
+    answer_scripts += [' '*12 + 'row_td_old[i].style.background="white";']
+    answer_scripts += [' '*10 + '}']
+    answer_scripts += [' '*8 + '}']
+    answer_scripts += [' '*8 + 'state_registration.associate = pid;']
+    answer_scripts += [' '*8 + 'var row_id = "#arr_" + pid + " td";']
+    answer_scripts += [' '*8 + 'var row_td = $(row_id);']
+    answer_scripts += [' '*8 + 'for (var i=0; i < row_td.length; i++) {']
+    answer_scripts += [' '*10 + 'row_td[i].style.background="lightgreen";']
+    answer_scripts += [' '*8 + '}']
+    answer_scripts += [' '*6 + '}']
+    answer_scripts += [' '*6 + 'function fillSearch(search_results) {']
+    answer_scripts += [' '*8 + 'var alt_string=\'\';']
+    answer_scripts += [' '*8 + '$( \'#table_associate_results tbody\').remove();']
+    answer_scripts += [' '*8 + '$( \'#table_associate_results\' ).append(\'<tr><th/><th bgcolor="lightblue">PatientID</th><th bgcolor="lightblue">MRDB</th><th bgcolor="lightblue">Alternate PatientID</th></tr>\');']
+    answer_scripts += [' '*8 + 'for (var i=0, keys=Object.keys(search_results), l=keys.length; i<l; i++) {']
+    answer_scripts += [' '*10 + 'for (var j=0, alt_string=\'\', ll=search_results[keys[i]].secondary.length; j < ll; j++) {']
+    answer_scripts += [' '*12 + 'alt_string = alt_string + search_results[keys[i]].secondary[j];']
+    answer_scripts += [' '*12 + 'if (j < (ll-1)) {alt_string = alt_string + \'<br/>\';}']
+    answer_scripts += [' '*10 + '}']
+    answer_scripts += [' '*10 + '$( \'#table_associate_results\' ).append(\'<tr id="arr_\' + search_results[keys[i]].pid + \'">' + \
+                                '<td><input type="radio" onclick="associate_check(\' + search_results[keys[i]].pid + \')" id="pid_\' + search_results[keys[i]].pid + \'" name="pid" value="pid_\' + search_results[keys[i]].pid + \'" /></td>' + \
+                                '<td>\' + search_results[keys[i]].value + \'</td>' + \
+                                '<td>\' + search_results[keys[i]].internalnumber + \'</td>' + \
+                                '<td>\' + alt_string + \'</td></tr>\');']
+    answer_scripts += [' '*10 + 'map_pid2mrn[search_results[keys[i]].pid] = search_results[keys[i]].value;']
+    answer_scripts += [' '*8 + '}']
+    answer_scripts += [' '*6 + '}']
+
+    answer_scripts += [' '*4 + '</script>']
+    answer_buffer = answer_buffer[0:2] + answer_scripts + answer_buffer[-3:]
+    answer_buffer += [' '*4 + '<h2>Select A Patient</h2>']
+    answer_buffer += [' '*6 + '<select id="sel_patient">']
+    patient_id_selected = None
+    i_patient = 0
+    for patient_id in unregistered:
+        if patient_id_selected is None:
+            answer_buffer += [' '*8 + '<option value="div_%d" selected>%s (MRN %s)</option>' % (i_patient, patient_stats[patient_id]['name'][0], patient_id)]
+            patient_id_selected = patient_id
+        else:
+            answer_buffer += [' '*8 + '<option value="div_%d">%s (MRN %s)</option>' % (i_patient, patient_stats[patient_id]['name'][0], patient_id)]
+        i_patient += 1
+    answer_buffer += [' '*6 + '</select>']
+
+    # Stats of current patient
+    i_patient = 0
+    for patient_id in unregistered:
+        if patient_id == patient_id_selected:
+            answer_buffer += [' '*6 + '<div style="display:block" id="div_%d">' % i_patient ]
+        else:
+            answer_buffer += [' '*6 + '<div style="display:none" id="div_%d">' % i_patient ]
+        answer_buffer += [' '*8 + '<table border=1 id="select_patient_info">']
+        answer_buffer += [' '*10 + '<tr><th bgcolor="lightblue">MRN</th><th bgcolor="lightblue">Name</th><th bgcolor="lightblue">DOB</th><th bgcolor="lightblue">Alternate MRN</th></tr>']
+        answer_buffer += [' '*10 + '<tr>']
+        
+        answer_buffer += [' '*12 + '<td>%s</td>' % patient_id]
+        answer_buffer += [' '*12 + '<td>%s</td>' % ', '.join(patient_stats[patient_id]['name'])]
+        if len(patient_stats[patient_id]['dob']) > 1:
+            answer_buffer += [' '*12 + '<td bgcolor="pink">%s</td>' % ', '.join(patient_stats[patient_id]['dob'])]
+        else:
+            answer_buffer += [' '*12 + '<td>%s</td>' % ', '.join(patient_stats[patient_id]['dob'])]
+        answer_buffer += [' '*12 + '<td>%s</td>' % ', '.join(map_primary_to_secondary[patient_id])]
+        answer_buffer += [' '*10 + '</tr>']
+        answer_buffer += [' '*8 + '</table>']
+        answer_buffer += [' '*6 + '</div>']
+        i_patient += 1
+    answer_buffer += [' '*4 + '<button type="button" id="button_register">Click to Register</button>']
+
+    answer_buffer += [' '*4 + '<hr>']
+    answer_buffer += [' '*4 + '<input type="checkbox" id="checkbox_register_as" name="checkbox_register_as" />']
+    answer_buffer += [' '*4 + '<label for="checkbox_register_as">Register as a NEW but different patient</label>']
+    answer_buffer += [' '*4 + '<div style="display:none" id="div_register_as">']
+    answer_buffer += [' '*6 + '<table border=1><tr>']
+    answer_buffer += [' '*8 + '<td><input id="entry_register_as" type="text" name="input_register_as" value=""/></td>']
+    answer_buffer += [' '*8 + '<td><button type="button" id="button_register_as">Click to accept</button></td>']
+    answer_buffer += [' '*6 + '</tr></table>']
+    answer_buffer += [' '*4 + '</div>']
+    answer_buffer += [' '*4 + '<hr>']
+    answer_buffer += [' '*4 + '<input type="checkbox" id="checkbox_associate" name="checkbox_associate" />']
+    answer_buffer += [' '*4 + '<label for="checkbox_associate">Associate with existing patient</label>']
+    answer_buffer += [' '*4 + '<div style="display:none" id="div_associate">']
+    answer_buffer += [' '*6 + '<table border=1><tr>']
+    answer_buffer += [' '*8 + '<td><input id="entry_associate" type="text" name="input_associate" value=""/></td>']
+    answer_buffer += [' '*8 + '<td><button type="button" id="button_associate">Search</button></td>']
+    answer_buffer += [' '*6 + '</tr></table>']
+    answer_buffer += [' '*4 + '</div>']
+    answer_buffer += [' '*4 + '<div style="display:block" class="select_existing"><table border=1, id="table_associate_results"></table></div>']
+
+    answer_buffer += answer_buffer_close
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] = log_indent_level_prev
+    return '\n'.join(answer_buffer)
+    
+# ============================================================================
+def patient_registration_final(pid=None, primary=None, secondary=None):
+# ----------------------------------------------------------------------------
+    """
+    PURPOSE: Register the subject set up by the patient_registration_web
+    OUTPUT:  HTML of result
+    HISTORY: 10 Sep 2024, John.Roberts@hsc.utah.edu
+             Dept Radis, UofU, SLC Utah
+    """
+# ----------------------------------------------------------------------------
+
+    if (pid is None and primary is None and secondary is None) or (pid is not None and secondary is None):
+        return {'status' : 1, 'result' : '', 'error_text' : 'Incorrect inputs for registration final'}
+
+    global global_var
+    log_message_bitflag = python_verbose_logwarning
+    if log_message_bitflag:
+        log_indent_level_prev = global_var['log_indent_level']
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
+    # Open a connection to the database
+    #status, pg_connection, pg_cursor = connect_to_database()
+    #flag_local_db = True
+    #if status['status'] != 0:
+    #    if pg_cursor is not None:
+    #        pg_cursor.close()
+    #    if pg_connection is not None:
+    #        pg_connection.close()
+    #    if log_message_bitflag:
+    #        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+    #        global_var['log_indent_level'] = log_indent_level_prev
+    #    return {'status' : 2, 'result' : '', 'error_text': 'database error %d %s' % (status['status'],status['error_text']) }
+
+    if pid is not None and secondary is not None:
+        sql_statement = "INSERT INTO patientid (value,parent_pid) VALUES(%s,%s)"
+        #try:
+        #    pg_cursor.execute(sql_statement, (secondary, pid))
+        #except:
+        #    pg_connection.rollback()
+        #    if flag_local_db:
+        #        pg_cursor.close()
+        #        pg_connection.close()
+        #    if log_message_bitflag:
+        #        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        #        global_var['log_indent_level'] = log_indent_level_prev
+        #    return {'status': 3, 'result' : '', 'error_text': 'get_internal_number: Problem saving the associate patientid'}, None
+        #pg_connection.commit()
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] = log_indent_level_prev
+        return {'status' : 0, 'result' : sql_statement, 'error_text' : ''}
+
+    if primary is not None:
+        result = []
+        sql_statement_primary = "INSERT INTO patientid (value) VALUES(%s)"
+        result += [sql_statement_primary]
+        #try:
+        #    pg_cursor.execute(sql_statement_primary, (primary,))
+        #except:
+        #    pg_connection.rollback()
+        #    if flag_local_db:
+        #        pg_cursor.close()
+        #        pg_connection.close()
+        #    if log_message_bitflag:
+        #        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        #        global_var['log_indent_level'] = log_indent_level_prev
+        #    return {'status': 4, 'result' : '', 'error_text': 'Problem inserting primary patient id'}
+        if secondary is not None:
+            sql_query_pid = "SELECT pid FROM patientid WHERE value=%s"
+            result += [sql_query_pid]
+            #try:
+            #    pg_cursor.execute(sql_query_pid, (primary,))
+            #except:
+            #    pg_connection.rollback()
+            #    if flag_local_db:
+            #        pg_cursor.close()
+            #        pg_connection.close()
+            #    if log_message_bitflag:
+            #        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            #        global_var['log_indent_level'] = log_indent_level_prev
+            #    return {'status': 5, 'result' : '', 'error_text': 'Problem finding primary pid'}
+            #row = pg_cursor.fetchone()
+            #pid = row[0]
+            sql_statement = "INSERT INTO patientid (value,parent_pid) VALUES(%s,%s)"
+            result += [sql_statement]
+            #try:
+            #    pg_cursor.execute(sql_statement, (secondary, pid))
+            #except:
+            #    pg_connection.rollback()
+            #    if flag_local_db:
+            #        pg_cursor.close()
+            #        pg_connection.close()
+            #    if log_message_bitflag:
+            #        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            #        global_var['log_indent_level'] = log_indent_level_prev
+            #    return {'status': 3, 'result' : '', 'error_text': 'get_internal_number: Problem saving the associate patientid'}, None
+            #pg_connection.commit()
+
+        #if flag_local_db:
+        #    pg_cursor.close()
+        #    pg_connection.close()
+        
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] = log_indent_level_prev
+        return {'status' : 0, 'result' : '\n'.join(result), 'error_text' : ''}
+ 
+     #if flag_local_db:
+     #    pg_cursor.close()
+     #    pg_connection.close()
+
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] = log_indent_level_prev
+    return {'status' : 0, 'result' : 'No valid operation', 'error_text' : ''}
+
+# ============================================================================
 def recursive_find_uid_to_keep(parent, level_in=global_var['max_recurse_depth'], kept_uid={}, top_level_tag_to_keep = {}, parent_key=None):
     """
     PURPOSE: Tunnel down orthanc instance meta data cataloging 
@@ -5950,6 +6495,175 @@ def scan_study_for_group_element(orthanc_study_id, trigger_map={}, type_match='g
     return trigger_map
 
 # =======================================================
+def search_patient(search_string, search_type='patientid'):
+# -------------------------------------------------------
+
+    global global_var
+    log_message_bitflag = python_verbose_logwarning
+    if log_message_bitflag:
+        log_indent_level_prev = global_var['log_indent_level']
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
+    if search_type not in ['patientid']:
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] = log_indent_level_prev
+        return {'status': 1, 'patients' : {}, 'error_text': 'Search not permitted'}
+
+    if global_var['regexp']['search_patient_min'].match(search_string) is None:
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] = log_indent_level_prev
+        return {'status': 2, 'patients' : {}, 'error_text': 'Must contain at least 4 consecutive alphanumeric characters'}
+
+    # Open a connection to the database
+    status, pg_connection, pg_cursor = connect_to_database()
+    flag_local_db = True
+    if status['status'] != 0:
+        if pg_cursor is not None:
+            pg_cursor.close()
+        if pg_connection is not None:
+            pg_connection.close()
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] = log_indent_level_prev
+        return {'status' : 3, 'patients' : {}, 'error_text': 'database error %d %s' % (status['status'],status['error_text']) }
+
+    if search_type == 'patientid':
+
+        sql_query = "SELECT * FROM patientid WHERE value ~* %s ORDER BY value" 
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Querying patientid matches')
+        try:
+            pg_cursor.execute(sql_query, (search_string,))
+        except:
+            pg_connection.rollback()
+            if flag_local_db:
+                pg_cursor.close()
+                pg_connection.close()
+            if log_message_bitflag:
+                log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] = log_indent_level_prev
+            return {'status': 4, 'patients' : {}, 'error_text': 'Problem executing search'}
+
+        patientids = {}
+        row = pg_cursor.fetchone()
+        while row is not None:
+            if row[2] is None:
+                if row[0] not in patientids:
+                    patientids[row[0]] = {'value' : row[1], 'secondary' : []}
+                else:
+                    patientids[row[0]]['value'] = row[1]
+            else:
+                if row[2] not in patientids:
+                    patientids[row[2]] = {'value' : 'unknown', 'secondary' : [row[1]]}
+                else:
+                    patientids[row[2]]['secondary'] += [row[1]]
+            row = pg_cursor.fetchone()
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Looking for associated matches')
+        for pid, dict_pid in patientids.items():
+            sql_query = "SELECT * FROM patientid WHERE parent_pid = %s" 
+            try:
+                pg_cursor.execute(sql_query, (pid,))
+            except:
+                pg_connection.rollback()
+                if flag_local_db:
+                    pg_cursor.close()
+                    pg_connection.close()
+                if log_message_bitflag:
+                    log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] = log_indent_level_prev
+                return {'status': 4, 'patients' : {}, 'error_text': 'Problem executing secondary search'}
+            row = pg_cursor.fetchone()
+            while row is not None:
+                if row[1] not in patientids[row[2]]['secondary']:
+                    patientids[row[2]]['secondary'] += [row[1]]
+                row = pg_cursor.fetchone()
+       
+        for pid, dict_pid in patientids.items():
+            if dict_pid['value'] == 'unknown':
+                sql_query = "SELECT * FROM patientid WHERE pid = %s"
+                try:
+                    pg_cursor.execute(sql_query, (pid,))
+                except:
+                    pg_connection.rollback()
+                    if flag_local_db:
+                        pg_cursor.close()
+                        pg_connection.close()
+                    if log_message_bitflag:
+                        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                        global_var['log_indent_level'] = log_indent_level_prev
+                    return {'status': 5, 'patients' : {}, 'error_text': 'Problem executing search'}
+                row = pg_cursor.fetchone()
+                while row is not None:
+                    patientids[row[0]]['value'] = row[1]
+                    row = pg_cursor.fetchone()
+        map_values_to_pid = {}
+        for pid, dict_pid in patientids.items():
+            map_values_to_pid[dict_pid['value']] = pid
+        ordered_values = list(map_values_to_pid.keys())
+        ordered_values.sort()
+        patientids_new = {}
+        i_order = 0
+        if len(ordered_values) == len(patientids):
+            for ordered_value in ordered_values:
+                pid = map_values_to_pid[ordered_value]
+                patientids_new[i_order] = patientids[pid]
+                patientids_new[i_order]['pid'] = pid
+                i_order += 1
+        else:
+            for pid, dict_pid in patientids.items():
+                patientids_new[i_order] = patientids[pid]
+                patientids_new[i_order]['pid'] = pid
+                i_order += 1
+        patientids = patientids_new
+
+        # Pull down internal numbers
+        for i_order, patientid_dict in patientids.items():
+            sql_query = "SELECT value FROM internalnumber WHERE pid = %s" 
+            try:
+                pg_cursor.execute(sql_query, (patientid_dict['pid'],))
+            except:
+                pg_connection.rollback()
+                if flag_local_db:
+                    pg_cursor.close()
+                    pg_connection.close()
+                if log_message_bitflag:
+                    log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] = log_indent_level_prev
+                return {'status': 6, 'patients' : {}, 'error_text': 'Problem executing internalnumber search'}
+            row = pg_cursor.fetchone()
+            internal_numbers = []
+            while row is not None:
+                if row[0] not in internal_numbers:
+                    internal_numbers += ['%d' % row[0]]
+                row = pg_cursor.fetchone()
+            patientids[i_order]['internalnumber'] = ', '.join(internal_numbers)
+
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] = log_indent_level_prev
+
+        if flag_local_db:
+            pg_cursor.close()
+            pg_connection.close()
+
+        return {'status' : 0, 'patients' : patientids, 'error_text': ''}
+
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+        global_var['log_indent_level'] = log_indent_level_prev
+
+    if flag_local_db:
+        pg_cursor.close()
+        pg_connection.close()
+    return {'status' : 7, 'patients': {}, 'error_text' : 'Unknown command'}
+
+# =======================================================
 def set_2d_or_cview_tomo(orthanc_series_id):
 # -------------------------------------------------------
     flag_non_2d = False
@@ -6724,7 +7438,7 @@ def update_lookup_html(**kwargs):
     return {'status': 0}
 
 # =======================================================
-def user_permitted(uri, remote_user):
+def user_permitted(uri, remote_user, operation='TO_TRIGGER'):
     """ Check remote user against list of permitted users """
 # -------------------------------------------------------
 
@@ -6732,8 +7446,8 @@ def user_permitted(uri, remote_user):
     log_message_bitflag = python_verbose_logwarning
     if log_message_bitflag:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Checking whether remote user (%s) is permitted to act on %s' % (remote_user,uri))
-    permissions = os.getenv('PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER')
-    if permissions is None:
+    permissions = os.getenv('PYTHON_X_REMOTE_USER_ALLOWED_%s' % operation, default='')
+    if len(permissions.strip()) == 0:
         if log_message_bitflag:
             log_message(log_message_bitflag, global_var['log_indent_level'], 'Rejecting anon due to missing permissions')
         return False
@@ -7051,6 +7765,39 @@ def OnChangeThreaded(change_type, level, resource_id):
         t.start()
 
 # ============================================================================
+def PatientRegistration(output, uri, **request):
+    """API interface to present patient registration form"""
+# ----------------------------------------------------------------------------
+
+    global global_var
+    if user_permitted(uri, get_remote_user(request['headers']), operation='DB_OPS'):
+        answer_buffer = patient_registration_web()
+        output.AnswerBuffer(answer_buffer, 'text/html')
+    else:
+        log_message(python_verbose_logwarning, global_var['log_indent_level'], 'Register patient not permitted to user %s' % get_remote_user(request['headers']))
+        output.AnswerBuffer('Register patient not permitted to user', 'text/plain')
+
+# ============================================================================
+def PatientRegistrationFinal(output, uri, **request):
+    """Execute the patient registration"""
+# ----------------------------------------------------------------------------
+
+    global global_var
+    if request['method'] == 'POST':
+        if user_permitted(uri, get_remote_user(request['headers']), operation='DB_OPS'):
+            incoming_data = json.loads(request['body'])
+            pid = incoming_data['pid'] if 'pid' in incoming_data else None
+            primary = incoming_data['Primary'] if 'Primary' in incoming_data else None
+            secondary = incoming_data['Secondary'] if 'Secondary' in incoming_data else None
+            answer_buffer = patient_registration_final(pid=pid,primary=primary,secondary=secondary)
+            output.AnswerBuffer(json.dumps(answer_buffer,indent=3), 'text/json')
+        else:
+            log_message(python_verbose_logwarning, global_var['log_indent_level'], 'Register patient not permitted to user %s' % get_remote_user(request['headers']))
+            output.AnswerBuffer('Register patient not permitted to user', 'text/plain')
+    else:
+        output.SendMethodNotAllowed('POST')
+
+# ============================================================================
 def PrepareDataForAnonymizeGUI(output, uri, **request):
     """Setup data for javascript anonymizer."""
 # ----------------------------------------------------------------------------
@@ -7114,18 +7861,18 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
         # Assemble map of patient studies
         response_patients = orthanc.RestApiGet('/patients')
         patient_studies = {}
-        for opatientid in json.loads(response_patients):
-            response_patient = orthanc.RestApiGet('/patients/%s' % opatientid)
+        for orthanc_patient_id in json.loads(response_patients):
+            response_patient = orthanc.RestApiGet('/patients/%s' % orthanc_patient_id)
             meta_patient = json.loads(response_patient)
-            patient_name = meta_patient['MainDicomTags']['PatientName'] if 'PatientName' in meta_patient['MainDicomTags'] else opatientid
+            patient_name = meta_patient['MainDicomTags']['PatientName'] if 'PatientName' in meta_patient['MainDicomTags'] else orthanc_patient_id
             if patient_name not in patient_studies:
                 patient_studies[patient_name] = []
             patient_studies[patient_name] += meta_patient['Studies']
         patient_names = list(patient_studies.keys())
         patient_names.sort()
-        ostudyids = []
+        orthanc_study_ids = []
         for patient_name in patient_names:
-            ostudyids += patient_studies[patient_name]
+            orthanc_study_ids += patient_studies[patient_name]
  
         # Initialize output
         data_for_anonymize_gui = {'StudyMeta' : {},
@@ -7137,11 +7884,11 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
 
         # DICOM now on Orthanc
         #response_studies = orthanc.RestApiGet('/studies')
-        #for ostudyid in json.loads(response_studies):
-        for ostudyid in ostudyids:
+        #for orthanc_study_id in json.loads(response_studies):
+        for orthanc_study_id in orthanc_study_ids:
 
             flag_first_image = True
-            meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % ostudyid))
+            meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
             patient_id_modifier = ''
             study_instance_uid_modifier = ''
             if not ('AnonymizedFrom' in meta_study or 'ModifiedFrom' in meta_study):
@@ -7157,30 +7904,30 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
                         other_patient_ids = meta_study['PatientMainDicomTags']['RETIRED_OtherPatientIDs'] + patient_id_modifier
 
                 # Store the study meta
-                data_for_anonymize_gui['StudyMeta'][ostudyid] = meta_study
-                study_date[ostudyid] = meta_study['MainDicomTags']['StudyDate'] + 'T' + meta_study['MainDicomTags']['StudyTime']
+                data_for_anonymize_gui['StudyMeta'][orthanc_study_id] = meta_study
+                study_date[orthanc_study_id] = meta_study['MainDicomTags']['StudyDate'] + 'T' + meta_study['MainDicomTags']['StudyTime']
 
                 # Check the lookup table
                 if len(lookup_table) > 0:
-                    data_for_anonymize_gui['Lookup'][ostudyid] = {'Found': 0}
+                    data_for_anonymize_gui['Lookup'][orthanc_study_id] = {'Found': 0}
                     found, pacs_data = find_pacs_in_lookup_table(lookup_table, study_instance_uid, type_match='siuid')
                     if not found:
                         found, pacs_data = find_pacs_in_lookup_table(lookup_table, patient_id, type_match='patientid')
                     if pacs_data is not None:
-                        data_for_anonymize_gui['Lookup'][ostudyid]['Found'] = 1
-                        data_for_anonymize_gui['Lookup'][ostudyid]['Data'] = {}
+                        data_for_anonymize_gui['Lookup'][orthanc_study_id]['Found'] = 1
+                        data_for_anonymize_gui['Lookup'][orthanc_study_id]['Data'] = {}
                         for name, address in {'PatientName':'0010,0010',
                                               'PatientID':'0010,0020',
                                               'StudyDate':'0008,0020',
                                               'AccessionNumber':'0008,0050',
                                               'PatientBirthDate':'0010,0030'}.items():
                             if address in pacs_data:
-                                data_for_anonymize_gui['Lookup'][ostudyid]['Data'][name] = pacs_data[address]['Value']
+                                data_for_anonymize_gui['Lookup'][orthanc_study_id]['Data'][name] = pacs_data[address]['Value']
 
                 # Check PACS
                 if flag_uuhscq and flag_query_pacs:
                     pacs_data = None
-                    data_for_anonymize_gui['PACS'][ostudyid] = {'Found': 0}
+                    data_for_anonymize_gui['PACS'][orthanc_study_id] = {'Found': 0}
                     post_data = {'Level': 'Study',
                                  'Query' : {'StudyInstanceUID' : study_instance_uid, 
                                             'PatientID' : patient_id}}
@@ -7195,15 +7942,15 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
                                     pacs_data = json.loads(orthanc.RestApiGet('/queries/%s/answers/0/content' % meta_post['ID']))
                     
                     if pacs_data is not None:
-                        data_for_anonymize_gui['PACS'][ostudyid]['Found'] = 1
-                        data_for_anonymize_gui['PACS'][ostudyid]['Data'] = {}
+                        data_for_anonymize_gui['PACS'][orthanc_study_id]['Found'] = 1
+                        data_for_anonymize_gui['PACS'][orthanc_study_id]['Data'] = {}
                         for name, address in {'PatientName':'0010,0010',
                                               'PatientID':'0010,0020',
                                               'StudyDate':'0008,0020',
                                               'AccessionNumber':'0008,0050',
                                               'PatientBirthDate':'0010,0030'}.items():
                             if address in pacs_data:
-                                data_for_anonymize_gui['PACS'][ostudyid]['Data'][name] = pacs_data[address]['Value']
+                                data_for_anonymize_gui['PACS'][orthanc_study_id]['Data'][name] = pacs_data[address]['Value']
 
                 # First image
                 if flag_first_image:
@@ -7253,7 +8000,7 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
                                     else:
                                         db['NameAnon'] = ','.join(names)
                                 
-                    data_for_anonymize_gui['DB'][ostudyid] = db
+                    data_for_anonymize_gui['DB'][orthanc_study_id] = db
 
                     # Store the series meta
                     for oseriesid in meta_study['Series']:
@@ -7272,7 +8019,7 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
                                             series_meta_table[tag] = meta_instance[tag]
                                     flag_first_image = False
                                     break
-                            data_for_anonymize_gui['SeriesMeta'][ostudyid] = series_meta_table
+                            data_for_anonymize_gui['SeriesMeta'][orthanc_study_id] = series_meta_table
                         if not flag_first_image:
                             break
                                             
@@ -7379,9 +8126,27 @@ def ScanStudyForOddGroups(output, uri, **request):
         output.SendMethodNotAllowed('GET')
 
 # ============================================================================
+def SearchPatient(output, uri, **request):
+# ----------------------------------------------------------------------------
+    if request['method'] == 'POST':
+        if not user_permitted(uri, get_remote_user(request['headers']), operation='DB_OPS'):
+            output.AnswerBuffer('User not permitted', 'text/plain')
+            return
+        incoming_data = json.loads(request['body'])
+        search_string = incoming_data['SearchString'] if 'SearchString' in incoming_data else ''
+        search_type = 'patientid'
+        search_results = search_patient(search_string, search_type=search_type)
+        output.AnswerBuffer(json.dumps(search_results), 'application/json')
+    else:
+        output.SendMethodNotAllowed('POST')
+
+# ============================================================================
 def SetPatientNameBase(output, uri, **request):
 # ----------------------------------------------------------------------------
     if request['method'] == 'POST':
+        if not user_permitted(uri, get_remote_user(request['headers'])):
+            output.AnswerBuffer('User not permitted', 'text/plain')
+            return
         incoming_data = json.loads(request['body'])
         if 'PatientNameBase' in incoming_data:
             set_patient_name_base(incoming_data['PatientNameBase'].strip())
@@ -7546,6 +8311,8 @@ orthanc.RegisterRestCallback('/studies/(.*)/email_report', EmailStudyReport)
 orthanc.RegisterRestCallback('/get_patient_name_base', GetPatientNameBase)
 #orthanc.RegisterRestCallback('/inspect_python_api', InspectPythonAPI)
 orthanc.RegisterRestCallback('/studies/(.*)/jsanon', JSAnonymizeStudy)
+orthanc.RegisterRestCallback('/patient_registration', PatientRegistration)
+orthanc.RegisterRestCallback('/patient_registration_final', PatientRegistrationFinal)
 orthanc.RegisterRestCallback('/prepare_data_for_anonymize', PrepareDataForAnonymizeGUI)
 orthanc.RegisterRestCallback('/instances/(.*)/group(.*)recursive_search', ScanInstanceForGroupElement)
 orthanc.RegisterRestCallback('/instances/(.*)/odd_group_recursive_search', ScanInstanceForOddGroups)
@@ -7553,6 +8320,7 @@ orthanc.RegisterRestCallback('/series/(.*)/group(.*)recursive_search', ScanSerie
 orthanc.RegisterRestCallback('/series/(.*)/odd_group_recursive_search', ScanSeriesForOddGroups)
 orthanc.RegisterRestCallback('/studies/(.*)/group(.*)recursive_search', ScanStudyForGroupElement)
 orthanc.RegisterRestCallback('/studies/(.*)/odd_group_recursive_search', ScanStudyForOddGroups)
+orthanc.RegisterRestCallback('/search_patient', SearchPatient)
 orthanc.RegisterRestCallback('/set_patient_name_base', SetPatientNameBase)
 orthanc.RegisterRestCallback('/studies/(.*)/set_screen_or_diagnostic', SetScreenOrDiagnostic)
 orthanc.RegisterRestCallback('/toggle_python_flag_assume_original_primary', TogglePythonFlagAssumeOriginalPrimary)
