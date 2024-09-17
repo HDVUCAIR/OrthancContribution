@@ -3788,23 +3788,26 @@ def get_internal_number(sql_pid, patient_id_modifier,
                 log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
                 global_var['log_indent_level'] = log_indent_level_prev
 
-            return {'status':1, 'error_text': 'get_internal_number: Must provide both con and cur'}, None
+            return {'status':2, 'error_text': 'get_internal_number: Must provide both con and cur'}, None
 
-    sql_query = "SELECT value FROM internalnumber WHERE pid=%s" 
-    try:
-        pg_cursor.execute(sql_query, (sql_pid,))
-    except:
-        pg_connection.rollback()
-        if flag_local_db:
-            pg_cursor.close()
-            pg_connection.close()
-        if log_message_bitflag:
-            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
-            global_var['log_indent_level'] = log_indent_level_prev
+    flag_valid_pid = sql_pid is not None
+       
+    if flag_valid_pid:
+        sql_query = "SELECT value FROM internalnumber WHERE pid=%s" 
+        try:
+            pg_cursor.execute(sql_query, (sql_pid,))
+        except:
+            pg_connection.rollback()
+            if flag_local_db:
+                pg_cursor.close()
+                pg_connection.close()
+            if log_message_bitflag:
+                log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
+                global_var['log_indent_level'] = log_indent_level_prev
 
-        return {'status':1, 'error_text':'get_internal_number: Problem querying for patientid table'}, None
+            return {'status':4, 'error_text':'get_internal_number: Problem querying for patientid table'}, None
 
-    if pg_cursor.rowcount > 0:
+    if flag_valid_pid and pg_cursor.rowcount > 0:
         row = pg_cursor.fetchone()
         internal_number = int(row[0])
         if flag_local_db:
@@ -3875,19 +3878,20 @@ def get_internal_number(sql_pid, patient_id_modifier,
                 break
                     
         # Save the internal number to the database
-        sql_statement = "INSERT INTO internalnumber (value,pid) VALUES(%s,%s)"
-        try:
-            pg_cursor.execute(sql_statement, (internal_number, sql_pid))
-        except:
-            pg_connection.rollback()
-            if flag_local_db:
-                pg_cursor.close()
-                pg_connection.close()
-            if log_message_bitflag:
-                log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
-                global_var['log_indent_level'] = log_indent_level_prev
-            return {'status': 3, 'error_text': 'get_internal_number: Problem saving the internal number'}, None
-        pg_connection.commit()
+        if flag_valid_pid:
+            sql_statement = "INSERT INTO internalnumber (value,pid) VALUES(%s,%s)"
+            try:
+                pg_cursor.execute(sql_statement, (internal_number, sql_pid))
+            except:
+                pg_connection.rollback()
+                if flag_local_db:
+                    pg_cursor.close()
+                    pg_connection.close()
+                if log_message_bitflag:
+                    log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
+                    global_var['log_indent_level'] = log_indent_level_prev
+                return {'status': 3, 'error_text': 'get_internal_number: Problem saving the internal number'}, None
+            pg_connection.commit()
 
     if flag_local_db:
         pg_cursor.close()
@@ -4991,7 +4995,16 @@ def patient_registration_web():
                 patient_stats[patient_name]['name'] += [patient_name]
             if patient_dob not in patient_stats[patient_id]['dob']:
                 patient_stats[patient_dob]['dob'] += [patient_dob]
-    
+
+    # Assemble likely next internal number
+    internal_number_type = os.getenv('PYTHON_INTERNAL_NUMBER_TYPE', default='random')
+    status, internal_number = get_internal_number(None, '')
+    if status['status'] != 0:
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], status['error_text'])
+            global_var['log_indent_level'] = log_indent_level_prev
+        return '\n'.join(answer_buffer + [status['error_text']] + answer_buffer_close)
+
     # Check database for already registered subjects
     if log_message_bitflag:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Checking database for registered subjects')
@@ -5263,7 +5276,7 @@ def patient_registration_web():
     answer_scripts += [' '*6 + 'function fillSearch(search_results) {']
     answer_scripts += [' '*8 + 'var alt_string=\'\';']
     answer_scripts += [' '*8 + '$( \'#table_associate_results tbody\').remove();']
-    answer_scripts += [' '*8 + '$( \'#table_associate_results\' ).append(\'<tr><th/><th bgcolor="lightblue">PatientID</th><th bgcolor="lightblue">MRDB</th><th bgcolor="lightblue">Alternate PatientID</th></tr>\');']
+    answer_scripts += [' '*8 + '$( \'#table_associate_results\' ).append(\'<tr><th/><th bgcolor="lightblue">PatientID</th><th bgcolor="lightblue">DBID</th><th bgcolor="lightblue">Alternate PatientID</th></tr>\');']
     answer_scripts += [' '*8 + 'for (var i=0, keys=Object.keys(search_results), l=keys.length; i<l; i++) {']
     answer_scripts += [' '*10 + 'for (var j=0, alt_string=\'\', ll=search_results[keys[i]].secondary.length; j < ll; j++) {']
     answer_scripts += [' '*12 + 'alt_string = alt_string + search_results[keys[i]].secondary[j];']
@@ -5272,7 +5285,7 @@ def patient_registration_web():
     answer_scripts += [' '*10 + '$( \'#table_associate_results\' ).append(\'<tr id="arr_\' + search_results[keys[i]].pid + \'">' + \
                                 '<td><input type="radio" onclick="associate_check(\' + search_results[keys[i]].pid + \')" id="pid_\' + search_results[keys[i]].pid + \'" name="pid" value="pid_\' + search_results[keys[i]].pid + \'" /></td>' + \
                                 '<td>\' + search_results[keys[i]].value + \'</td>' + \
-                                '<td>\' + search_results[keys[i]].internalnumber + \'</td>' + \
+                                '<td align="center">\' + search_results[keys[i]].internalnumber + \'</td>' + \
                                 '<td>\' + alt_string + \'</td></tr>\');']
     answer_scripts += [' '*10 + 'map_pid2mrn[search_results[keys[i]].pid] = search_results[keys[i]].value;']
     answer_scripts += [' '*8 + '}']
@@ -5280,40 +5293,48 @@ def patient_registration_web():
 
     answer_scripts += [' '*4 + '</script>']
     answer_buffer = answer_buffer[0:2] + answer_scripts + answer_buffer[-3:]
-    answer_buffer += [' '*4 + '<h2>Select A Patient</h2>']
-    answer_buffer += [' '*6 + '<select id="sel_patient">']
+    answer_buffer += [' '*4 + '<table border=1>']
+    answer_buffer += [' '*6 + '<tr><th bgcolor="lightblue" align="center">Select A Patient</th><th bgcolor="lightblue" align="center">DBID Type</th><th bgcolor="lightblue">Next DBID</th></tr>']
+    answer_buffer += [' '*6 + '<tr>']
+    answer_buffer += [' '*8 + '<td><select id="sel_patient">']
     patient_id_selected = None
     i_patient = 0
     for patient_id in unregistered:
         if patient_id_selected is None:
-            answer_buffer += [' '*8 + '<option value="div_%d" selected>%s (MRN %s)</option>' % (i_patient, patient_stats[patient_id]['name'][0], patient_id)]
+            answer_buffer += [' '*10 + '<option value="div_%d" selected>%s (MRN %s)</option>' % (i_patient, patient_stats[patient_id]['name'][0], patient_id)]
             patient_id_selected = patient_id
         else:
-            answer_buffer += [' '*8 + '<option value="div_%d">%s (MRN %s)</option>' % (i_patient, patient_stats[patient_id]['name'][0], patient_id)]
+            answer_buffer += [' '*10 + '<option value="div_%d">%s (MRN %s)</option>' % (i_patient, patient_stats[patient_id]['name'][0], patient_id)]
         i_patient += 1
-    answer_buffer += [' '*6 + '</select>']
+    answer_buffer += [' '*8 + '</select></td>']
+    if internal_number_type == 'random':
+        answer_buffer += [' '*8 + '<td>random</td><td>random</td>']
+    else:
+        answer_buffer += [' '*8 + '<td align="center">%s</td><td align="center">%d</td>' % (internal_number_type, internal_number)]
+    answer_buffer += [' '*6 + '</tr>']
+    answer_buffer += [' '*4 + '</table>']
 
     # Stats of current patient
     i_patient = 0
     for patient_id in unregistered:
         if patient_id == patient_id_selected:
-            answer_buffer += [' '*6 + '<div style="display:block" id="div_%d">' % i_patient ]
+            answer_buffer += [' '*4 + '<div style="display:block" id="div_%d">' % i_patient ]
         else:
-            answer_buffer += [' '*6 + '<div style="display:none" id="div_%d">' % i_patient ]
-        answer_buffer += [' '*8 + '<table border=1 id="select_patient_info">']
-        answer_buffer += [' '*10 + '<tr><th bgcolor="lightblue">MRN</th><th bgcolor="lightblue">Name</th><th bgcolor="lightblue">DOB</th><th bgcolor="lightblue">Alternate MRN</th></tr>']
-        answer_buffer += [' '*10 + '<tr>']
+            answer_buffer += [' '*4 + '<div style="display:none" id="div_%d">' % i_patient ]
+        answer_buffer += [' '*6 + '<table border=1 id="select_patient_info">']
+        answer_buffer += [' '*8 + '<tr><th bgcolor="lightgreen">MRN</th><th bgcolor="lightgreen">Name</th><th bgcolor="lightgreen">DOB</th><th bgcolor="lightgreen">Alternate MRN</th></tr>']
+        answer_buffer += [' '*8 + '<tr>']
         
-        answer_buffer += [' '*12 + '<td>%s</td>' % patient_id]
-        answer_buffer += [' '*12 + '<td>%s</td>' % ', '.join(patient_stats[patient_id]['name'])]
+        answer_buffer += [' '*10 + '<td>%s</td>' % patient_id]
+        answer_buffer += [' '*10 + '<td>%s</td>' % ', '.join(patient_stats[patient_id]['name'])]
         if len(patient_stats[patient_id]['dob']) > 1:
-            answer_buffer += [' '*12 + '<td bgcolor="pink">%s</td>' % ', '.join(patient_stats[patient_id]['dob'])]
+            answer_buffer += [' '*10 + '<td bgcolor="pink">%s</td>' % ', '.join(patient_stats[patient_id]['dob'])]
         else:
-            answer_buffer += [' '*12 + '<td>%s</td>' % ', '.join(patient_stats[patient_id]['dob'])]
-        answer_buffer += [' '*12 + '<td>%s</td>' % ', '.join(map_primary_to_secondary[patient_id])]
-        answer_buffer += [' '*10 + '</tr>']
-        answer_buffer += [' '*8 + '</table>']
-        answer_buffer += [' '*6 + '</div>']
+            answer_buffer += [' '*10 + '<td>%s</td>' % ', '.join(patient_stats[patient_id]['dob'])]
+        answer_buffer += [' '*10 + '<td>%s</td>' % ', '.join(map_primary_to_secondary[patient_id])]
+        answer_buffer += [' '*8 + '</tr>']
+        answer_buffer += [' '*6 + '</table>']
+        answer_buffer += [' '*4 + '</div>']
         i_patient += 1
     answer_buffer += [' '*4 + '<button type="button" id="button_register">Click to Register</button>']
 
