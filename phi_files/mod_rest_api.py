@@ -30,6 +30,7 @@ except:
 # Regular expressions
 global_var['regexp']['address'] = re.compile('([^<]+)<([^@]+)@([^>]+)>.*')
 global_var['regexp']['search_patient_min'] = re.compile('.*[a-z0-9]{4,4}.*', re.I)
+global_var['regexp']['PatientAge'] = re.compile('([0-9.]+)([^0-9]*)',re.I)
 
 # Global variables
 python_verbose_logwarning = 1 if os.getenv('PYTHON_VERBOSE_LOGWARNING', default='false') == 'true' or os.getenv('ORTHANC__PYTHON_VERBOSE', default='false') == 'true' else 0
@@ -6886,12 +6887,12 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
             date_string_new = shift_date_time_string(shift_epoch, dicom_tags['PatientBirthDate'])
             replace_dict['PatientBirthDate'] = date_string_new
         if 'PatientAge' in dicom_tags:
-            age_number = int(dicom_tags['PatientAge'][0:3])
-            age_unit = dicom_tags['PatientAge'][3]
-            if age_unit == 'Y':
-                if age_number > 89:
-                    age_number = 90
-                    replace_dict['PatientAge'] = '%03dY' %  age_number
+            res_age = global_var['regexp']['PatientAge'].match(dicom_tags['PatientAge'])
+            age_number = int(res_age.group(1))
+            age_unit = res_age.group(2)
+            if age_number > 89:
+                age_number = 90
+                replace_dict['PatientAge'] = '%03d%s' % (age_number,age_unit)
 
         # Handle non-date/time replacements that take place at this stage
         if 'SOPInstanceUID' in dicom_tags:
