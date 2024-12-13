@@ -589,8 +589,8 @@ def anonymize_by_label_run(remote_user='None', **kwargs):
             if log_message_bitflag:
                 log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
                 global_var['log_indent_level'] = log_indent_level_prev
-                return status
-
+            return status
+    
     if log_message_bitflag:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
         global_var['log_indent_level'] = log_indent_level_prev
@@ -6832,67 +6832,71 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
             if log_message_bitflag:
                 log_message(log_message_bitflag, global_var['log_indent_level'], 'Shift date will skip non orig/prim /instances/%s/simplified-tags' % orthanc_instance_id, **kwargs)
 
-        # Loop through separate date/time tags looking for fields to update
-        for dicom_field_base in dicom_field_bases:
-            date_field = '%sDate' % dicom_field_base
-            time_field = '%sTime' % dicom_field_base
-            if date_field in dicom_tags and len(dicom_tags[date_field].strip()) > 0:
-                if time_field in dicom_tags and len(dicom_tags[time_field].strip()) > 0:
-                    date_string_new, time_string_new = shift_date_time_string(shift_epoch, dicom_tags[date_field], dicom_tags[time_field])
-                    replace_dict[date_field] = date_string_new
-                    replace_dict[time_field] = time_string_new
-                else:
-                    if log_message_bitflag:
-                        log_message(log_message_bitflag, global_var['log_indent_level'], 'No matching time for date: %s, %s'  % (date_field, time_field), **kwargs)
+        # Only do this if the shift is non-zero
+        if abs(shift_epoch) > 0:
 
-        # Loop through combo date/time tags looking for fields to update
-        for date_time_field in date_time_fields:
-            if date_time_field in dicom_tags and len(dicom_tags[date_time_field].strip()) > 0:
-                date_string_new = shift_date_time_string(shift_epoch, dicom_tags[date_time_field])
-                replace_dict[date_time_field] = date_string_new
+            # Loop through separate date/time tags looking for fields to update
+            for dicom_field_base in dicom_field_bases:
+                date_field = '%sDate' % dicom_field_base
+                time_field = '%sTime' % dicom_field_base
+                if date_field in dicom_tags and len(dicom_tags[date_field].strip()) > 0:
+                    if time_field in dicom_tags and len(dicom_tags[time_field].strip()) > 0:
+                        date_string_new, time_string_new = shift_date_time_string(shift_epoch, dicom_tags[date_field], dicom_tags[time_field])
+                        replace_dict[date_field] = date_string_new
+                        replace_dict[time_field] = time_string_new
+                    else:
+                        if log_message_bitflag:
+                            log_message(log_message_bitflag, global_var['log_indent_level'], 'No matching time for date: %s, %s'  % (date_field, time_field), **kwargs)
 
-        # Loop over radiopharm fields
-        radio_sequence = 'RadiopharmaceuticalInformationSequence'
-        if radio_sequence in dicom_tags:
-            replace_dict[radio_sequence] = copy.copy(dicom_tags[radio_sequence])
-            i_seq_tag = 0
-            for seq_tags in dicom_tags[radio_sequence]:
-                for date_time_field_radio in date_time_fields_radio:
-                    if date_time_field_radio in seq_tags and len(seq_tags[date_time_field_radio].strip()) > 0:
-                        date_string_new = shift_date_time_string(shift_epoch, seq_tags[date_time_field_radio])
-                        replace_dict[radio_sequence][i_seq_tag][date_time_field_radio] = date_string_new
-                i_seq_tag += 1
+            # Loop through combo date/time tags looking for fields to update
+            for date_time_field in date_time_fields:
+                if date_time_field in dicom_tags and len(dicom_tags[date_time_field].strip()) > 0:
+                    date_string_new = shift_date_time_string(shift_epoch, dicom_tags[date_time_field])
+                    replace_dict[date_time_field] = date_string_new
 
-        # Loop over frame fields
-        per_frame_functional_groups_sequence = 'PerFrameFunctionalGroupsSequence'
-        frame_content_sequence = 'FrameContentSequence'
-        if per_frame_functional_groups_sequence in dicom_tags:
-            #replace_dict[per_frame_functional_groups_sequence] = copy.copy(dicom_tags[per_frame_functional_groups_sequence])
-            i_group = 0
-            for functional_group_dict in dicom_tags[per_frame_functional_groups_sequence]:
-                if frame_content_sequence in functional_group_dict:
-                    i_content = 0
-                    for frame_content_dict in functional_group_dict[frame_content_sequence]:
-                        for date_time_field_frame in date_time_fields_frame:
-                            if date_time_field_frame in frame_content_dict and len(frame_content_dict[date_time_field_frame].strip()) > 0:
-                                date_string_new = shift_date_time_string(shift_epoch, frame_content_dict[date_time_field_frame])
-                                key_str = '%s[%d].%s[%d].%s' % (per_frame_functional_groups_sequence, i_group, frame_content_sequence, i_content, date_time_field_frame)
-                                #replace_dict[per_frame_functional_groups_sequence][i_group][frame_content_sequence][i_content][date_time_field_frame] = date_string_new
-                                replace_dict[key_str] = date_string_new
-                        i_content += 1
-                i_group += 1
+            # Loop over radiopharm fields
+            radio_sequence = 'RadiopharmaceuticalInformationSequence'
+            if radio_sequence in dicom_tags:
+                # This needs re-working like the perframefunctionalgroupsequence below
+                replace_dict[radio_sequence] = json.loads(json.dumps(dicom_tags[radio_sequence]))
+                i_seq_tag = 0
+                for seq_tags in dicom_tags[radio_sequence]:
+                    for date_time_field_radio in date_time_fields_radio:
+                        if date_time_field_radio in seq_tags and len(seq_tags[date_time_field_radio].strip()) > 0:
+                            date_string_new = shift_date_time_string(shift_epoch, seq_tags[date_time_field_radio])
+                            replace_dict[radio_sequence][i_seq_tag][date_time_field_radio] = date_string_new
+                    i_seq_tag += 1
 
-        # Handle birthdate / age
-        if 'PatientBirthDate' in dicom_tags:
-            date_string_new = shift_date_time_string(shift_epoch, dicom_tags['PatientBirthDate'])
-            replace_dict['PatientBirthDate'] = date_string_new
-        if 'PatientAge' in dicom_tags:
-            res_age = global_var['regexp']['PatientAge'].match(dicom_tags['PatientAge'])
-            age_number = int(res_age.group(1))
-            age_unit = res_age.group(2)
-            if age_number > 89:
-                age_number = 90
-                replace_dict['PatientAge'] = '%03d%s' % (age_number,age_unit)
+            # Loop over frame fields
+            per_frame_functional_groups_sequence = 'PerFrameFunctionalGroupsSequence'
+            frame_content_sequence = 'FrameContentSequence'
+            if per_frame_functional_groups_sequence in dicom_tags:
+                #replace_dict[per_frame_functional_groups_sequence] = copy.copy(dicom_tags[per_frame_functional_groups_sequence])
+                i_group = 0
+                for functional_group_dict in dicom_tags[per_frame_functional_groups_sequence]:
+                    if frame_content_sequence in functional_group_dict:
+                        i_content = 0
+                        for frame_content_dict in functional_group_dict[frame_content_sequence]:
+                            for date_time_field_frame in date_time_fields_frame:
+                                if date_time_field_frame in frame_content_dict and len(frame_content_dict[date_time_field_frame].strip()) > 0:
+                                    date_string_new = shift_date_time_string(shift_epoch, frame_content_dict[date_time_field_frame])
+                                    key_str = '%s[%d].%s[%d].%s' % (per_frame_functional_groups_sequence, i_group, frame_content_sequence, i_content, date_time_field_frame)
+                                    #replace_dict[per_frame_functional_groups_sequence][i_group][frame_content_sequence][i_content][date_time_field_frame] = date_string_new
+                                    replace_dict[key_str] = date_string_new
+                            i_content += 1
+                    i_group += 1
+
+            # Handle birthdate / age
+            if 'PatientBirthDate' in dicom_tags:
+                date_string_new = shift_date_time_string(shift_epoch, dicom_tags['PatientBirthDate'])
+                replace_dict['PatientBirthDate'] = date_string_new
+            if 'PatientAge' in dicom_tags:
+                res_age = global_var['regexp']['PatientAge'].match(dicom_tags['PatientAge'])
+                age_number = int(res_age.group(1))
+                age_unit = res_age.group(2)
+                if age_number > 89:
+                    age_number = 90
+                    replace_dict['PatientAge'] = '%03d%s' % (age_number,age_unit)
 
         # Handle non-date/time replacements that take place at this stage
         if 'SOPInstanceUID' in dicom_tags:
