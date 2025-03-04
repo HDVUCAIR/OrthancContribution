@@ -14,13 +14,17 @@ RUN apt-get update \
        tzdata \
        apt-utils \
        html2text net-tools \
-       python3-bs4 python3-psycopg2 python3-pydicom python3-requests \
-    && mkdir /scripts
+       python3-bs4 python3-dateutil python3-psycopg2 python3-pydicom python3-requests \
+    && mkdir /scripts /json
+
+RUN groupadd -g $PROCESS_GID orthanc1 && \
+    useradd -m -g $PROCESS_GID -u $PROCESS_UID orthanc1
+
 
 # Fix the entry file to force umask
 RUN sed -i.bak -e "s/^.*Orthanc .verb.*/umask 0007\n&/g" /docker-entrypoint.sh 
 
-RUN chown -R $PROCESS_UID:$PROCESS_GID /usr/share/orthanc /etc/orthanc /scripts
+RUN chown -R $PROCESS_UID:$PROCESS_GID /usr/share/orthanc /etc/orthanc /scripts /json
 
 RUN hostid > /etc/hostid && chmod ugo+r /etc/hostid
 

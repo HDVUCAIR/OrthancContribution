@@ -227,12 +227,52 @@ button_js_series_stats = "$('#series').live('pagebeforecreate', function() {" + 
                      "});"
 
 # ----------------------------------------------------------------------------
+# Buttons on instances page
+# ----------------------------------------------------------------------------
+# Same as API instances/uid
+button_js_instance_meta = "$('#instance').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-theme', 'b')" + \
+                         " .text('Instance Metadata');" + \
+                       " b.insertBefore($('#instance-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/instances/' + uuid);" % global_var['website'] + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# Same as API instances/uid/tags
+button_js_instance_tags = "$('#instance').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-theme', 'b')" + \
+                         " .text('DICOM Tags');" + \
+                       " b.insertBefore($('#instance-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/instances/' + uuid + '/tags');" % global_var['website'] + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
+# ----------------------------------------------------------------------------
 # Inserting the above button definitions into the explorer
 # ----------------------------------------------------------------------------
 orthanc.ExtendOrthancExplorer(' '.join([button_js_system_meta, button_js_system_stats, button_js_anonymize_by_label, \
                                         button_js_patient_meta, button_js_patient_stats, \
                                         button_js_study_meta, button_js_study_stats, \
-                                        button_js_series_meta, button_js_series_stats]))
+                                        button_js_series_meta, button_js_series_stats, \
+                                        button_js_instance_meta, button_js_instance_tags]))
 
 # ============================================================================
 def anonymize_by_label_init():
@@ -7888,7 +7928,10 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
         response_patients = orthanc.RestApiGet('/patients')
         patient_studies = {}
         for orthanc_patient_id in json.loads(response_patients):
+            try:
             response_patient = orthanc.RestApiGet('/patients/%s' % orthanc_patient_id)
+            except:
+                continue
             meta_patient = json.loads(response_patient)
             patient_name = meta_patient['MainDicomTags']['PatientName'] if 'PatientName' in meta_patient['MainDicomTags'] else orthanc_patient_id
             if patient_name not in patient_studies:
@@ -7914,7 +7957,10 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
         for orthanc_study_id in orthanc_study_ids:
 
             flag_first_image = True
+            try:
             meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
+            except:
+                continue
             patient_id_modifier = ''
             study_instance_uid_modifier = ''
             if not ('AnonymizedFrom' in meta_study or 'ModifiedFrom' in meta_study):
