@@ -228,7 +228,8 @@ $( window ).on( 'load', function() {
                 url:'../../set_patient_name_base', 
                 type: 'POST',
                 contentType: 'application/json', 
-                data: "{\"PatientNameBase\" : \"" + value_patient_basename + "\"}",
+                // data: "{\"PatientNameBase\" : \"" + value_patient_basename + "\"}",
+                data: JSON.stringify({ PatientNameBase : value_patient_basename }),
                 dataType: "json",
                 success : function( msg ) {
                    $("#ase_status_col").css("background-color", "lightgreen");

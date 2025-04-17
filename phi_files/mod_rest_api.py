@@ -5429,32 +5429,32 @@ def patient_registration_final(pid=None, primary=None, secondary=None):
         global_var['log_indent_level'] += 3
 
     # Open a connection to the database
-    #status, pg_connection, pg_cursor = connect_to_database()
-    #flag_local_db = True
-    #if status['status'] != 0:
-    #    if pg_cursor is not None:
-    #        pg_cursor.close()
-    #    if pg_connection is not None:
-    #        pg_connection.close()
-    #    if log_message_bitflag:
-    #        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-    #        global_var['log_indent_level'] = log_indent_level_prev
-    #    return {'status' : 2, 'result' : '', 'error_text': 'database error %d %s' % (status['status'],status['error_text']) }
+    status, pg_connection, pg_cursor = connect_to_database()
+    flag_local_db = True
+    if status['status'] != 0:
+        if pg_cursor is not None:
+            pg_cursor.close()
+        if pg_connection is not None:
+            pg_connection.close()
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] = log_indent_level_prev
+        return {'status' : 2, 'result' : '', 'error_text': 'database error %d %s' % (status['status'],status['error_text']) }
 
     if pid is not None and secondary is not None:
         sql_statement = "INSERT INTO patientid (value,parent_pid) VALUES(%s,%s)"
-        #try:
-        #    pg_cursor.execute(sql_statement, (secondary, pid))
-        #except:
-        #    pg_connection.rollback()
-        #    if flag_local_db:
-        #        pg_cursor.close()
-        #        pg_connection.close()
-        #    if log_message_bitflag:
-        #        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-        #        global_var['log_indent_level'] = log_indent_level_prev
-        #    return {'status': 3, 'result' : '', 'error_text': 'get_internal_number: Problem saving the associate patientid'}, None
-        #pg_connection.commit()
+        try:
+            pg_cursor.execute(sql_statement, (secondary, pid))
+        except:
+            pg_connection.rollback()
+            if flag_local_db:
+                pg_cursor.close()
+                pg_connection.close()
+            if log_message_bitflag:
+                log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] = log_indent_level_prev
+            return {'status': 3, 'result' : '', 'error_text': 'get_internal_number: Problem saving the associate patientid'}, None
+        pg_connection.commit()
         if log_message_bitflag:
             log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
             global_var['log_indent_level'] = log_indent_level_prev
@@ -5464,60 +5464,60 @@ def patient_registration_final(pid=None, primary=None, secondary=None):
         result = []
         sql_statement_primary = "INSERT INTO patientid (value) VALUES(%s)"
         result += [sql_statement_primary]
-        #try:
-        #    pg_cursor.execute(sql_statement_primary, (primary,))
-        #except:
-        #    pg_connection.rollback()
-        #    if flag_local_db:
-        #        pg_cursor.close()
-        #        pg_connection.close()
-        #    if log_message_bitflag:
-        #        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-        #        global_var['log_indent_level'] = log_indent_level_prev
-        #    return {'status': 4, 'result' : '', 'error_text': 'Problem inserting primary patient id'}
+        try:
+            pg_cursor.execute(sql_statement_primary, (primary,))
+        except:
+            pg_connection.rollback()
+            if flag_local_db:
+                pg_cursor.close()
+                pg_connection.close()
+            if log_message_bitflag:
+                log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                global_var['log_indent_level'] = log_indent_level_prev
+            return {'status': 4, 'result' : '', 'error_text': 'Problem inserting primary patient id'}
         if secondary is not None:
             sql_query_pid = "SELECT pid FROM patientid WHERE value=%s"
             result += [sql_query_pid]
-            #try:
-            #    pg_cursor.execute(sql_query_pid, (primary,))
-            #except:
-            #    pg_connection.rollback()
-            #    if flag_local_db:
-            #        pg_cursor.close()
-            #        pg_connection.close()
-            #    if log_message_bitflag:
-            #        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-            #        global_var['log_indent_level'] = log_indent_level_prev
-            #    return {'status': 5, 'result' : '', 'error_text': 'Problem finding primary pid'}
-            #row = pg_cursor.fetchone()
-            #pid = row[0]
+            try:
+                pg_cursor.execute(sql_query_pid, (primary,))
+            except:
+                pg_connection.rollback()
+                if flag_local_db:
+                    pg_cursor.close()
+                    pg_connection.close()
+                if log_message_bitflag:
+                    log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] = log_indent_level_prev
+                return {'status': 5, 'result' : '', 'error_text': 'Problem finding primary pid'}
+            row = pg_cursor.fetchone()
+            pid = row[0]
             sql_statement = "INSERT INTO patientid (value,parent_pid) VALUES(%s,%s)"
             result += [sql_statement]
-            #try:
-            #    pg_cursor.execute(sql_statement, (secondary, pid))
-            #except:
-            #    pg_connection.rollback()
-            #    if flag_local_db:
-            #        pg_cursor.close()
-            #        pg_connection.close()
-            #    if log_message_bitflag:
-            #        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
-            #        global_var['log_indent_level'] = log_indent_level_prev
-            #    return {'status': 3, 'result' : '', 'error_text': 'get_internal_number: Problem saving the associate patientid'}, None
-            #pg_connection.commit()
+            try:
+                pg_cursor.execute(sql_statement, (secondary, pid))
+            except:
+                pg_connection.rollback()
+                if flag_local_db:
+                    pg_cursor.close()
+                    pg_connection.close()
+                if log_message_bitflag:
+                    log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+                    global_var['log_indent_level'] = log_indent_level_prev
+                return {'status': 3, 'result' : '', 'error_text': 'get_internal_number: Problem saving the associate patientid'}, None
+            pg_connection.commit()
 
-        #if flag_local_db:
-        #    pg_cursor.close()
-        #    pg_connection.close()
+        if flag_local_db:
+            pg_cursor.close()
+            pg_connection.close()
         
         if log_message_bitflag:
             log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
             global_var['log_indent_level'] = log_indent_level_prev
         return {'status' : 0, 'result' : '\n'.join(result), 'error_text' : ''}
  
-     #if flag_local_db:
-     #    pg_cursor.close()
-     #    pg_connection.close()
+    if flag_local_db:
+        pg_cursor.close()
+        pg_connection.close()
 
     if log_message_bitflag:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
@@ -7929,7 +7929,7 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
         patient_studies = {}
         for orthanc_patient_id in json.loads(response_patients):
             try:
-            response_patient = orthanc.RestApiGet('/patients/%s' % orthanc_patient_id)
+                response_patient = orthanc.RestApiGet('/patients/%s' % orthanc_patient_id)
             except:
                 continue
             meta_patient = json.loads(response_patient)
@@ -7958,7 +7958,7 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
 
             flag_first_image = True
             try:
-            meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
+                meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id))
             except:
                 continue
             patient_id_modifier = ''
