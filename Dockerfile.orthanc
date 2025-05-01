@@ -3,11 +3,11 @@ FROM orthancteam/orthanc
 
 ARG PROCESS_UID
 ARG PROCESS_GID
-ARG TZ=America/Denver
+#ARG TZ=America/Denver
 
-# Setup time zone
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
- && echo $TZ > /etc/timezone
+## Setup time zone
+#RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+# && echo $TZ > /etc/timezone
 
 RUN apt-get update \
     && apt-get install -y \

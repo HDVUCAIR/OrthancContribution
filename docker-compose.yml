@@ -13,9 +13,10 @@ services:
       args:
         PROCESS_UID: ${ORTHANC_UID}
         PROCESS_GID: ${ORTHANC_GID}
-        TZ: ${ORTHANC_TIMEZONE}
+        #TZ: ${ORTHANC_TIMEZONE}
     user: "${ORTHANC_UID}:${ORTHANC_GID}"
     environment:
+      TZ: ${ORTHANC_TIMEZONE}
       # ================================
       # Env variables for my scripts
       # --------------------------------
@@ -171,6 +172,7 @@ services:
       PYTHON_XREF_MODALITY: "AET_OF_MAIN_PACS"
       PYTHON_X_REMOTE_IP_ALLOWED_TO_TRIGGER: "${PHI_X_REMOTE_IP_ALLOWED_TO_TRIGGER}"
       PYTHON_X_REMOTE_USER_ALLOWED_TO_TRIGGER: "${PHI_X_REMOTE_USER_ALLOWED_TO_TRIGGER}"
+      PYTHON_X_REMOTE_USER_ALLOWED_DB_OPS: "${PHI_X_REMOTE_USER_ALLOWED_DB_OPS}"
       # Serve Folders
       ORTHANC__SERVE_FOLDERS__FOLDERS: '{ "/extra" : "/media/html" }'
       # Web viewer
@@ -222,6 +224,7 @@ services:
         PG_VERSION_TAG: ${PG_VERSION_TAG}
     user: "$POSTGRES_UID:$POSTGRES_GID"
     environment:
+      TZ: ${ORTHANC_TIMEZONE}
       PGDATA: "/var/lib/postgresql/data/pgdata"
       # Moved passwords and such to secrets (reverting here until docker fixed)
       PG_USER: "${COMMON_BASENAME}_phi_orthanc"
@@ -280,13 +283,14 @@ services:
       args:
         PROCESS_UID: ${ORTHANC_UID}
         PROCESS_GID: ${ORTHANC_GID}
-        TZ: ${ORTHANC_TIMEZONE}
+        #TZ: ${ORTHANC_TIMEZONE}
     user: "${ORTHANC_UID}:${ORTHANC_GID}"
 #    entrypoint: 
 #       - tail
 #       - -f
 #       - /dev/null
     environment:
+      TZ: ${ORTHANC_TIMEZONE}
       # ================================
       # Env variables for my scripts
       # --------------------------------
@@ -452,6 +456,7 @@ services:
         PG_VERSION_TAG: ${PG_VERSION_TAG}
     user: "$POSTGRES_UID:$POSTGRES_GID"
     environment:
+      TZ: ${ORTHANC_TIMEZONE}
       PGDATA: "/var/lib/postgresql/data/pgdata"
       PG_USER: "${COMMON_BASENAME}_anon_orthanc"
       PG_DB: "${COMMON_BASENAME}_anon_orthanc_db"
@@ -480,9 +485,10 @@ services:
       args:
         PROCESS_UID: ${ORTHANC_UID}
         PROCESS_GID: ${ORTHANC_GID}
-        TZ: ${ORTHANC_TIMEZONE}
+        #TZ: ${ORTHANC_TIMEZONE}
     user: "${ORTHANC_UID}:${ORTHANC_GID}"
     environment:
+      TZ: ${ORTHANC_TIMEZONE}
       # ================================
       # Env variables for my scripts
       # --------------------------------
@@ -641,6 +647,7 @@ services:
         PG_VERSION_TAG: ${PG_VERSION_TAG}
     user: "$POSTGRES_UID:$POSTGRES_GID"
     environment:
+      TZ: ${ORTHANC_TIMEZONE}
       PGDATA: "/var/lib/postgresql/data/pgdata"
       PG_USER: "${COMMON_BASENAME}_disk_orthanc"
       PG_DB: "${COMMON_BASENAME}_disk_orthanc_db"
