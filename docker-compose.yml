@@ -478,6 +478,9 @@ services:
         source: ${ANON_HOST_DATA_DIR_POSTGRE}/${PG_VERSION_TAG}
         target: /var/lib/postgresql/data/pgdata
       - type: bind
+        source: ${ANON_HOST_DATA_DIR_POSTGRE}/backup
+        target: /backup
+      - type: bind
         source: ./shared_files/postgres.cron
         target: /var/spool/cron/crontabs/postgres
         read_only: true
@@ -679,6 +682,9 @@ services:
       - type: bind
         source: ${DISK_HOST_DATA_DIR_POSTGRE}/${PG_VERSION_TAG}
         target: /var/lib/postgresql/data/pgdata
+      - type: bind
+        source: ${DISK_HOST_DATA_DIR_POSTGRE}/backup
+        target: /backup
       - type: bind
         source: ./shared_files/postgres.cron
         target: /var/spool/cron/crontabs/postgres
