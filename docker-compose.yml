@@ -254,10 +254,10 @@ services:
     container_name: ${COMMON_BASENAME}_phi_postgres
     volumes:
       - type: bind
-        source: ./phi_files/postgres.conf
+        source: ./shared_files/postgres.conf
         target: /etc/postgresql/postgresql.conf
       - type: bind
-        source: ./phi_files/pg_hba.conf
+        source: ./shared_files/pg_hba.conf
         target: /etc/postgresql/pg_hba.conf
       - type: bind
         source: ./phi_files/postgresql-create-orthanc-user.sh
@@ -269,7 +269,7 @@ services:
         source: ${PHI_HOST_DATA_DIR_POSTGRE}/backup
         target: /backup
       - type: bind
-        source: ./phi_files/postgres.cron
+        source: ./shared_files/postgres.cron
         target: /var/spool/cron/crontabs/postgres
         read_only: true
     networks:
@@ -462,14 +462,25 @@ services:
       PG_DB: "${COMMON_BASENAME}_anon_orthanc_db"
       POSTGRES_PASSWORD: "${ANON_PASSWORD_FOR_PG_USER_POSTGRES}"
       PG_ORTHANC_PASSWORD: "${ANON_PASSWORD_FOR_PG_USER_ORTHANC}"
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
     container_name: ${COMMON_BASENAME}_anon_postgres
     volumes: 
+      - type: bind
+        source: ./shared_files/postgres.conf
+        target: /etc/postgresql/postgresql.conf
+      - type: bind
+        source: ./shared_files/pg_hba.conf
+        target: /etc/postgresql/pg_hba.conf
       - type: bind
         source: ./anon_files/postgresql-create-orthanc-user.sh
         target: /docker-entrypoint-initdb.d/postgresql-create-orthanc-user.sh
       - type: bind
-        source: ${ANON_HOST_DATA_DIR_POSTGRE}
+        source: ${ANON_HOST_DATA_DIR_POSTGRE}/${PG_VERSION_TAG}
         target: /var/lib/postgresql/data/pgdata
+      - type: bind
+        source: ./shared_files/postgres.cron
+        target: /var/spool/cron/crontabs/postgres
+        read_only: true
     networks:
       - nw_anon
 
@@ -653,20 +664,25 @@ services:
       PG_DB: "${COMMON_BASENAME}_disk_orthanc_db"
       POSTGRES_PASSWORD: "${DISK_PASSWORD_FOR_PG_USER_POSTGRES}"
       PG_ORTHANC_PASSWORD: "${DISK_PASSWORD_FOR_PG_USER_ORTHANC}"
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
     container_name: ${COMMON_BASENAME}_disk_postgres
     volumes: 
       - type: bind
-        source: ./disk_files/postgres.conf
+        source: ./shared_files/postgres.conf
         target: /etc/postgresql/postgresql.conf
       - type: bind
-        source: ./disk_files/pg_hba.conf
+        source: ./shared_files/pg_hba.conf
         target: /etc/postgresql/pg_hba.conf
       - type: bind
         source: ./disk_files/postgresql-create-orthanc-user.sh
         target: /docker-entrypoint-initdb.d/postgresql-create-orthanc-user.sh
       - type: bind
-        source: ${DISK_HOST_DATA_DIR_POSTGRE}/main
+        source: ${DISK_HOST_DATA_DIR_POSTGRE}/${PG_VERSION_TAG}
         target: /var/lib/postgresql/data/pgdata
+      - type: bind
+        source: ./shared_files/postgres.cron
+        target: /var/spool/cron/crontabs/postgres
+        read_only: true
     networks:
       - nw_disk
 

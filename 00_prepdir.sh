@@ -6,6 +6,11 @@ umask -S u=rwx,g=rx,o=
 
 CERT_HOST_IP_ADDRESS=1.2.3.4
 
+# Shared files
+chown $POSTGRES_UID:$POSTGRES_GID ./shared_files/*.conf
+chown $ORTHANC_UID:$ORTHANC_GID ./shared_files/make_certs_orthanc.sh
+chmod 600 ./shared_files/postgres.cron
+
 # ------------------------------------------------------
 # Preparation of anon disk
 # ------------------------------------------------------
@@ -29,11 +34,18 @@ if test -d "$ANON_HOST_DATA_DIR_POSTGRE"; then
    echo "$ANON_HOST_DATA_DIR_POSTGRE exists."
 else
    echo "Creating $ANON_HOST_DATA_DIR_POSTGRE"
-   mkdir -p $ANON_HOST_DATA_DIR_POSTGRE
+   mkdir -p $ANON_HOST_DATA_DIR_POSTGRE/$PG_VERSION_TAG
+   mkdir -p $ANON_HOST_DATA_DIR_POSTGRE/backup
+   /bin/cp -pf anon_files/backup_philookup.sh $ANON_HOST_DATA_DIR_POSTGRE/backup
    chown -R $POSTGRES_UID:$POSTGRES_GID $ANON_HOST_DATA_DIR_POSTGRE
    chmod -R o-rwx $ANON_HOST_DATA_DIR_POSTGRE
 fi
+
+# ------------------------------------------------------
+# Preparation of ANON files mapped into containers
+# ------------------------------------------------------
 chown $ORTHANC_UID:$ORTHANC_GID ./anon_files/mod_rest_api.py
+chown $POSTGRES_UID:$POSTGRES_GID ./anon_files/postgresql-create-orthanc-user.sh
 
 # ------------------------------------------------------
 # Preparation of phi disk
@@ -93,8 +105,6 @@ chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/base_anon_profile.json
 chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/orthanc.secret.json.template
 chown $ORTHANC_UID:$ORTHANC_GID ${PHI_ANON_PROFILE_JSON}
 chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/postgresql-create-orthanc-user.sh
-chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/postgres.cron
-chmod 600 ./phi_files/postgres.cron
 chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/pg*
 
 # ------------------------------------------------------
@@ -121,7 +131,9 @@ if test -d "$DISK_HOST_DATA_DIR_POSTGRE"; then
    echo "$DISK_HOST_DATA_DIR_POSTGRE exists."
 else
    echo "Creating $DISK_HOST_DATA_DIR_POSTGRE"
-   mkdir -p $PHI_HOST_DATA_DIR_POSTGRE/$PG_VERSION_TAG
+   mkdir -p $DISK_HOST_DATA_DIR_POSTGRE/$PG_VERSION_TAG
+   mkdir -p $DISK_HOST_DATA_DIR_POSTGRE/backup
+   /bin/cp -pf disk_files/backup_philookup.sh $DISK_HOST_DATA_DIR_POSTGRE/backup
    chown -R $POSTGRES_UID:$POSTGRES_GID $DISK_HOST_DATA_DIR_POSTGRE
    chmod -R o-rwx $DISK_HOST_DATA_DIR_POSTGRE
 fi
@@ -129,9 +141,6 @@ fi
 # ------------------------------------------------------
 # Preparation of DISK files mapped into containers
 # ------------------------------------------------------
-chown $ORTHANC_UID:$ORTHANC_GID ./shared_files/make_certs_orthanc.sh
-chmod ug+rx ./shared_files/make_certs_orthanc.sh
 chown $ORTHANC_UID:$ORTHANC_GID ./disk_files/mod_rest_api.py
 chown $POSTGRES_UID:$POSTGRES_GID ./disk_files/postgresql-create-orthanc-user.sh
-chown $POSTGRES_UID:$POSTGRES_GID ./disk_files/*.conf
 
