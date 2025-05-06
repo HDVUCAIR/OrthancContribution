@@ -9,6 +9,7 @@ CERT_HOST_IP_ADDRESS=1.2.3.4
 # Shared files
 chown $POSTGRES_UID:$POSTGRES_GID ./shared_files/*.conf
 chown $ORTHANC_UID:$ORTHANC_GID ./shared_files/make_certs_orthanc.sh
+chown $POSTGRES_UID:102 ./shared_files/postgres.cron
 chmod 600 ./shared_files/postgres.cron
 
 # ------------------------------------------------------

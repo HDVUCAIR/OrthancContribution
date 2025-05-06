@@ -23,7 +23,7 @@ for line_of_text in lines_of_text:
 for root, subdirs, files in os.walk('.'):
 
     for file_template in files:
-        if re.match('.*\.template$', file_template) is not None:
+        if re.match('.*.template$', file_template) is not None:
             file_out = '%s/%s' % (root, file_template[0:-9])
             lun_in = open('%s/%s' % (root, file_template), 'r')
             lines_of_text = lun_in.readlines()

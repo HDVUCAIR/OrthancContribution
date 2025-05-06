@@ -271,7 +271,7 @@ services:
       - type: bind
         source: ./shared_files/postgres.cron
         target: /var/spool/cron/crontabs/postgres
-        read_only: true
+        #read_only: true
     networks:
       - nw_phi
 
@@ -422,27 +422,23 @@ services:
       - type: bind
         source: ./anon_files/mod_rest_api.py
         target: /etc/orthanc/rest.py
-        volume:
-          read_only: true
+        read_only: true
       - type: bind
         source: ${ANON_HOST_DATA_DIR_ORTHANC}
         target: /media
       #- type: bind
       #  source: ./anon_files/configuration_orthanc.json
       #  target: /etc/orthanc/configuration.json
-      #  volume:
-      #    read_only: true
+      #  read_only: true
       - type: bind
         source: ./shared_files/make_certs_orthanc.sh
         target: /scripts/make_certs_orthanc.sh
-        volume:
-          read_only: true
+        read_only: true
         #target: /usr/lib/orthanc/setup.d/make_certs_orthanc.sh
       #- type: bind
       #  source: /etc/localtime
       #  target: /etc/localtime
-      #  volume:
-      #    read_only: true
+      #  read_only: true
     networks:
       - nw_anon
       - nw_phi
@@ -483,7 +479,7 @@ services:
       - type: bind
         source: ./shared_files/postgres.cron
         target: /var/spool/cron/crontabs/postgres
-        read_only: true
+        #read_only: true
     networks:
       - nw_anon
 
@@ -631,8 +627,7 @@ services:
       - type: bind
         source: ./disk_files/mod_rest_api.py
         target: /etc/orthanc/rest.py
-        volume:
-          read_only: true
+        read_only: true
       - type: bind
         source: ${DISK_HOST_DATA_DIR_ORTHANC}
         target: /media
@@ -640,12 +635,11 @@ services:
         source: ./shared_files/make_certs_orthanc.sh
         target: /scripts/make_certs_orthanc.sh
         volume:
-          read_only: true
+        read_only: true
       #- type: bind
       #  source: /etc/localtime
       #  target: /etc/localtime
-      #  volume:
-      #    read_only: true
+      #  read_only: true
       - type: bind
         source: ${DISK_HOST_DATA_DIR_DICOM}
         target: /dicomout
@@ -688,7 +682,7 @@ services:
       - type: bind
         source: ./shared_files/postgres.cron
         target: /var/spool/cron/crontabs/postgres
-        read_only: true
+        #read_only: true
     networks:
       - nw_disk
 
