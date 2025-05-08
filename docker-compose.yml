@@ -32,7 +32,8 @@ services:
       # Orthanc settings
       # --------------------------------
       # Basics
-      #BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
+      # Have the 00_prepdir.bash take care of this
+      #BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.bash"
       ORTHANC__EXECUTE_LUA_ENABLED: "false"
       ORTHANC__HTTP_PORT: "8042"
       ORTHANC__HTTP_TIMEOUT: "10"
@@ -205,8 +206,8 @@ services:
         source: ${PHI_HOST_DATA_DIR_ORTHANC}
         target: /media
       - type: bind
-        source: ./shared_files/make_certs_orthanc.sh
-        target: /scripts/make_certs_orthanc.sh
+        source: ./shared_files/make_certs_orthanc.bash
+        target: /scripts/make_certs_orthanc.bash
         read_only: true
     #  - type: bind
     #    source: /etc/localtime
@@ -306,7 +307,8 @@ services:
       # Orthanc settings
       # --------------------------------
       # Basics
-      BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
+      # Have the 00_prepdir.bash take care of this
+      #BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.bash"
       ORTHANC__EXECUTE_LUA_ENABLED: "false"
       ORTHANC__HTTP_PORT: "8042"
       ORTHANC__HTTP_TIMEOUT: "10"
@@ -431,10 +433,10 @@ services:
       #  target: /etc/orthanc/configuration.json
       #  read_only: true
       - type: bind
-        source: ./shared_files/make_certs_orthanc.sh
-        target: /scripts/make_certs_orthanc.sh
+        source: ./shared_files/make_certs_orthanc.bash
+        target: /scripts/make_certs_orthanc.bash
         read_only: true
-        #target: /usr/lib/orthanc/setup.d/make_certs_orthanc.sh
+        #target: /usr/lib/orthanc/setup.d/make_certs_orthanc.bash
       #- type: bind
       #  source: /etc/localtime
       #  target: /etc/localtime
@@ -514,7 +516,8 @@ services:
       # Orthanc settings
       # --------------------------------
       # Basics
-      BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.sh"
+      # Have the 00_prepdir.bash take care of this
+      #BEFORE_ORTHANC_STARTUP_SCRIPT: "/scripts/make_certs_orthanc.bash"
       ORTHANC__EXECUTE_LUA_ENABLED: "false"
       ORTHANC__HTTP_PORT: "8042"
       ORTHANC__HTTP_TIMEOUT: "10"
@@ -632,8 +635,8 @@ services:
         source: ${DISK_HOST_DATA_DIR_ORTHANC}
         target: /media
       - type: bind
-        source: ./shared_files/make_certs_orthanc.sh
-        target: /scripts/make_certs_orthanc.sh
+        source: ./shared_files/make_certs_orthanc.bash
+        target: /scripts/make_certs_orthanc.bash
         volume:
         read_only: true
       #- type: bind
