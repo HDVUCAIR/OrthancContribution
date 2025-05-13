@@ -14,8 +14,8 @@ RUN apt-get update \
        tzdata \
        apt-utils \
        html2text net-tools \
-       python3-bs4 python3-dateutil python3-psycopg2 python3-pydicom python3-requests \
-    && mkdir /scripts /json
+       python3-bs4 python3-dateutil python3-psycopg2 python3-pydicom python3-requests python3-openpyxl \
+    && mkdir /scripts /json 
 
 RUN groupadd -g $PROCESS_GID orthanc1 && \
     useradd -m -g $PROCESS_GID -u $PROCESS_UID orthanc1

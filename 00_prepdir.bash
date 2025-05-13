@@ -104,6 +104,7 @@ fi
 chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/mod_rest_api.py
 chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/base_anon_profile.json
 chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/orthanc.secret.json.template
+chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/CSVQuery.html
 chown $ORTHANC_UID:$ORTHANC_GID ${PHI_ANON_PROFILE_JSON}
 chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/postgresql-create-orthanc-user.sh
 chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/pg*

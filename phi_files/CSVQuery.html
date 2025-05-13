@@ -1,0 +1,382 @@
+
+<!doctype html>
+<html lang="en-US">
+
+   <head>
+      <meta charset="UTF-8" />
+      <script type="text/javascript" src="../app/libs/jquery.min.js"></script>
+      <title>Query by CSV</title>
+   </head>
+
+   <body>
+
+      <input type="file" id="csvFile" accept=".csv">
+      <button onclick="parseCSV()" style="background-color:#AAFFAA;">Parse CSV</button>
+      <button onclick="preScan()" id="preScanId" style="background-color:#AAAAAA;">Prescan</button>
+      <button onclick="pull()" id="pullId" style="background-color:#AAAAAA;">Pull Studies</button>
+      <div id="output">
+         <table name="tableId", id="tableId", border=1>
+         </table>
+      </div>
+
+      <script>
+
+         var countPACS = 0;
+         var countOrthanc = 0;
+         var lines;
+         var dataUp = [];
+         var headers;
+         var table;
+         var nColumns=0;
+         var flagSufficient, flagCounts;
+         const selectList=["Header","CSV"];
+         const optionsHeader=["None","PatientID","AccessionNumber","StudyDate", "Label"];
+         
+         // ==================================================================
+         function pull() {
+            checkCounts();
+            if (flagCounts && (dataUp.length > 0)) {
+               $.post("../csv_pull_studies",
+                      JSON.stringify(dataUp),
+                      function(result, status) {
+                         if (status == "success") {
+                            window.open(result);
+                            preScan();
+                         } else {
+                            alert("Problem pulling studies");
+                         }
+                    }
+                );
+            }
+         }
+
+         // ==================================================================
+         function preScan() {
+            checkSufficiency();
+            if (flagSufficient) {
+               var select;
+               let mapColumns = new Map();
+               for (var iColumn=0; iColumn < (nColumns-2); iColumn++) {
+                  select = document.getElementById("selectHeaderId" + iColumn);
+                  if (select.selectedIndex == 0) {continue;}
+                  mapColumns.set(iColumn, select.value);
+               }
+               dataUp = [];
+               for (var iRow=1; iRow < table.rows.length; iRow++) {
+                  var row = document.getElementById("r" + iRow);
+                  var datum = {}
+                  datum["Row"] = iRow;
+                  for (var iColumn=0; iColumn < (nColumns-2); iColumn++) {
+                     if (!mapColumns.has(iColumn)) {continue;}
+                     var cell = document.getElementById("r" + iRow + "c" + iColumn);
+                     datum[mapColumns.get(iColumn)] = cell.innerHTML;
+                  }
+                  dataUp.push(datum);
+               }
+               $.post("../csv_prescan",
+                      JSON.stringify(dataUp),
+                      function(result, status) {
+                         if (result.Status == 1) {
+                             alert("Error type: " + result["Error Type"] + "\n" + result["Error"]);
+                         } else if (result.Status == 0) {
+                             countPACS = 0;
+                             countOrthanc = 0;
+                             checkCounts();
+                             for (var iResult = 0; iResult < result.Result.length; iResult++) {
+                                 var cellId = "r" + result.Result[iResult].Row + "c" + (nColumns-2);
+                                 cell = document.getElementById(cellId);
+                                 cell.innerHTML = result.Result[iResult].PACS;
+                                 if (result.Result[iResult].PACS == "0") {
+                                     cell.style.background = "#FFAAAA";
+                                 } else {
+                                     countPACS = countPACS + parseInt(result.Result[iResult].PACS)
+                                     cell.style.background = "#AAFFAA";
+                                 }
+                                 cellId = "r" + result.Result[iResult].Row + "c" + (nColumns-1);
+                                 cell = document.getElementById(cellId);
+                                 cell.innerHTML = result.Result[iResult].Orthanc;
+                                 if (result.Result[iResult].Orthanc == "0") {
+                                     cell.style.background = "#FFAAAA";
+                                 } else {
+                                     countOrthanc = countOrthanc + parseInt(result.Result[iResult].Orthanc)
+                                     cell.style.background = "#AAFFAA";
+                                 }
+                             }
+                             checkCounts();
+                         }
+                    }
+                );
+            } else {
+               alert("Insufficient!  You need at least AccessionNumber or (PatientID and StudyDate).");
+            }
+            checkCounts();
+         }
+         // ==================================================================
+         function parseCSV() {
+         
+            const fileInput = document.getElementById("csvFile");
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            flagSufficient = false;
+
+            // ---------------------------------------------------------------
+            reader.onload = function(event) {
+         
+               const csvData = event.target.result;
+               lines = csvData.split("\n");
+               headers = lines[0].split(",");
+               dataUp = [];
+               var cell;
+         
+               table = document.getElementById("tableId");
+               deleteRangeOfRows(0,table.rows.length-1);
+         
+               for (var iHeader=0; (iHeader<headers.length) && (iHeader < (optionsHeader.length-1)); iHeader++) {
+                  insertColumnCSV();
+               }
+               insertColumnCounts();
+         
+           };
+           reader.readAsText(file);
+         }
+         
+         // ==================================================================
+         function selectHeader(event) {
+            dataUp = [];
+            const iColumnSelected = this.id.substring(14)
+            var cell = document.getElementById("r0c" + iColumnSelected);
+            if (this.selectedIndex == 0) {
+               checkSufficiency();
+               cell.style.background = "#000000";
+               for (var iRow=1; iRow < lines.length; iRow++) {
+                   cell = document.getElementById("r" + iRow + "c" + iColumnSelected);
+                   if (cell) {cell.style.background = "#000000";}
+               }
+               return;
+            } else {
+               for (var iColumn=0; iColumn < (nColumns-2); iColumn++) {
+                  if (iColumn != iColumnSelected) {
+                     select = document.getElementById("selectHeaderId" + iColumn);
+                     if ((select.selectedIndex != 0) && (select.selectedIndex == this.selectedIndex)) {
+                        alert("You have already selected " + this.value);
+                        this.selectedIndex = 0;
+                        break;
+                     }
+                  }
+               }
+               if (this.selectedIndex != 0) {
+                  cell.style.background = "#AAFFAA";
+                  for (var iRow=1; iRow < lines.length; iRow++) {
+                      cell = document.getElementById("r" + iRow + "c" + iColumnSelected);
+                      if (cell) {cell.style.background = "#AAFFAA";}
+                  }
+               }
+            }
+            checkSufficiency();
+         }
+         
+         // ==================================================================
+         function checkCounts() {
+            flagCounts = countPACS > countOrthanc;
+            var pullButton = document.getElementById("pullId");
+            pullButton.style.background = flagCounts ? "#AAFFAA" : "#AAAAAA";
+         }
+
+         // ==================================================================
+         function checkSufficiency() {
+            let flagMap = new Map();
+            for (var iColumn=0; iColumn < (nColumns-2); iColumn++) {
+               select = document.getElementById("selectHeaderId" + iColumn);
+               if (select.selectedIndex == 0) {continue;}
+               flagMap.set(select.value, true);
+            }
+            flagSufficient = flagMap.has("AccessionNumber") || (flagMap.has("PatientID") && flagMap.has("StudyDate"));
+            prescanButton = document.getElementById("preScanId");
+            prescanButton.style.background = flagSufficient ? "#AAFFAA" : "#AAAAAA";
+         }
+
+         // ==================================================================
+         function selectCSV(event) {
+            updateCSV(this);
+         }
+         
+         // ==================================================================
+         function deleteRangeOfRows(rowStart,rowStop) {
+            for (var iRow=rowStart; iRow <= rowStop; iRow++) {
+               var rowId = "r" + iRow;
+               document.getElementById(rowId).remove();
+            }
+            if (table.rows.length == 0) {
+               nColumns = 0;
+            } else {
+               nColumns = tables.rows[0].cells.length;
+            }
+         }
+         
+         // ==================================================================
+         function updateCSV(select) {
+         
+            dataUp = [];
+            const iColOut = select.id.substring(11)
+            var i;
+            const iColIn = select.selectedIndex;
+            for (i = 1; i < lines.length; i++) {
+               if (lines[i].trim().length == 0) {
+                  continue;
+               }
+               const currentLine = lines[i].split(",");
+               if (currentLine.length < iColIn) {
+                  continue;
+               }
+               if (currentLine[iColIn].trim().length == 0) {
+                  continue;
+               }
+               cell = document.getElementById("r" + i + "c" + iColOut);
+               cell.innerHTML = currentLine[iColIn];
+            }
+         }
+         
+         // ==================================================================
+         function insertColumnCSV() {
+         
+            var iRow=0;
+            var row;
+            var iCell;
+            var cell;
+            var select;
+            var iOption;
+            var opt;
+            rowId = "r" + iRow;
+         
+            // Grab the first row
+            if (nColumns == 0) {
+               row = table.insertRow(iRow);
+               row.id = rowId;
+            } else {
+               row = document.getElementById(rowId);
+            }
+         
+            // Insert the drop down lists
+            iCell = nColumns;
+            cell = row.insertCell(iCell);
+            cell.id = rowId + "c" + iCell;
+            cell.style.background = "#AAAAAA";
+            for (var iSelect=0; iSelect < selectList.length; iSelect++) {
+               select = document.createElement("select");
+               select.name = "select" + selectList[iSelect] + "Id" + iCell;
+               select.id = "select" + selectList[iSelect] + "Id" + iCell;
+               var functionName = window["select" + selectList[iSelect]]
+               select.addEventListener("change", functionName);
+               cell.appendChild(select);
+               if (selectList[iSelect] == "Header") {
+                  for (iOption=0; iOption < optionsHeader.length; iOption++) {
+                     opt = document.createElement("option");
+                     opt.value = optionsHeader[iOption];
+                     opt.innerHTML = optionsHeader[iOption];
+                     if (iOption == 0) {
+                         opt.selected = true;
+                     }
+                     select.appendChild(opt);
+                  }
+                  var br = document.createElement("br");
+                  cell.appendChild(br);
+               // CSV headers
+               } else {
+                  for (var j=0; j<headers.length; j++) {
+                     var opt=document.createElement("option");
+                     opt.value = headers[j];
+                     opt.innerHTML= headers[j];
+                     select.appendChild(opt);
+                  }
+               }
+            }
+            select.selectedIndex = 0;
+            if (nColumns < headers.length) {
+               select.selectedIndex = nColumns;
+            } else {
+               select.selectedIndex = headers.length - 1;
+            }
+         
+            // Create cells and Insert the values
+            for (iRow = 1; iRow < lines.length; iRow++) {
+               if (lines[iRow].trim().length == 0) {
+                  continue;
+               }
+               rowId = "r" + iRow;
+               const currentLine = lines[iRow].split(",");
+               if (nColumns == 0) { 
+                  row = table.insertRow(iRow);
+                  row.id = rowId;
+               } else {
+                  row = document.getElementById(rowId);
+               }
+               j = select.selectedIndex;
+               cell = row.insertCell(nColumns);
+               cell.id = "r" + iRow + "c" + nColumns;
+               cell.style.background = "#000000";
+            }
+            updateCSV(select);
+            nColumns++;
+         }
+         // ==================================================================
+         function insertColumnCounts() {
+         
+            var iRow=0;
+            var row;
+            var iCell;
+            var cell;
+            rowId = "r" + iRow;
+         
+            // Grab the first row
+            row = document.getElementById(rowId);
+         
+            // The main header
+            iCell = nColumns;
+            cell = row.insertCell(iCell);
+            cell.id = rowId + "c" + iCell;
+            cell.innerHTML = "PACS Counts";
+         
+            // Create cells and Insert the values
+            for (iRow = 1; iRow < lines.length; iRow++) {
+               if (lines[iRow].trim().length == 0) {
+                  continue;
+               }
+               rowId = "r" + iRow;
+               row = document.getElementById(rowId);
+               cell = row.insertCell(nColumns);
+               cell.id = "r" + iRow + "c" + nColumns;
+               cell.style.textAlign = "center";
+               cell.innerHTML = "";
+            }
+
+            nColumns++;
+
+            // The main header
+            iRow = 0;
+            rowId = "r" + iRow;
+            row = document.getElementById(rowId);
+            iCell = nColumns;
+            cell = row.insertCell(iCell);
+            cell.id = rowId + "c" + iCell;
+            cell.innerHTML = "Orthanc Counts";
+         
+            // Create cells and Insert the values
+            for (iRow = 1; iRow < lines.length; iRow++) {
+               if (lines[iRow].trim().length == 0) {
+                  continue;
+               }
+               rowId = "r" + iRow;
+               row = document.getElementById(rowId);
+               cell = row.insertCell(nColumns);
+               cell.id = "r" + iRow + "c" + nColumns;
+               cell.style.textAlign = "center";
+               cell.innerHTML = "";
+            }
+
+            nColumns++;
+
+         }
+      </script>
+   </body>
+</html>
+

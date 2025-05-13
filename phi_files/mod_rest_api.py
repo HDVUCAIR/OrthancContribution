@@ -1,8 +1,13 @@
 import copy
+import csv
 import datetime
+from dateutil import relativedelta
+from email.message import EmailMessage
+from email.headerregistry import Address
 import inspect
 import json
 import numbers
+import openpyxl
 import orthanc
 import os
 import pprint
@@ -12,8 +17,6 @@ import smtplib
 import threading
 import time
 import string
-from email.message import EmailMessage
-from email.headerregistry import Address
 
 global_var = {'flag' : {}, 'regexp': {}}
 try:
@@ -88,6 +91,23 @@ button_js_system_stats = "$('#lookup').live('pagebeforecreate', function() {" + 
                              "   uuid = $.mobile.pageData.uuid" + \
                              " };" + \
                              " window.open('/%s/statistics');" % global_var['website'] + \
+                             "}" + \
+                           ");" + \
+                         "});"
+
+button_js_system_recent = "$('#lookup').live('pagebeforecreate', function() {" + \
+                           " var b = $('<a>')" + \
+                             " .attr('data-role', 'button')" + \
+                             " .attr('href', '#')" + \
+                             " .attr('data-theme', 'b')" + \
+                             " .text('Recent');" + \
+                           " b.insertAfter($('#content').parent());" + \
+                           " b.click(function() {" + \
+                             " var uuid='none'; " + \
+                             " if ($.mobile.pageData) {" + \
+                             "   uuid = $.mobile.pageData.uuid" + \
+                             " };" + \
+                             " window.open('/%s/recent_statistics');" % global_var['website'] + \
                              "}" + \
                            ");" + \
                          "});"
@@ -268,7 +288,7 @@ button_js_instance_tags = "$('#instance').live('pagebeforecreate', function() {"
 # ----------------------------------------------------------------------------
 # Inserting the above button definitions into the explorer
 # ----------------------------------------------------------------------------
-orthanc.ExtendOrthancExplorer(' '.join([button_js_system_meta, button_js_system_stats, button_js_anonymize_by_label, \
+orthanc.ExtendOrthancExplorer(' '.join([button_js_system_meta, button_js_system_stats, button_js_system_recent, button_js_anonymize_by_label, \
                                         button_js_patient_meta, button_js_patient_stats, \
                                         button_js_study_meta, button_js_study_stats, \
                                         button_js_series_meta, button_js_series_stats, \
@@ -3251,6 +3271,52 @@ def create_lookup_table_sql(pg_connection=None, pg_cursor=None, **kwargs):
     return {'status' : 0}
 
 # =======================================================
+def csv_pull_studies(incoming_data, **kwargs):
+# -------------------------------------------------------
+
+    log_message_bitflag = python_verbose_logwarning + (2 if 'log_user' in kwargs else 0)
+    if log_message_bitflag:
+        global_var['log_indent_level'] = 0
+        log_indent_level_prev = 0
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Entering %s' % frame.f_code.co_name, **kwargs)
+
+    response_system = orthanc.RestApiGet('/system')
+    meta_system = json.loads(response_system)
+    aet = meta_system['DicomAet']
+    flag_xref_modality, xref_modality = check_xref_modality()
+    log_message(log_message_bitflag, global_var['log_indent_level']+3, 'Looping over %d csv rows' % len(incoming_data), **kwargs)
+    for incoming_datum in incoming_data:
+
+        log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Forming query', **kwargs)
+        query_dicom = {}
+        for input_type in ['AccessionNumber', 'PatientID', 'StudyDate']:
+            if input_type in incoming_datum:
+                query_dicom[input_type] = incoming_datum[input_type]
+        query_studies = {'Level' : 'Study',
+                         'Query' : query_dicom}
+        meta_query = json.loads(orthanc.RestApiPost('/tools/find', json.dumps(query_studies)))
+
+        if len(meta_query) == 0 and flag_xref_modality:
+            log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Not on orthanc, querying PACS', **kwargs)
+            meta_query_study = json.loads(orthanc.RestApiPost('/modalities/' + xref_modality + '/query', json.dumps(query_studies)))
+            if 'ID' in meta_query_study:
+                response_answers_study = json.loads(orthanc.RestApiGet('%s/answers' % meta_query_study['Path']))
+                for response_answer_id in response_answers_study:
+                    response_answer = json.loads(orthanc.RestApiGet('%s/answers/%s' % (meta_query_study['Path'],response_answer_id)))
+                    if 'content' in response_answer:
+                        log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Found on PACs, initiating pull...', **kwargs)
+                        url_move = '%s/answers/%s/retrieve' % (meta_query_study['Path'],response_answer_id)
+                        response_move = orthanc.RestApiPost(url_move, aet)
+                        if 'Label' in incoming_datum:
+                            log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Adding label', **kwargs)
+                            orthanc_study_ids = json.loads(orthanc.RestApiPost('/tools/find', json.dumps(query_studies)))
+                            for orthanc_study_id in orthanc_study_ids:
+                                orthanc.RestApiPut('/studies/%s/labels/%s' % (orthanc_study_id, incoming_datum['Label']), json.dumps({}))
+                    break
+
+# =======================================================
 def email_message(subject, message_body, subtype='plain', alternates=None, cc=None, **kwargs):
     """
         PURPOSE: Send email to addresses specified in env var PYTHON_MAIL_TO
@@ -5525,6 +5591,87 @@ def patient_registration_final(pid=None, primary=None, secondary=None):
     return {'status' : 0, 'result' : 'No valid operation', 'error_text' : ''}
 
 # ============================================================================
+def recent_statistics():
+    """ 
+    PURPOSE: Query recent month and print table of most recent 10 stats
+    OUTPUT:  status - dict{'status': 0 or non-zero, 'error_text': 'Error if any'}
+             statistics - dict
+                ['html'] - html text of table of stats
+    HISTORY: 24 Apr 2025, John.Roberts@hsc.utah.edu
+             Dept Radis, UofU, SLC Utah
+             Converted from original Lua
+    """
+# ----------------------------------------------------------------------------
+
+    previous_month = datetime.datetime.now() + relativedelta.relativedelta(months=-1)
+    try:
+        post_data = {'Level' : 'Study',
+                     'Expand' : True,
+                     'Query' : { 'StudyDate' : previous_month.strftime('%Y%m%d-') },
+                     'Full' : False}
+        statistics = {}
+        statistics['json'] = json.loads(orthanc.RestApiPost('/tools/find', json.dumps(post_data)))
+        list_html = []
+        list_html += ['<html>']
+        list_html += [' '*3 + '<body>']
+        if len(statistics['json']) == 0:
+            list_html += [' '*6 + 'Number of studies since %s: %d' % (previous_month.strftime('%Y%m%d'), len(statistics['json']))]
+        else:
+            data = {}
+            n_stable = 0
+            n_unstable = 0
+            for meta_study in statistics['json']:
+                last_update = meta_study['LastUpdate']
+                is_stable = meta_study['IsStable']
+                if is_stable:
+                    n_stable += 1
+                else:
+                    n_unstable += 1
+                study_date = meta_study['MainDicomTags']['StudyDate'].strip() if 'StudyDate' in meta_study['MainDicomTags'] and len(meta_study['MainDicomTags']['StudyDate'].strip()) > 0 else ''
+                study_time = meta_study['MainDicomTags']['StudyTime'].strip() if 'StudyTime' in meta_study['MainDicomTags'] and len(meta_study['MainDicomTags']['StudyTime'].strip()) > 0 else ''
+                study_description = meta_study['MainDicomTags']['StudyDescription'].strip() if 'StudyDescription' in meta_study['MainDicomTags'] and len(meta_study['MainDicomTags']['StudyDescription'].strip()) > 0 else ''
+                accession_number = meta_study['MainDicomTags']['AccessionNumber'].strip() if 'AccessionNumber' in meta_study['MainDicomTags'] and len(meta_study['MainDicomTags']['AccessionNumber'].strip()) > 0 else ''
+                patient_name = meta_study['PatientMainDicomTags']['PatientName'].strip() if 'PatientName' in meta_study['PatientMainDicomTags'] and len(meta_study['PatientMainDicomTags']['PatientName'].strip()) > 0 else ''
+                n_series = len(meta_study['Series'])
+                datum = {'StudyDate' : study_date,
+                         'StudyTime' : study_time,
+                         'IsStable' : is_stable,
+                         'StudyDescription' : study_description,
+                         'AccessionNumber' : accession_number,
+                         'PatientName' : patient_name,
+                         'Series' : '%d' % n_series}
+                if last_update not in data:
+                    data[last_update] = []
+                data[last_update] += [datum]
+            list_html += [' '*6 + 'Number of studies since %s' % previous_month.strftime('%Y%m%d') ]
+            list_html += [' '*6 + '<table border=1><tr><th>Stable</th><th>Unstable</th></tr>']
+            list_html += [' '*6 + '<tr><td style="background-color:#AAFFAA;">%d</td><td style="background-color:#FFAAAA;">%d</td></tr></table>' % (n_stable, n_unstable)]
+            all_dates = list(data.keys())
+            all_dates.sort()
+            list_html += [' '*6 + '<table border=1>']
+            list_html += [' '*9 + '<tr><th>Patient</th><th>Accession</th><th>Date</th><th>Time</th><th>Description</th><th>Series</th></tr>']
+            for date_str in all_dates[::-1]:
+                for entry in data[date_str]:
+                    color = '#AAFFAA' if entry['IsStable'] else '#FFAAAA'
+                    list_html += [' '*9 + '<tr style="background-color:%s">' % color]
+                    for key in ['PatientName', 'AccessionNumber', 'StudyDate', 'StudyTime', 'StudyDescription', 'Series']:
+                        if len(entry[key]) > 0:
+                            list_html += [' '*12 + '<td>%s</td>' % entry[key]]
+                        else:
+                            list_html += [' '*12 + '<td>&nbsp</td>']
+                    list_html += [' '*9 + '</tr>']
+            list_html += [' '*6 + '</table>']
+
+        list_html += [' '*3 + '</body>']
+        list_html += ['</html>']
+        statistics['html'] = '\n'.join(list_html)
+        status = {'status' : 0}
+        return status, statistics
+    except:
+        status = {'status' : 1, 'error_text' : 'Problem with stats query'}
+        return status, None
+    
+# ============================================================================
 def recursive_find_uid_to_keep(parent, level_in=global_var['max_recurse_depth'], kept_uid={}, top_level_tag_to_keep = {}, parent_key=None):
     """
     PURPOSE: Tunnel down orthanc instance meta data cataloging 
@@ -7567,6 +7714,72 @@ def AnonymizeByLabelRun(output, uri, **request):
         output.AnswerBuffer('Anonymize by label not permitted to user', 'text/plain')
 
 # ============================================================================
+def CSVPullStudies(output, uri, **request):
+    """API interface to pull CSV studies"""
+# ----------------------------------------------------------------------------
+                   
+    if request['method'] != 'POST':
+        output.SendMethodNotAllowed('POST')
+    else:
+        remote_user = get_remote_user(request['headers'])
+        incoming_data = json.loads(request['body'])
+        random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+        t = threading.Timer(0, function=csv_pull_studies, args=(incoming_data,), kwargs={'remote_user':remote_user, 'log_user':random_string})
+        t.start()
+        output.AnswerBuffer('/%s/userlog/%s' % (global_var['website'], random_string), 'text/plain')
+
+# ============================================================================
+def CSVPrescan(output, uri, **request):
+    """API interface to pre-scan CSV entries"""
+# ----------------------------------------------------------------------------
+    re_types = {      'PatientID' : re.compile('[0-9]+$'),
+                'AccessionNumber' : re.compile('[0-9]+$'),
+                      'StudyDate' : re.compile('(197|198|199|200|201|202)[0-9][0-1][0-9][0-3][0-9]$'),
+                       'Modality' : re.compile('[a-z]+$',re.I),
+                 'Anon Last Name' : re.compile('[a-z0-9_]+$', re.I),
+                     'IRB Number' : re.compile('[0-9]+$'),
+                          'Label' : re.compile('[a-z]+[a-z0-9]*', re.I) }
+                   
+    if request['method'] != 'POST':
+        output.SendMethodNotAllowed('POST')
+    else:
+        incoming_data = json.loads(request['body'])
+        errors = {}
+        for incoming_datum in incoming_data:
+            for entry_type, entry_re in re_types.items():
+                if entry_type in incoming_datum and entry_re.match(incoming_datum[entry_type]) is None:
+                    if entry_type not in errors:
+                        errors[entry_type] = []
+                    if 'Total' not in errors:
+                        errors['Total'] = 0
+                    errors[entry_type] += [incoming_datum[entry_type]]
+                    errors['Total'] += 1
+        if 'Total' in errors and errors['Total'] > 0:
+            output.AnswerBuffer(json.dumps({'Status': 1, 'Error Type' : 'Input', 'Error' : json.dumps(errors,indent=3)}), 'application/json')
+
+        answers = []
+        flag_xref_modality, xref_modality = check_xref_modality()
+        for incoming_datum in incoming_data:
+            query_dicom = {}
+            for input_type in ['AccessionNumber', 'PatientID', 'StudyDate']:
+                if input_type in incoming_datum:
+                    query_dicom[input_type] = incoming_datum[input_type]
+            query_studies = {'Level' : 'Study',
+                             'Query' : query_dicom}
+            answer = {'Row' : incoming_datum['Row'], 'PACS' : 0, 'Orthanc': 0}
+            if flag_xref_modality:
+                meta_query = json.loads(orthanc.RestApiPost('/modalities/' + xref_modality + '/query', json.dumps(query_studies)))
+                if 'ID' in meta_query:
+                    meta_id = json.loads(orthanc.RestApiGet('/queries/%s' % meta_query['ID']))
+                    if meta_id[0] == 'answers':
+                        meta_answers = json.loads(orthanc.RestApiGet('/queries/%s/answers' % meta_query['ID']))
+                        answer['PACS'] = len(meta_answers)
+            meta_query = json.loads(orthanc.RestApiPost('/tools/find', json.dumps(query_studies)))
+            answer['Orthanc'] = len(meta_query)
+            answers += [answer]
+        output.AnswerBuffer(json.dumps({'Status': 0, 'Result' : answers}),'application/json')
+
+ # ============================================================================
 def ConstructPatientName(output, uri, **request):
     """API interface to construct the patients name"""
 # ----------------------------------------------------------------------------
@@ -7656,26 +7869,17 @@ def IncomingFilter(uri, **request):
     if method in ['DELETE', 'PUT']:
         return user_permitted(uri, remote_user)
         
-    if method == 'POST' and \
-        uri.find('/set_patient_name_base') >= 0:
-        if not user_permitted(uri, remote_user):
-            if log_message_bitflag:
-                log_message(log_message_bitflag, global_var['log_indent_level'], 'User not permitted to anonymize: %s' % remote_user)
-            return False
-        else: 
-            if log_message_bitflag:
-                log_message(log_message_bitflag, global_var['log_indent_level'], 'User permitted to anonymize: %s' % remote_user)
-        return True
-
-    if method == 'POST' and uri.find('/execute-script') >= 0:
-        if not user_permitted(uri, remote_user):
-            if log_message_bitflag:
-                log_message(log_message_bitflag, global_var['log_indent_level'], 'User not permitted to execute-script: %s' % remote_user)
-            return False
-        else: 
-            if log_message_bitflag:
-                log_message(log_message_bitflag, global_var['log_indent_level'], 'User permitted to execute-script: %s' % remote_user)
-            return True
+    if method == 'POST':
+        for protected_api in ['set_patient_name_base', 'execute_script', 'csv_prescan', 'csv_pull_studies']:
+            if uri.split('/')[-1] == protected_api:
+                if not user_permitted(uri, remote_user):
+                    if log_message_bitflag:
+                        log_message(log_message_bitflag, global_var['log_indent_level'], 'User not permitted to %s: %s' % (protected_api, remote_user))
+                    return False
+                else: 
+                    if log_message_bitflag:
+                        log_message(log_message_bitflag, global_var['log_indent_level'], 'User permitted to %s: %s' % (protected_api, remote_user))
+                return True
 
     if method == 'POST' and \
         ((uri.find('/anonymize') >= 0 and (uri.find('/anonymize_by') < 0)) or \
@@ -7773,10 +7977,10 @@ def JSAnonymizeStudy(output, uri, **request):
         to OnStableStudyMean that bypassed the IncomingHTTP filter.
     """
 # ----------------------------------------------------------------------------
-    if request['method'] == 'POST':
-        output.AnswerBuffer(json.dumps({}, indent=3), 'application/json')
-    else:
+    if request['method'] != 'POST':
         output.SendMethodNotAllowed('POST')
+    else:
+        output.AnswerBuffer(json.dumps({}, indent=3), 'application/json')
 
 # ============================================================================
 def OnChange(change_type, level, resource_id):
@@ -8105,6 +8309,20 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
         global_var['log_indent_level'] = log_indent_level_prev
 
 # ============================================================================
+def RecentStatistics(output, uri, **request):
+    """API interface to display table of recent statistics."""
+# ----------------------------------------------------------------------------
+    if request['method'] == 'GET':
+        status, statistics = recent_statistics()
+        if status['status'] == 0:
+            output.AnswerBuffer(statistics['html'], 'text/html')
+            #output.AnswerBuffer(json.dumps(statistics['json'],indent=3), 'text/plain')
+        else:
+            output.AnswerBuffer('Problem computing recent stats', 'text/plain')
+    else:
+        output.SendMethodNotAllowed('GET')
+
+# ============================================================================
 def ScanInstanceForGroupElement(output, uri, **request):
     """API interface to scan_instance_for_group_element."""
 # ----------------------------------------------------------------------------
@@ -8377,12 +8595,15 @@ orthanc.RegisterIncomingHttpRequestFilter(IncomingFilter)
 orthanc.RegisterOnChangeCallback(OnChangeThreaded)
 orthanc.RegisterRestCallback('/anonymize_by_label', AnonymizeByLabel)
 orthanc.RegisterRestCallback('/anonymize_by_label_run', AnonymizeByLabelRun)
+orthanc.RegisterRestCallback('/csv_prescan', CSVPrescan)
+orthanc.RegisterRestCallback('/csv_pull_studies', CSVPullStudies)
 orthanc.RegisterRestCallback('/construct_patient_name', ConstructPatientName)
 orthanc.RegisterRestCallback('/studies/(.*)/email_report', EmailStudyReport)
 #orthanc.RegisterRestCallback('/get_configuration', GetConfiguration)
 orthanc.RegisterRestCallback('/get_patient_name_base', GetPatientNameBase)
 #orthanc.RegisterRestCallback('/inspect_python_api', InspectPythonAPI)
 orthanc.RegisterRestCallback('/studies/(.*)/jsanon', JSAnonymizeStudy)
+orthanc.RegisterRestCallback('/recent_statistics', RecentStatistics)
 orthanc.RegisterRestCallback('/patient_registration', PatientRegistration)
 orthanc.RegisterRestCallback('/patient_registration_final', PatientRegistrationFinal)
 orthanc.RegisterRestCallback('/prepare_data_for_anonymize', PrepareDataForAnonymizeGUI)
