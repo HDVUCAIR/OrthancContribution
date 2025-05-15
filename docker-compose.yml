@@ -213,6 +213,31 @@ services:
         source: ./phi_files/CSVQuery.html
         target: /media/html/CSVQuery.html 
         read_only: true
+      - type: bind
+        source: ./phi_files/jquery.tablesorter.combined.min.js
+        target: /media/html/lookup/master/jquery.tablesorter.combined.min.js 
+        read_only: true
+      - type: bind
+        source: ./phi_files/style.css
+        target: /media/html/lookup/master/style.css                          
+        read_only: true
+      - type: bind
+        source: ./phi_files/theme.blue.min.css
+        target: /media/html/lookup/master/theme.blue.min.css                 
+        read_only: true
+      - type: bind
+        source: ./phi_files/updatelookup.html
+        target: /media/html/lookup/master/updatelookup.html                  
+        read_only: true
+      - type: bind
+        source: ./phi_files/study_anonymize.html
+        target: /media/html/scrub
+        read_only: true
+      - type: bind
+        source: ./phi_files/study_anonymize.js
+        target:  /media/html/scrub
+        read_only: true
+
     #  - type: bind
     #    source: /etc/localtime
     #    target: /etc/localtime
@@ -277,6 +302,9 @@ services:
         source: ./shared_files/postgres.cron
         target: /var/spool/cron/crontabs/postgres
         #read_only: true
+      - type: bind
+        source: ./phi_files/backup_philookup.sh
+        target: /backup/backup_philookup.sh
     networks:
       - nw_phi
 
@@ -485,6 +513,9 @@ services:
       - type: bind
         source: ./shared_files/postgres.cron
         target: /var/spool/cron/crontabs/postgres
+      - type: bind
+        source: ./anon_files/backup_philookup.sh
+        target: /backup/backup_philookup.sh
         #read_only: true
     networks:
       - nw_anon
@@ -690,6 +721,9 @@ services:
         source: ./shared_files/postgres.cron
         target: /var/spool/cron/crontabs/postgres
         #read_only: true
+      - type: bind
+        source: ./disk_files/backup_philookup.sh
+        target: /backup/backup_philookup.sh
     networks:
       - nw_disk
 

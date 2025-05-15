@@ -37,7 +37,6 @@ else
    echo "Creating $ANON_HOST_DATA_DIR_POSTGRE"
    mkdir -p $ANON_HOST_DATA_DIR_POSTGRE/$PG_VERSION_TAG
    mkdir -p $ANON_HOST_DATA_DIR_POSTGRE/backup
-   /bin/cp -pf anon_files/backup_philookup.sh $ANON_HOST_DATA_DIR_POSTGRE/backup
    chown -R $POSTGRES_UID:$POSTGRES_GID $ANON_HOST_DATA_DIR_POSTGRE
    chmod -R o-rwx $ANON_HOST_DATA_DIR_POSTGRE
 fi
@@ -47,6 +46,9 @@ fi
 # ------------------------------------------------------
 chown $ORTHANC_UID:$ORTHANC_GID ./anon_files/mod_rest_api.py
 chown $POSTGRES_UID:$POSTGRES_GID ./anon_files/postgresql-create-orthanc-user.sh
+chown $POSTGRES_UID:$POSTGRES_GID ./anon_files/backup_philookup.sh
+chmod ug+rwx anon_files/backup_philookup.sh
+chmod o-rwx anon_files/backup_philookup.sh
 
 # ------------------------------------------------------
 # Preparation of phi disk
@@ -73,7 +75,6 @@ else
    echo "Creating $PHI_HOST_DATA_DIR_POSTGRE"
    mkdir -p $PHI_HOST_DATA_DIR_POSTGRE/$PG_VERSION_TAG
    mkdir -p $PHI_HOST_DATA_DIR_POSTGRE/backup
-   /bin/cp -pf phi_files/backup_philookup.sh $PHI_HOST_DATA_DIR_POSTGRE/backup
    chown -R $POSTGRES_UID:$POSTGRES_GID $PHI_HOST_DATA_DIR_POSTGRE
    chmod -R o-rwx $PHI_HOST_DATA_DIR_POSTGRE
 fi
@@ -82,18 +83,12 @@ fi
 #    will be written by the anonymize script
 if [ ! -e "$PHI_HOST_DATA_DIR_ORTHANC/html/lookup/master" ]; then
    mkdir -p $PHI_HOST_DATA_DIR_ORTHANC/html/lookup/master
-   /bin/cp -pf phi_files/jquery.tablesorter.combined.min.js $PHI_HOST_DATA_DIR_ORTHANC/html/lookup/master
-   /bin/cp -pf phi_files/style.css $PHI_HOST_DATA_DIR_ORTHANC/html/lookup/master
-   /bin/cp -pf phi_files/theme.blue.min.css $PHI_HOST_DATA_DIR_ORTHANC/html/lookup/master
-   /bin/cp -pf phi_files/updatelookup.html $PHI_HOST_DATA_DIR_ORTHANC/html/lookup/master
    chown -R $ORTHANC_UID:$ORTHANC_GID $PHI_HOST_DATA_DIR_ORTHANC/html
    chmod -R ug+rw,o-rwx $PHI_HOST_DATA_DIR_ORTHANC/html
 fi
 # Setup the scrubbing page
 if [ ! -e "$PHI_HOST_DATA_DIR_ORTHANC/html/scrub" ]; then
    mkdir -p $PHI_HOST_DATA_DIR_ORTHANC/html/scrub
-   /bin/cp -pf phi_files/study_anonymize.html $PHI_HOST_DATA_DIR_ORTHANC/html/scrub
-   /bin/cp -pf phi_files/study_anonymize.js $PHI_HOST_DATA_DIR_ORTHANC/html/scrub
    chown -R $ORTHANC_UID:$ORTHANC_GID $PHI_HOST_DATA_DIR_ORTHANC/html
    chmod -R ug+rw,o-rwx $PHI_HOST_DATA_DIR_ORTHANC/html
 fi
@@ -105,9 +100,18 @@ chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/mod_rest_api.py
 chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/base_anon_profile.json
 chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/orthanc.secret.json.template
 chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/CSVQuery.html
+chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/jquery.tablesorter.combined.min.js
+chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/style.css
+chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/theme.blue.min.css
+chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/updatelookup.html
+chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/study_anonymize.html
+chown $ORTHANC_UID:$ORTHANC_GID ./phi_files/study_anonymize.js
 chown $ORTHANC_UID:$ORTHANC_GID ${PHI_ANON_PROFILE_JSON}
 chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/postgresql-create-orthanc-user.sh
 chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/pg*
+chown $POSTGRES_UID:$POSTGRES_GID ./phi_files/backup_philookup.sh
+chmod ug+rwx phi_files/backup_philookup.sh
+chmod o-rwx phi_files/backup_philookup.sh
 
 # ------------------------------------------------------
 # Preparation of DISK disk
@@ -135,7 +139,6 @@ else
    echo "Creating $DISK_HOST_DATA_DIR_POSTGRE"
    mkdir -p $DISK_HOST_DATA_DIR_POSTGRE/$PG_VERSION_TAG
    mkdir -p $DISK_HOST_DATA_DIR_POSTGRE/backup
-   /bin/cp -pf disk_files/backup_philookup.sh $DISK_HOST_DATA_DIR_POSTGRE/backup
    chown -R $POSTGRES_UID:$POSTGRES_GID $DISK_HOST_DATA_DIR_POSTGRE
    chmod -R o-rwx $DISK_HOST_DATA_DIR_POSTGRE
 fi
@@ -145,4 +148,7 @@ fi
 # ------------------------------------------------------
 chown $ORTHANC_UID:$ORTHANC_GID ./disk_files/mod_rest_api.py
 chown $POSTGRES_UID:$POSTGRES_GID ./disk_files/postgresql-create-orthanc-user.sh
+chown $POSTGRES_UID:$POSTGRES_GID ./disk_files/backup_philookup.sh
+chmod ug+rwx disk_files/backup_philookup.sh
+chmod o-rwx disk_files/backup_philookup.sh
 
