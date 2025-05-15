@@ -95,12 +95,46 @@ button_js_system_stats = "$('#lookup').live('pagebeforecreate', function() {" + 
                            ");" + \
                          "});"
 
+button_js_system_csv = "$('#lookup').live('pagebeforecreate', function() {" + \
+                           " var b = $('<a>')" + \
+                             " .attr('data-role', 'button')" + \
+                             " .attr('href', '#')" + \
+                             " .attr('data-theme', 'b')" + \
+                             " .text('CSV Query');" + \
+                           " b.insertAfter($('#content').parent());" + \
+                           " b.click(function() {" + \
+                             " var uuid='none'; " + \
+                             " if ($.mobile.pageData) {" + \
+                             "   uuid = $.mobile.pageData.uuid" + \
+                             " };" + \
+                             " window.open('/%s/extra/CSVQuery.html');" % global_var['website'] + \
+                             "}" + \
+                           ");" + \
+                         "});"
+
+button_js_system_lookup = "$('#lookup').live('pagebeforecreate', function() {" + \
+                           " var b = $('<a>')" + \
+                             " .attr('data-role', 'button')" + \
+                             " .attr('href', '#')" + \
+                             " .attr('data-theme', 'b')" + \
+                             " .text('PHI Map');" + \
+                           " b.insertAfter($('#content').parent());" + \
+                           " b.click(function() {" + \
+                             " var uuid='none'; " + \
+                             " if ($.mobile.pageData) {" + \
+                             "   uuid = $.mobile.pageData.uuid" + \
+                             " };" + \
+                             " window.open('/%s/extra/lookup/master/lookuptable.html');" % global_var['website'] + \
+                             "}" + \
+                           ");" + \
+                         "});"
+
 button_js_system_recent = "$('#lookup').live('pagebeforecreate', function() {" + \
                            " var b = $('<a>')" + \
                              " .attr('data-role', 'button')" + \
                              " .attr('href', '#')" + \
                              " .attr('data-theme', 'b')" + \
-                             " .text('Recent');" + \
+                             " .text('Recent Studies');" + \
                            " b.insertAfter($('#content').parent());" + \
                            " b.click(function() {" + \
                              " var uuid='none'; " + \
@@ -112,12 +146,46 @@ button_js_system_recent = "$('#lookup').live('pagebeforecreate', function() {" +
                            ");" + \
                          "});"
 
+button_js_system_register = "$('#lookup').live('pagebeforecreate', function() {" + \
+                           " var b = $('<a>')" + \
+                             " .attr('data-role', 'button')" + \
+                             " .attr('href', '#')" + \
+                             " .attr('data-theme', 'b')" + \
+                             " .text('Register Patient');" + \
+                           " b.insertAfter($('#content').parent());" + \
+                           " b.click(function() {" + \
+                             " var uuid='none'; " + \
+                             " if ($.mobile.pageData) {" + \
+                             "   uuid = $.mobile.pageData.uuid" + \
+                             " };" + \
+                             " window.open('/%s/patient_registration');" % global_var['website'] + \
+                             "}" + \
+                           ");" + \
+                         "});"
+
+button_js_anonymize_single = "$('#lookup').live('pagebeforecreate', function() {" + \
+                           " var b = $('<a>')" + \
+                             " .attr('data-role', 'button')" + \
+                             " .attr('href', '#')" + \
+                             " .attr('data-theme', 'b')" + \
+                             " .text('Anonymize A Single Study');" + \
+                           " b.insertAfter($('#content').parent());" + \
+                           " b.click(function() {" + \
+                             " var uuid='none'; " + \
+                             " if ($.mobile.pageData) {" + \
+                             "   uuid = $.mobile.pageData.uuid" + \
+                             " };" + \
+                             " window.open('/%s/extra/scrub/study_anonymize.html');" % global_var['website'] + \
+                             "}" + \
+                           ");" + \
+                         "});"
+
 button_js_anonymize_by_label = "$('#lookup').live('pagebeforecreate', function() {" + \
                            " var b = $('<a>')" + \
                              " .attr('data-role', 'button')" + \
                              " .attr('href', '#')" + \
                              " .attr('data-theme', 'b')" + \
-                             " .text('Anonymize By Label');" + \
+                             " .text('Anonymize Multiple Studies By Label');" + \
                            " b.insertAfter($('#content').parent());" + \
                            " b.click(function() {" + \
                              " var uuid='none'; " + \
@@ -288,7 +356,8 @@ button_js_instance_tags = "$('#instance').live('pagebeforecreate', function() {"
 # ----------------------------------------------------------------------------
 # Inserting the above button definitions into the explorer
 # ----------------------------------------------------------------------------
-orthanc.ExtendOrthancExplorer(' '.join([button_js_system_meta, button_js_system_stats, button_js_system_recent, button_js_anonymize_by_label, \
+orthanc.ExtendOrthancExplorer(' '.join([button_js_anonymize_by_label, button_js_anonymize_single, button_js_system_csv, button_js_system_register, button_js_system_lookup, 
+                                        button_js_system_recent, button_js_system_meta, button_js_system_stats, \
                                         button_js_patient_meta, button_js_patient_stats, \
                                         button_js_study_meta, button_js_study_stats, \
                                         button_js_series_meta, button_js_series_stats, \
@@ -3951,8 +4020,27 @@ def get_internal_number(sql_pid, patient_id_modifier,
                     internal_number_new += 1
                 if internal_number_new % internal_number_offset == 0:
                     internal_number_new += internal_number_offset + 1
+            elif internal_number_type == 'pid':
+                sql_query = "SELECT pid FROM patientid" 
+                try:
+                    pg_cursor.execute(sql_query, (sql_pid,))
+                except:
+                    pg_connection.rollback()
+                    if flag_local_db:
+                        pg_cursor.close()
+                        pg_connection.close()
+                    if log_message_bitflag:
+                        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
+                        global_var['log_indent_level'] = log_indent_level_prev
+                    return {'status':4, 'error_text':'get_internal_number: Problem querying for patientid table'}, None
+                row = pg_cursor.fetchone()
+                while row is not None:
+                    sql_pid = row[0] if row is not None else None
+                    row = pg_cursor.fetchone()
+                internal_number_new = int(sql_pid) if sql_pid is not None else 1
+
             # Default: same as incoming sql_pid
-            else:
+            elif flag_valid_pid:
                 internal_number = int(sql_pid)
                 break
 
@@ -5101,7 +5189,7 @@ def patient_registration_web():
             if patient_name not in patient_stats[patient_id]['name']:
                 patient_stats[patient_name]['name'] += [patient_name]
             if patient_dob not in patient_stats[patient_id]['dob']:
-                patient_stats[patient_dob]['dob'] += [patient_dob]
+                patient_stats[patient_id]['dob'] += [patient_dob]
 
     # Assemble likely next internal number
     internal_number_type = os.getenv('PYTHON_INTERNAL_NUMBER_TYPE', default='random')
