@@ -1,18 +1,19 @@
 #!/bin/python
-import sys
 import csv
-import os
 import datetime
 from dateutil.relativedelta import relativedelta 
-from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+import glob
 import html
+import numpy as np
+import os
+import re
 import smtplib
 import subprocess
-import re
-import glob
-import numpy as np
+import sys
+import time
 
 # =======================================================
 def email_message(subject, message_body, subtype='plain',  email_recipients = None, files_csv=None):
@@ -366,6 +367,7 @@ if flag_error_report:
     result_email = email_message('%s Error Log PHI' % orthanc_info['name'], message_body, 
                                  email_recipients = orthanc_info['email']['error'], 
                                  subtype='html', files_csv=files_log_error)
+    time.sleep(60)
 
 # ----------------------------
 # User reports
