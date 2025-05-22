@@ -207,7 +207,8 @@ if flag_error_report:
                 elif res_warning is not None:
                     continue
                 else:
-                    print(line_of_text)
+                    print('%s: %s' % (file_log, line_of_text[0:100]))
+                    continue
                     import pdb; pdb.set_trace()
     
         if len(log_error) > 0:
@@ -551,7 +552,8 @@ if flag_user_report:
                         log_warning[warning_text] = []
                     log_warning[warning_text] += [date_entry]
                 else:
-                    print(line_of_text)
+                    print('%s: %s' % (file_log, line_of_text[0:100]))
+                    continue
                     import pdb; pdb.set_trace()
     
         if len(log_user_api) > 0:
