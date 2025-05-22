@@ -74,9 +74,9 @@ for file_log in file_logs:
 
 # Assemble statistics
 re_log_entry = re.compile('^[EW]([0-9]+) ([0-9:]+)\.([0-9]+) (.*)')
-re_error = re.compile('^E([0-9]+) ([0-9:]+)\.([0-9]+) ([^:]+):([0-9]+). (.*)')
+re_error = re.compile('^E([0-9]+) ([0-9:]+)\.([0-9]+) (.*(?=:)):([0-9]+). (.*)')
 re_user_api = re.compile('^W([0-9]+) ([0-9:]+)\.([0-9]+) ([^:]+):([0-9]+). ([^ ]+) ([^ ]+) (GET|POST|DELETE|PUT) (.*)')
-re_warning = re.compile('^W([0-9]+) ([0-9:]+)\.([0-9]+) ([^:]+):([0-9]+). (.*)')
+re_warning = re.compile('^W([0-9]+) ([0-9:]+)\\.([0-9]+) (.*(?=:)):([0-9]+). (.*)')
 re_radiology = re.compile('^(155\.100|10\.111)\.6[0-3]\.[0-9]+$')
 
 # Audit buckets
@@ -240,7 +240,7 @@ if flag_error_report:
                     if date_str not in error_stats_by_day:
                         error_stats_by_day[date_str] = 0
                     error_stats_by_day[date_str] += 1
-                error_stats_by_day = np.array(error_stats_by_day.values())
+                error_stats_by_day = np.array(list(error_stats_by_day.values()))
                 error_entry = {'Min per day' : error_stats_by_day.min(),
                                'Max per day' : error_stats_by_day.max(),
                                'Mean per day' : error_stats_by_day.mean(),
@@ -277,7 +277,7 @@ if flag_error_report:
         file_log_error = '%s/%s error_log_%s.csv' % (orthanc_info['directory']['logs'], audit_bucket['type'], datetime.datetime.now().strftime('%Y%m%d%H%M%S'))
         if flag_generate_csv:
             files_log_error += [file_log_error]
-        with open(file_log_error, 'wb') as lun:
+        with open(file_log_error, 'w') as lun:
             fieldnames = ['N Occurences', 'Min per day', 'Max per day', 'Mean per day', 'Std per day', 'Earliest', 'Latest', 'Text']
             html_text = ' '*6 + '<thead>\n'
             html_text += ' '*8 + '<tr bgcolor="lightblue">\n'
@@ -352,7 +352,7 @@ if flag_error_report:
     html_body = '\n'.join(html_body)
     file_html_base = 'error_log_report_%s.html' % datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     file_html = '%s/%s' % (orthanc_info['directory']['reports'], file_html_base)
-    with open(file_html, 'wb') as lun:
+    with open(file_html, 'w') as lun:
         lun.write(html_body)
     url_html = '%s/extra/reports/%s' % (orthanc_info['url'], file_html_base)
     if flag_report_includes_previous_week:
@@ -622,11 +622,11 @@ if flag_user_report:
                     if date_str not in user_api_stats_by_day:
                         user_api_stats_by_day[date_str] = 0
                     user_api_stats_by_day[date_str] += 1
-                user_api_stats_by_day = np.array(user_api_stats_by_day.values())
+                user_api_stats_by_day = np.array(list(user_api_stats_by_day.values()))
                 user_api_entry = {'Min per day' : user_api_stats_by_day.min(),
                                   'Max per day' : user_api_stats_by_day.max(),
-                                  'Mean per day' : user_api_stats_by_day.mean(),
-                                  'Std per day' : user_api_stats_by_day.std(),
+                                  'Mean per day' : user_api_stats_by_day.mean() if user_api_stats_by_day.size > 1 else user_api_stats_by_day[0],
+                                  'Std per day' : user_api_stats_by_day.std() if user_api_stats_by_day.size > 2 else 0,
                                   'Earliest' : dates_unique.min(),
                                   'Latest' : dates_unique.max()}
             else:
@@ -660,7 +660,7 @@ if flag_user_report:
         file_log_user_api = '%s/%s user_api_log_%s.csv' % (orthanc_info['directory']['logs'], audit_bucket['type'], datetime.datetime.now().strftime('%Y%m%d%H%M%S'))
         if flag_generate_csv:
             files_log_user_api += [file_log_user_api]
-        with open(file_log_user_api, 'wb') as lun:
+        with open(file_log_user_api, 'w') as lun:
             fieldnames = ['N Occurences', 'Min per day', 'Max per day', 'Mean per day', 'Std per day', 'Earliest', 'Latest', 'Text']
             html_text = ' '*6 + '<thead>\n'
             html_text += ' '*8 + '<tr bgcolor="lightblue">\n'
@@ -783,7 +783,7 @@ if flag_user_report:
     html_body = '\n'.join(html_body)
     file_html_base = 'user_log_report_%s.html' % datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     file_html = '%s/%s' % (orthanc_info['directory']['reports'], file_html_base)
-    with open(file_html, 'wb') as lun:
+    with open(file_html, 'w') as lun:
         lun.write(html_body)
     url_html = '%s/extra/reports/%s' % (orthanc_info['url'], file_html_base)
     if flag_report_includes_previous_week:
