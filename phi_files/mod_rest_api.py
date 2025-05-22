@@ -99,7 +99,7 @@ button_js_system_csv = "$('#lookup').live('pagebeforecreate', function() {" + \
                            " var b = $('<a>')" + \
                              " .attr('data-role', 'button')" + \
                              " .attr('href', '#')" + \
-                             " .attr('data-theme', 'b')" + \
+                             " .attr('data-theme', 'e')" + \
                              " .text('CSV Query');" + \
                            " b.insertAfter($('#content').parent());" + \
                            " b.click(function() {" + \
@@ -150,7 +150,7 @@ button_js_system_register = "$('#lookup').live('pagebeforecreate', function() {"
                            " var b = $('<a>')" + \
                              " .attr('data-role', 'button')" + \
                              " .attr('href', '#')" + \
-                             " .attr('data-theme', 'b')" + \
+                             " .attr('data-theme', 'e')" + \
                              " .text('Register Patient');" + \
                            " b.insertAfter($('#content').parent());" + \
                            " b.click(function() {" + \
@@ -167,7 +167,7 @@ button_js_anonymize_single = "$('#lookup').live('pagebeforecreate', function() {
                            " var b = $('<a>')" + \
                              " .attr('data-role', 'button')" + \
                              " .attr('href', '#')" + \
-                             " .attr('data-theme', 'b')" + \
+                             " .attr('data-theme', 'e')" + \
                              " .text('Anonymize A Single Study');" + \
                            " b.insertAfter($('#content').parent());" + \
                            " b.click(function() {" + \
@@ -184,7 +184,7 @@ button_js_anonymize_by_label = "$('#lookup').live('pagebeforecreate', function()
                            " var b = $('<a>')" + \
                              " .attr('data-role', 'button')" + \
                              " .attr('href', '#')" + \
-                             " .attr('data-theme', 'b')" + \
+                             " .attr('data-theme', 'e')" + \
                              " .text('Anonymize Multiple Studies By Label');" + \
                            " b.insertAfter($('#content').parent());" + \
                            " b.click(function() {" + \
@@ -193,6 +193,23 @@ button_js_anonymize_by_label = "$('#lookup').live('pagebeforecreate', function()
                              "   uuid = $.mobile.pageData.uuid" + \
                              " };" + \
                              " window.open('/%s/anonymize_by_label');" % global_var['website'] + \
+                             "}" + \
+                           ");" + \
+                         "});"
+
+button_js_toggle_email = "$('#lookup').live('pagebeforecreate', function() {" + \
+                           " var b = $('<a>')" + \
+                             " .attr('data-role', 'button')" + \
+                             " .attr('href', '#')" + \
+                             " .attr('data-theme', 'c')" + \
+                             " .text('Toggle Email');" + \
+                           " b.insertAfter($('#content').parent());" + \
+                           " b.click(function() {" + \
+                             " var uuid='none'; " + \
+                             " if ($.mobile.pageData) {" + \
+                             "   uuid = $.mobile.pageData.uuid" + \
+                             " };" + \
+                             " window.open('/%s/toggle_python_mail_auto');" % global_var['website'] + \
                              "}" + \
                            ");" + \
                          "});"
@@ -356,7 +373,7 @@ button_js_instance_tags = "$('#instance').live('pagebeforecreate', function() {"
 # ----------------------------------------------------------------------------
 # Inserting the above button definitions into the explorer
 # ----------------------------------------------------------------------------
-orthanc.ExtendOrthancExplorer(' '.join([button_js_anonymize_by_label, button_js_anonymize_single, button_js_system_csv, button_js_system_register, button_js_system_lookup, 
+orthanc.ExtendOrthancExplorer(' '.join([button_js_anonymize_by_label, button_js_anonymize_single, button_js_system_csv, button_js_system_register, button_js_toggle_email, button_js_system_lookup, 
                                         button_js_system_recent, button_js_system_meta, button_js_system_stats, \
                                         button_js_patient_meta, button_js_patient_stats, \
                                         button_js_study_meta, button_js_study_stats, \
