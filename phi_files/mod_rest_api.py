@@ -3382,9 +3382,9 @@ def csv_pull_studies(incoming_data, **kwargs):
                 query_dicom[input_type] = incoming_datum[input_type]
         query_studies = {'Level' : 'Study',
                          'Query' : query_dicom}
-        meta_query = json.loads(orthanc.RestApiPost('/tools/find', json.dumps(query_studies)))
+        orthanc_study_ids = json.loads(orthanc.RestApiPost('/tools/find', json.dumps(query_studies)))
 
-        if len(meta_query) == 0 and flag_xref_modality:
+        if len(orthanc_study_ids) == 0 and flag_xref_modality:
             log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Not on orthanc, querying PACS', **kwargs)
             meta_query_study = json.loads(orthanc.RestApiPost('/modalities/' + xref_modality + '/query', json.dumps(query_studies)))
             if 'ID' in meta_query_study:
@@ -3395,12 +3395,13 @@ def csv_pull_studies(incoming_data, **kwargs):
                         log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Found on PACs, initiating pull...', **kwargs)
                         url_move = '%s/answers/%s/retrieve' % (meta_query_study['Path'],response_answer_id)
                         response_move = orthanc.RestApiPost(url_move, aet)
-                        if 'Label' in incoming_datum:
-                            log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Adding label', **kwargs)
-                            orthanc_study_ids = json.loads(orthanc.RestApiPost('/tools/find', json.dumps(query_studies)))
-                            for orthanc_study_id in orthanc_study_ids:
-                                orthanc.RestApiPut('/studies/%s/labels/%s' % (orthanc_study_id, incoming_datum['Label']), json.dumps({}))
-                    break
+
+        if 'Label' in incoming_datum:
+            label_local = re.sub('[^a-z0-9A-Z_-]','',incoming_datum['Label'])
+            log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Adding label: "%s"' % label_local, **kwargs)
+            orthanc_study_ids = json.loads(orthanc.RestApiPost('/tools/find', json.dumps(query_studies)))
+            for orthanc_study_id in orthanc_study_ids:
+                orthanc.RestApiPut('/studies/%s/labels/%s' % (orthanc_study_id, label_local), json.dumps({}))
 
 # =======================================================
 def email_message(subject, message_body, subtype='plain', alternates=None, cc=None, **kwargs):
