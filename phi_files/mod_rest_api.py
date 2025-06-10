@@ -1328,8 +1328,8 @@ def anonymize_study(orthanc_study_id_parent, trigger_type, remote_user, **kwargs
         n_to_send = len(flag_by_instance)
         ten_percent_to_send = n_to_send // 10
         i_to_send = 0
-        for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
-            if flag_send_to_remote:
+        for orthanc_instance_id, flag_send_dict in flag_by_instance.items():
+            if flag_send_dict['good']:
                 if not flag_force_anon:
                     if not flag_images_sent and log_message_bitflag:
                         log_message(log_message_bitflag, global_var['log_indent_level'], 'Sending to remote.', **kwargs)
@@ -1347,6 +1347,9 @@ def anonymize_study(orthanc_study_id_parent, trigger_type, remote_user, **kwargs
                             log_message(log_message_bitflag, global_var['log_indent_level'], 'Failed sending image on attempt %d' % i_try, **kwargs)
                         time.sleep(5)
             else:
+                if log_message_bitflag:
+                    log_message(log_message_bitflag, global_var['log_indent_level'], 'Deleting %s' % orthanc_instance_id, **kwargs)
+                    log_message(log_message_bitflag, global_var['log_indent_level'], f'{flag_send_dict}', **kwargs)
                 orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
                 flag_non_original_detected = True
             i_to_send += 1
@@ -1708,8 +1711,8 @@ def anonymize_study_by_series(orthanc_study_id, anonymization_history, anonymiza
             n_to_send = len(flag_by_instance)
             ten_percent_to_send = n_to_send // 10
             i_to_send = 0
-            for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
-                if flag_send_to_remote:
+            for orthanc_instance_id, flag_send_dict in flag_by_instance.items():
+                if flag_send_dict['good']:
                     if not flag_force_anon:
                         if not flag_images_sent and log_message_bitflag:
                             log_message(log_message_bitflag, global_var['log_indent_level'], 'Sending to remote.', **kwargs)
@@ -1727,6 +1730,9 @@ def anonymize_study_by_series(orthanc_study_id, anonymization_history, anonymiza
                                 log_message(log_message_bitflag, global_var['log_indent_level'], 'Failed sending image on attempt %d' % i_try, **kwargs)
                             time.sleep(5)
                 else:
+                    if log_message_bitflag:
+                        log_message(log_message_bitflag, global_var['log_indent_level'], 'Deleting %s' % orthanc_instance_id, **kwargs)
+                        log_message(log_message_bitflag, global_var['log_indent_level'], f'{flag_send_dict}', **kwargs)
                     orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
                     flag_non_original_detected = True
                 i_to_send += 1
@@ -3671,11 +3677,12 @@ def filter_and_delete_instances(orthanc_study_id, **kwargs):
     # Delete instances
     counts['instances']['start'] = len(flag_by_instance)
     counts['instances']['end'] = len(flag_by_instance)
-    for orthanc_instance_id, flag_keep in flag_by_instance.items():
-        if not flag_keep:
+    for orthanc_instance_id, flag_keep_dict in flag_by_instance.items():
+        if not flag_keep_dict['good']:
             counts['instances']['end'] -= 1
             if log_message_bitflag:
                 log_message(log_message_bitflag, global_var['log_indent_level'], 'Prefilter is deleting %s' % orthanc_instance_id, **kwargs)
+                log_message(log_message_bitflag, global_var['log_indent_level'], f'{flag_keep_dict}', **kwargs)
             orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
 
     # Refresh study info after deletion
@@ -3815,21 +3822,31 @@ def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=Non
                                                                            'Manufacturer' : ['ischemaview'],
                                                                   'ManufacturerModelName' : ['securview', 'blackford'],
                                                                       'SeriesDescription' : ['screen *s[a-z]*er', 'dose report', 'screen snapshot', 
-                                                                                             'no rpt', 'summary', 'vpct', 'history', 'rapid', 
+                                                                                             'summary', 'vpct', 'history', 
                                                                                              'securview', 'patient protocol', 'phoenix', 
                                                                                              'carestream', 'req', 'report', 'blackford','topo']}.items():
                 if flag_non_report and field_type in meta_instance:
                     for field_item in field_items:
                         flag_non_report = flag_non_report and re.match('.*%s.*' % field_item, meta_instance[field_type], re.IGNORECASE) is None
+                        if not flag_non_report:
+                            break
                 if not flag_non_report:
+                    log_message(log_message_bitflag, global_var['log_indent_level'], '%s %s %s' % (field_type, meta_instance[field_type], field_item), **kwargs)
                     break
 
         #Consider both original and primary
         if (os.getenv('PYTHON_FLAG_MUST_BE_ORIGINAL', default='true') == 'true'):
-           flag_by_instance[orthanc_instance_id] = flag_dynacad or (flag_original_primary and flag_non_report)
+           flag_by_instance[orthanc_instance_id] = {'good' : flag_dynacad or (flag_original_primary and flag_non_report),
+                                                    'dynacad' : flag_dynacad,
+                                                    'original_primary' : flag_original_primary,
+                                                    'primary' : flag_primary,
+                                                    'non_report' : flag_non_report}
         else:
-           flag_by_instance[orthanc_instance_id] = flag_dynacad or (flag_primary and flag_non_report)
-
+           flag_by_instance[orthanc_instance_id] = {'good' : flag_dynacad or (flag_primary and flag_non_report),
+                                                    'dynacad' : flag_dynacad,
+                                                    'original_primary' : flag_original_primary,
+                                                    'primary' : flag_primary,
+                                                    'non_report' : flag_non_report}
     if log_message_bitflag:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
         global_var['log_indent_level'] = log_indent_level_prev
@@ -3999,7 +4016,7 @@ def get_internal_number(sql_pid, patient_id_modifier,
                 log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
                 global_var['log_indent_level'] = log_indent_level_prev
 
-            return {'status':4, 'error_text':'get_internal_number: Problem querying for patientid table'}, None
+            return {'status':3, 'error_text':'get_internal_number: Problem querying for patientid table'}, None
 
     if flag_valid_pid and pg_cursor.rowcount > 0:
         row = pg_cursor.fetchone()
@@ -4039,9 +4056,15 @@ def get_internal_number(sql_pid, patient_id_modifier,
                 if internal_number_new % internal_number_offset == 0:
                     internal_number_new += internal_number_offset + 1
             elif internal_number_type == 'pid':
-                sql_query = "SELECT pid FROM patientid" 
+                if not flag_valid_pid:
+                    if log_message_bitflag:
+                        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
+                        global_var['log_indent_level'] = log_indent_level_prev
+                    return {'status':4, 'error_text':'get_internal_number: at this point, pid should be valid'}, None
+                # Assumes the latest pid belongs to this patient
+                sql_query = "SELECT max(pid) FROM patientid" 
                 try:
-                    pg_cursor.execute(sql_query, (sql_pid,))
+                    pg_cursor.execute(sql_query)
                 except:
                     pg_connection.rollback()
                     if flag_local_db:
@@ -4050,7 +4073,7 @@ def get_internal_number(sql_pid, patient_id_modifier,
                     if log_message_bitflag:
                         log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
                         global_var['log_indent_level'] = log_indent_level_prev
-                    return {'status':4, 'error_text':'get_internal_number: Problem querying for patientid table'}, None
+                    return {'status':5, 'error_text':'get_internal_number: Problem querying for patientid table'}, None
                 row = pg_cursor.fetchone()
                 while row is not None:
                     sql_pid = row[0] if row is not None else None
@@ -4071,7 +4094,7 @@ def get_internal_number(sql_pid, patient_id_modifier,
                     log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
                     global_var['log_indent_level'] = log_indent_level_prev
 
-                return {'status': 4, 'error_text': 'get_internal_number: Internal number overrun'}, None
+                return {'status': 6, 'error_text': 'get_internal_number: Internal number overrun'}, None
 
             sql_query = "SELECT count(*) FROM internalnumber WHERE value=%s"
             try:
@@ -4084,7 +4107,7 @@ def get_internal_number(sql_pid, patient_id_modifier,
                 if log_message_bitflag:
                     log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
                     global_var['log_indent_level'] = log_indent_level_prev
-                return {'status':2, 'error_text':'get_internal_number: querying new internal number'}, None
+                return {'status':7, 'error_text':'get_internal_number: querying new internal number'}, None
             row = pg_cursor.fetchone()
             if row is not None and int(row[0]) == 0:
                 internal_number = int(internal_number_new)
@@ -4103,7 +4126,7 @@ def get_internal_number(sql_pid, patient_id_modifier,
                 if log_message_bitflag:
                     log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
                     global_var['log_indent_level'] = log_indent_level_prev
-                return {'status': 3, 'error_text': 'get_internal_number: Problem saving the internal number'}, None
+                return {'status': 8, 'error_text': 'get_internal_number: Problem saving the internal number'}, None
             pg_connection.commit()
 
     if flag_local_db:
@@ -7105,7 +7128,7 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
 
     i = 0
     m_instance = max(len(flag_by_instance) // 10, 5)
-    for orthanc_instance_id, flag_send_to_remote in flag_by_instance.items():
+    for orthanc_instance_id, flag_process_dict in flag_by_instance.items():
 
         # Show progress
         i = i + 1
@@ -7118,7 +7141,7 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
             replace_dict[replace_root_key] = replace_root_val
         
         # Gather Dicom meta (I used to save time by not working on files not meant to be sent, but almost everyone sends the files manually if they want)
-        if True or flag_send_to_remote:
+        if True or flag_process_dict['good']:
             dicom_tags = json.loads(orthanc.RestApiGet('/instances/%s/simplified-tags' % orthanc_instance_id))
         else:
             dicom_tags = {}
@@ -7199,7 +7222,7 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
             replace_dict['SOPInstanceUID'] = sop_instance_uid_new
 
         # Need to work through numeric tags now (now, regardless of send status)
-        if True or flag_send_to_remote:
+        if True or flag_process_dict['good']:
             dicom_tags_numeric = json.loads(orthanc.RestApiGet('/instances/%s/tags' % orthanc_instance_id))
             for tag_key, tag_val in global_var['top_level_tag_to_keep'].items():
                 if tag_key in dicom_tags_numeric:
