@@ -3812,7 +3812,8 @@ def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=Non
         
         #Checking for non-mammo images
         flag_screen_for_reports = os.getenv('PYTHON_FLAG_SCREEN_FOR_REPORTS',default='true') == 'true' #turn on to weed out reports
-        flag_non_report = 'ImageType' in meta_instance
+        #flag_non_report = 'ImageType' in meta_instance
+        flag_non_report = True
         if flag_screen_for_reports: #Test for unwanted mammo studies
             for field_type, field_items in {                                  'ImageType' : ['dose', 'screen', 'report', 'exam protocol'],
                                                                        'StudyDescription' : ['securview'],
@@ -3825,9 +3826,11 @@ def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=Non
                                                                                              'summary', 'vpct', 'history', 
                                                                                              'securview', 'patient protocol', 'phoenix', 
                                                                                              'carestream', 'req', 'report', 'blackford','topo']}.items():
-                if flag_non_report and field_type in meta_instance:
+                #if flag_non_report and field_type in meta_instance:
+                if field_type in meta_instance:
                     for field_item in field_items:
-                        flag_non_report = flag_non_report and re.match('.*%s.*' % field_item, meta_instance[field_type], re.IGNORECASE) is None
+                        #flag_non_report = flag_non_report and re.match('.*%s.*' % field_item, meta_instance[field_type], re.IGNORECASE) is None
+                        flag_non_report = re.match('.*%s.*' % field_item, meta_instance[field_type], re.IGNORECASE) is None
                         if not flag_non_report:
                             break
                 if not flag_non_report:
