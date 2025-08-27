@@ -3729,13 +3729,13 @@ def filter_and_delete_series_by_modality(orthanc_study_id, **kwargs):
     # Filter series
     for orthanc_series_id in meta_study['Series']:
         meta_series = json.loads(orthanc.RestApiGet('/series/%s' % orthanc_series_id))
-        if 'Modalitty' in meta_series['MainDicomTags']:
+        if 'Modality' in meta_series['MainDicomTags']:
             modality_series = meta_series['MainDicomTags']['Modality']
             flag_allowed = len(modalities_allowed) == 0
             for modality_allowed in modalities_allowed:
-                flag_allowed = flag_allowed or modality_series == modality_allowed
+                flag_allowed = flag_allowed or modality_series.find(modality_allowed) >= 0
             for modality_denied in modalities_denied:
-                flag_allowed = flag_allowed and (modality_series != modality_denied)
+                flag_allowed = flag_allowed and (modality_series.find(modality_denied) < 0)
             if not flag_allowed:
                 if log_message_bitflag:
                     log_message(log_message_bitflag, global_var['log_indent_level'], 'Deleting denied modality %s %s' % (modality_series, orthanc_series_id), **kwargs)
