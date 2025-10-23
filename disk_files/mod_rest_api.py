@@ -626,6 +626,11 @@ def useful_study_data(orthanc_study_id, return_meta=False):
 
     patient_name_parts = study_data['PatientName'].split('^')
     study_data['base'] = patient_name_parts[0]
+    if len(patient_name_parts) < 2 or re.search('[^0-9][^0-9][0-9]+', patient_name_parts[1]) is None:
+        if return_meta:
+            return {'status' : 2, 'error_text': 'Unrecognized patient name: %s' % study_data['PatientName']}, {}
+        else:
+            return {'status' : 2, 'error_text': 'Unrecognized patient name: %s' % study_data['PatientName']}
     study_data['internal_number_str'] = patient_name_parts[1][2:]
     study_data['internal_number'] = int(study_data['internal_number_str'])
     study_data['internal_number_lo'] = (study_data['internal_number'] // 50) * 50
