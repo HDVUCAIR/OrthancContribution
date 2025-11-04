@@ -231,11 +231,11 @@ services:
         read_only: true
       - type: bind
         source: ./phi_files/study_anonymize.html
-        target: /media/html/scrub
+        target: /media/html/scrub/study_anonymize.html
         read_only: true
       - type: bind
         source: ./phi_files/study_anonymize.js
-        target:  /media/html/scrub
+        target:  /media/html/scrub/study_anonymize.js
         read_only: true
 
     #  - type: bind
