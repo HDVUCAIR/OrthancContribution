@@ -3723,8 +3723,23 @@ def filter_and_delete_series_by_modality(orthanc_study_id, **kwargs):
     counts['end'] = len(meta_study['Series'])
 
     # Get environment
-    modalities_allowed = os.getenv('PYTHON_ALLOWED_MODALITIES', default='').split(',')
-    modalities_denied = os.getenv('PYTHON_DENIED_MODALITIES', default='').split(',')
+    modalities_allowed = os.getenv('PYTHON_ALLOWED_MODALITIES', default='').strip()
+    if len(modalities_allowed) == 0:
+        modalities_allowed = []
+    elif modalities_allowed.find(',') > 0:
+        modalities_allowed = modalities_allowed.split(',')
+    else:
+        modalities_allowed = [modalities_allowed]
+    modalities_denied = os.getenv('PYTHON_DENIED_MODALITIES', default='').strip()
+    if len(modalities_denied) == 0:
+        modalities_denied = []
+    elif modalities_denied.find(',') > 0:
+        modalities_denied = modalities_denied.split(',')
+    else:
+        modalities_denied = [modalities_denied]
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Modalities allowed: %s' % ','.join(modalities_allowed), **kwargs)
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Modalities denied: %s' % ','.join(modalities_denied), **kwargs)
 
     # Filter series
     for orthanc_series_id in meta_study['Series']:
