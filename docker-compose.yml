@@ -45,7 +45,9 @@ services:
       ORTHANC__USER_METADATA: >
         { 
           "AnonymizationHistory" : 1029,
-          "ExportHistory" : 1030
+          "ExportHistory" : 1030,
+          "USRedactedFrom" : 1031,
+          "USRedactedTo" : 1032
         }
       LOGDIR: "/media/logs"
       #LOGFILE: "/media/logs/orthanc.log"
