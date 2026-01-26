@@ -5,14 +5,19 @@ from dateutil import relativedelta
 from email.message import EmailMessage
 from email.headerregistry import Address
 import inspect
+from io import BytesIO
 import json
 import numbers
+import numpy as np
 import openpyxl
 import orthanc
 import os
+from PIL import Image
 import pprint
+import pydicom
 import random
 import re
+from scipy.ndimage import label
 import smtplib
 import threading
 import time
@@ -34,6 +39,8 @@ except:
 global_var['regexp']['address'] = re.compile('([^<]+)<([^@]+)@([^>]+)>.*')
 global_var['regexp']['search_patient_min'] = re.compile('.*[a-z0-9]{4,4}.*', re.I)
 global_var['regexp']['PatientAge'] = re.compile('([0-9.]+)([^0-9]*)',re.I)
+global_var['regexp']['us_manufacturer'] = re.compile('.*samsung medison.*', re.I)
+global_var['regexp']['us_station_name'] = re.compile('.*rs85_09v.*', re.I)
 
 # Global variables
 python_verbose_logwarning = 1 if os.getenv('PYTHON_VERBOSE_LOGWARNING', default='false') == 'true' or os.getenv('ORTHANC__PYTHON_VERBOSE', default='false') == 'true' else 0
@@ -44,7 +51,8 @@ global_var['fqdn'] = os.getenv('HOST_FQDN', default='Unknown.Host')
 global_var['address_constructor'] = []
 global_var['address_list'] = {}
 global_var['anonymization_queue'] = {}
-global_var['flag_force_anon'] = False
+global_var['flag']['force_anon'] = False
+global_var['flag']['attempt_us_redaction'] = os.getenv('PYTHON_ATTEMPT_US_REDACTION', default='false') == 'true' 
 global_var['irb_label_regex_map'] = json.loads(os.getenv('PYTHON_IRB_LABEL_REGEXP_MAP', default='{}'))
 global_var['irb_re'] = re.compile('^irb.*', re.IGNORECASE)
 global_var['kept_uid'] = {}
@@ -292,6 +300,24 @@ button_js_study_stats = "$('#study').live('pagebeforecreate', function() {" + \
                        ");" + \
                      "});"
 
+# Same as API studies/uid/redact_ultrasound
+button_js_us_redact = "$('#study').live('pagebeforecreate', function() {" + \
+                       " var b = $('<a>')" + \
+                         " .attr('data-role', 'button')" + \
+                         " .attr('href', '#')" + \
+                         " .attr('data-theme', 'c')" + \
+                         " .text('Redact Ultrasound');" + \
+                       " b.insertBefore($('#study-delete').parent().parent());" + \
+                       " b.click(function() {" + \
+                         " var uuid='none'; " + \
+                         " if ($.mobile.pageData) {" + \
+                         "   uuid = $.mobile.pageData.uuid" + \
+                         " };" + \
+                         " window.open('/%s/studies/' + uuid + '/redact_ultrasound');" % global_var['website'] + \
+                         "}" + \
+                       ");" + \
+                     "});"
+
 # ----------------------------------------------------------------------------
 # Buttons on series page
 # ----------------------------------------------------------------------------
@@ -374,7 +400,7 @@ button_js_instance_tags = "$('#instance').live('pagebeforecreate', function() {"
 # Inserting the above button definitions into the explorer
 # ----------------------------------------------------------------------------
 orthanc.ExtendOrthancExplorer(' '.join([button_js_anonymize_by_label, button_js_anonymize_single, button_js_system_csv, button_js_system_register, button_js_toggle_email, button_js_system_lookup, 
-                                        button_js_system_recent, button_js_system_meta, button_js_system_stats, \
+                                        button_js_system_recent, button_js_system_meta, button_js_system_stats, button_js_us_redact, \
                                         button_js_patient_meta, button_js_patient_stats, \
                                         button_js_study_meta, button_js_study_stats, \
                                         button_js_series_meta, button_js_series_stats, \
@@ -733,6 +759,8 @@ def anonymize_by_label_run(remote_user='None', **kwargs):
         reset_patient_name_base()
         if status['status'] != 0:
             if log_message_bitflag:
+                if 'error_text' in status:
+                    log_message(log_message_bitflag, global_var['log_indent_level'], 'Error: %s' % status['error_text'], **kwargs)
                 log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
                 global_var['log_indent_level'] = log_indent_level_prev
             return status
@@ -1110,7 +1138,7 @@ def anonymize_study(orthanc_study_id_parent, trigger_type, remote_user, **kwargs
 
     if log_message_bitflag:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Anonymizing %s' % orthanc_study_id_parent, **kwargs)
-    if log_message_bitflag and global_var['flag_force_anon']:
+    if log_message_bitflag and global_var['flag']['force_anon']:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Forcing anonymization', **kwargs)
     meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_parent))
     anonymization_history = anonymization_history_get(orthanc_study_id_parent)
@@ -1231,7 +1259,7 @@ def anonymize_study(orthanc_study_id_parent, trigger_type, remote_user, **kwargs
 
     # We're not going to bother anonymizing unless either a new patient or study
     flag_non_original_detected = False
-    flag_force_anon = global_var['flag_force_anon']
+    flag_force_anon = global_var['flag']['force_anon']
     if flag_force_anon or (flag_new_patient_id or flag_new_study_instance_uid):
 
         # First pass anonymization
@@ -1324,6 +1352,8 @@ def anonymize_study(orthanc_study_id_parent, trigger_type, remote_user, **kwargs
         anonymization_history_anon = anonymization_history_modify(anonymization_history_anon, 'AnonymizedFrom', orthanc_study_id_parent, anonymization_history_atom_anon, orthanc_study_id_anon)
     
         # Send to receiving modality
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Initiating: sending to remote modality', **kwargs)
         flag_by_instance = filter_what_instances_to_keep(orthanc_instance_ids=orthanc_instances_id_new, **kwargs)
         n_to_send = len(flag_by_instance)
         ten_percent_to_send = n_to_send // 10
@@ -1353,6 +1383,9 @@ def anonymize_study(orthanc_study_id_parent, trigger_type, remote_user, **kwargs
                 orthanc.RestApiDelete('/instances/%s' % orthanc_instance_id)
                 flag_non_original_detected = True
             i_to_send += 1
+
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Completed: sending to remote modality', **kwargs)
 
         if log_message_bitflag:
             log_message(log_message_bitflag, global_var['log_indent_level'], 'Updating lookup table', **kwargs)
@@ -1518,7 +1551,7 @@ def anonymize_study_by_series(orthanc_study_id, anonymization_history, anonymiza
 
         # We're not going to bother anonymizing unless either a new patient or study
         flag_non_original_detected = False
-        flag_force_anon = False or global_var['flag_force_anon']
+        flag_force_anon = False or global_var['flag']['force_anon']
         patient_name_anon_dict = {}
         if flag_force_anon or (flag_new_patient_id[patient_id_modifier] or flag_new_study_instance_uid[patient_id_modifier]):
 
@@ -1775,7 +1808,7 @@ def anonymize_study_by_series(orthanc_study_id, anonymization_history, anonymiza
     return {'status' : 0}
 
 # ============================================================================
-def anonymize_study_init(orthanc_study_id, flag_force_anon=global_var['flag_force_anon'], trigger_type='manual', remote_user='None', **kwargs):
+def anonymize_study_init(orthanc_study_id, flag_force_anon=global_var['flag']['force_anon'], trigger_type='manual', remote_user='None', **kwargs):
 # ----------------------------------------------------------------------------
     global global_var
     log_message_bitflag = python_verbose_logwarning + (2 if 'log_user' in kwargs else 0)
@@ -1788,7 +1821,23 @@ def anonymize_study_init(orthanc_study_id, flag_force_anon=global_var['flag_forc
     response_system = orthanc.RestApiGet('/system')
     meta_system = json.loads(response_system)
     aet = meta_system['DicomAet']
-    global_var['flag_force_anon'] = flag_force_anon
+    global_var['flag']['force_anon'] = flag_force_anon
+
+    # Handle special case of ultrasound - requires successful redaction
+    modalities_allowed = os.getenv('PYTHON_ALLOWED_MODALITIES', default='').strip().lower()
+    modalities_denied = os.getenv('PYTHON_DENIED_MODALITIES', default='').strip().lower()
+    if modalities_allowed.find('us') >= 0 and modalities_denied.find('us') < 0:
+        flag_found_us, flag_found_redacted, orthanc_study_id_redacted, comment_ultrasound = ultrasound_scan_for_redaction(orthanc_study_id)
+        if flag_found_us and not flag_found_redacted:
+            if log_message_bitflag:
+                log_message(log_message_bitflag, global_var['log_indent_level'], 'Denying anonymization: %s' % comment_ultrasound, **kwargs)
+                log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
+                global_var['log_indent_level'] = log_indent_level_prev
+            return {'status' : 99, 'error_text': comment_ultrasound}
+        elif flag_found_us:
+            orthanc_study_id = orthanc_study_id_redacted
+
+    # Grab meta data
     response_study = orthanc.RestApiGet('/studies/%s' % orthanc_study_id)
     meta_study = json.loads(response_study)
     anonymization_history = anonymization_history_get(orthanc_study_id)
@@ -1861,7 +1910,7 @@ def anonymize_study_init(orthanc_study_id, flag_force_anon=global_var['flag_forc
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Auto anon failed: %s' % status['error_text'], **kwargs)
 
     if flag_force_anon:
-        global_var['flag_force_anon'] = False
+        global_var['flag']['force_anon'] = False
 
     if log_message_bitflag:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
@@ -3378,10 +3427,14 @@ def csv_pull_studies(incoming_data, **kwargs):
     meta_system = json.loads(response_system)
     aet = meta_system['DicomAet']
     flag_xref_modality, xref_modality = check_xref_modality()
-    log_message(log_message_bitflag, global_var['log_indent_level']+3, 'Looping over %d csv rows' % len(incoming_data), **kwargs)
+    n_data = len(incoming_data)
+    i_data = 0
+    log_message(log_message_bitflag, global_var['log_indent_level']+3, 'Looping over %d csv rows' % n_data, **kwargs)
     for incoming_datum in incoming_data:
 
-        log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Forming query', **kwargs)
+        i_data += 1
+        log_message(log_message_bitflag, global_var['log_indent_level']+6, '%d of %d' % (i_data, n_data), **kwargs)
+        log_message(log_message_bitflag, global_var['log_indent_level']+9, 'Forming query', **kwargs)
         query_dicom = {}
         for input_type in ['AccessionNumber', 'PatientID', 'StudyDate']:
             if input_type in incoming_datum:
@@ -3391,20 +3444,20 @@ def csv_pull_studies(incoming_data, **kwargs):
         orthanc_study_ids = json.loads(orthanc.RestApiPost('/tools/find', json.dumps(query_studies)))
 
         if len(orthanc_study_ids) == 0 and flag_xref_modality:
-            log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Not on orthanc, querying PACS', **kwargs)
+            log_message(log_message_bitflag, global_var['log_indent_level']+9, 'Not on orthanc, querying PACS', **kwargs)
             meta_query_study = json.loads(orthanc.RestApiPost('/modalities/' + xref_modality + '/query', json.dumps(query_studies)))
             if 'ID' in meta_query_study:
                 response_answers_study = json.loads(orthanc.RestApiGet('%s/answers' % meta_query_study['Path']))
                 for response_answer_id in response_answers_study:
                     response_answer = json.loads(orthanc.RestApiGet('%s/answers/%s' % (meta_query_study['Path'],response_answer_id)))
                     if 'content' in response_answer:
-                        log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Found on PACs, initiating pull...', **kwargs)
+                        log_message(log_message_bitflag, global_var['log_indent_level']+9, 'Found on PACs, initiating pull...', **kwargs)
                         url_move = '%s/answers/%s/retrieve' % (meta_query_study['Path'],response_answer_id)
                         response_move = orthanc.RestApiPost(url_move, aet)
 
         if 'Label' in incoming_datum:
             label_local = re.sub('[^a-z0-9A-Z_-]','',incoming_datum['Label'])
-            log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Adding label: "%s"' % label_local, **kwargs)
+            log_message(log_message_bitflag, global_var['log_indent_level']+9, 'Adding label: "%s"' % label_local, **kwargs)
             orthanc_study_ids = json.loads(orthanc.RestApiPost('/tools/find', json.dumps(query_studies)))
             for orthanc_study_id in orthanc_study_ids:
                 orthanc.RestApiPut('/studies/%s/labels/%s' % (orthanc_study_id, label_local), json.dumps({}))
@@ -7356,6 +7409,263 @@ def shift_date_time_string(shift_epoch,incoming_yyyymmdd,incoming_hhmmss=None):
         return outgoing_yyyymmdd, outgoing_hhmmss
 
 # =======================================================
+def ultrasound_perform_redaction(orthanc_study_id, **kwargs):
+    """ Perform redaction and update meta data """
+# -------------------------------------------------------
+
+    global global_var
+    log_message_bitflag = python_verbose_logwarning + (2 if 'log_user' in kwargs else 0)
+    if log_message_bitflag:
+        log_indent_level_prev = global_var['log_indent_level']
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Entering %s' % frame.f_code.co_name, **kwargs)
+        global_var['log_indent_level'] += 3
+
+    # Scan to see if already redacted
+    flag_found_us, flag_found_redacted, orthanc_study_id_redacted, comment_ultrasound = ultrasound_scan_for_redaction(orthanc_study_id)
+
+    # Not an US study
+    if not flag_found_us:
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'No Ultrasound series found', **kwargs)
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
+            global_var['log_indent_level'] = log_indent_level_prev
+        return {'status': 1, 'error_text': 'No US found'}, None
+
+    # Case where we already redacted
+    if flag_found_redacted:
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Ultrasound appears to be redacted', **kwargs)
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
+            global_var['log_indent_level'] = log_indent_level_prev
+        return {'status': 0}, orthanc_study_id_redacted
+
+    # Remaining needs redaction
+    meta_instances_list = json.loads(orthanc.RestApiGet('/studies/%s/instances' % orthanc_study_id))
+    orthanc_study_id_redacted = None
+    study_instance_uid_redacted = pydicom.uid.generate_uid()
+    map_series_instance_uid = {}
+    sop_instance_uids = []
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Scanning instances', **kwargs)
+    i_instance = 0
+    n_instance = len(meta_instances_list)
+    for meta_instance_portion in meta_instances_list:
+
+        i_instance += 1
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level']+3, '%d of %d' % (i_instance, n_instance), **kwargs)
+
+        # Check Orthanc managed 
+        meta_instance = json.loads(orthanc.RestApiGet('/instances/%s/simplified-tags' % meta_instance_portion['ID']))
+        if 'Modality' not in meta_instance or 'StationName' not in meta_instance or 'Manufacturer' not in meta_instance:
+            continue
+        if meta_instance['Modality'].lower().find('us') < 0:
+            continue
+        if global_var['regexp']['us_manufacturer'].search(meta_instance['Manufacturer']) is None:
+            continue
+        if global_var['regexp']['us_station_name'].search(meta_instance['StationName']) is None:
+            continue
+        series_instance_uid = meta_instance['SeriesInstanceUID']
+
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Matches initial criteria', **kwargs)
+            log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Pulling blob', **kwargs)
+
+        # Pull the binary to access the proprietary DICOM meta
+        binary_blob = orthanc.RestApiGet('/instances/%s/file' % meta_instance_portion['ID'])
+        dataset = pydicom.dcmread(BytesIO(binary_blob))
+        rgb = pydicom.pixel_data_handlers.convert_color_space(dataset.pixel_array,
+                                                              'YBR_FULL', 'RGB',
+                                                              per_frame=True)
+        mask_text_area = np.ones(rgb.shape[0:2],dtype=bool)
+        medians = np.zeros(3,dtype=dataset.pixel_array.dtype)
+        pixel_array_new = dataset.pixel_array.copy()
+
+        is_scan = (0x0018,0x6011) in dataset and (0x7fe7,0x0010) in dataset
+        is_not_scan = (0x0018,0x6011) not in dataset and (0x7fe7,0x0010) not in dataset
+        n_rows = int(dataset.Rows)
+        n_cols = int(dataset.Columns)
+        flag_good = True
+        if is_scan:
+            flag_good = flag_good and n_rows==876 and n_cols==1280
+        elif is_not_scan:
+            flag_good = flag_good and n_rows==1080 and n_cols==1920
+        else:
+            flag_good = False
+        if not flag_good:
+            continue
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Matches secondary criteria', **kwargs)
+
+        # Generate uid if necessary
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Generating UID', **kwargs)
+        if series_instance_uid not in map_series_instance_uid:
+            map_series_instance_uid[series_instance_uid] = pydicom.uid.generate_uid()
+        series_instance_uid_redacted = map_series_instance_uid[series_instance_uid]
+        sop_instance_uid_redacted = pydicom.uid.generate_uid()
+        sop_instance_uids += [sop_instance_uid_redacted]
+        study_description = dataset.StudyDescription if 'StudyDescription' in dataset else ''
+        series_description = dataset.SeriesDescription if 'SeriesDescription' in dataset else ''
+
+        if is_scan:    
+            if log_message_bitflag:
+                log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Redacting SCAN type', **kwargs)
+            for c in range(3):
+                mask_text_area = np.logical_and(mask_text_area,
+                                                np.abs(rgb[:,:,c].astype(float) - 6) < 2)
+            labels, n_labels = label(mask_text_area)
+            histo, edges = np.histogram(labels, bins=n_labels+2, range=[0,n_labels+2])
+            index_bins = histo.argsort()[::-1]
+            jp, ip = np.where(labels == index_bins[1])
+            max_j = jp.max()
+            for c in range(3):
+                medians[c] = np.median(dataset.pixel_array[jp,ip,c])
+                pixel_array_new[:max_j+1,:,c] = medians[c]
+            rgb_new = pydicom.pixel_data_handlers.convert_color_space(pixel_array_new,
+                                                                     'YBR_FULL', 'RGB',
+                                                                      per_frame=True)
+        else:
+            if log_message_bitflag:
+                log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Redacting NON scan type', **kwargs)
+            for c in range(3):
+                mask_text_area = np.logical_and(mask_text_area,
+                                                np.abs(rgb[:,:,c].astype(float) - 50) < 15)
+                medians[c] = np.median(dataset.pixel_array[:,:,c][mask_text_area])
+    
+            labels, n_labels = label(mask_text_area)
+            for i_label in range(1,n_labels+1):
+                jp, ip = np.where(labels == i_label)
+                for c in range(3):
+                    pixel_array_new[jp.min():jp.max()+1,ip.min():ip.max()+1] = medians[c]
+            rgb_new = pydicom.pixel_data_handlers.convert_color_space(pixel_array_new,
+                                                                     'YBR_FULL', 'RGB',
+                                                                      per_frame=True)
+
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Uploading redacted', **kwargs)
+        with BytesIO() as buffer_out:
+
+            image_pil = Image.fromarray(rgb_new, 'RGB')
+            buffer_jpg = BytesIO()
+            image_pil.save(buffer_jpg, format='JPEG', quality=100)
+            dataset.PixelData = pydicom.encaps.encapsulate([buffer_jpg.getvalue()])
+            dataset.StudyInstanceUID = study_instance_uid_redacted
+            dataset.SeriesInstanceUID = series_instance_uid_redacted
+            dataset.SOPInstanceUID = sop_instance_uid_redacted
+            dataset.StudyDescription = ('Redacted %s' % study_description).strip()
+            dataset.SeriesDescription = ('Redacted %s' % series_description).strip()
+
+            memory_dataset = pydicom.filebase.DicomFileLike(buffer_out)
+            #pydicom.dcmwrite(memory_dataset, dataset, enforce_file_format=True)
+            pydicom.dcmwrite(memory_dataset, dataset)
+            memory_dataset.seek(0)
+            orthanc.RestApiPost('/instances', memory_dataset.read())
+
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level']+3, 'Determine new osiuid', **kwargs)
+    for sop_instance_uid in sop_instance_uids:
+
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Lookup %s' % sop_instance_uid, **kwargs)
+        meta_lookup = json.loads(orthanc.RestApiPost('/tools/lookup', sop_instance_uid))
+        if len(meta_lookup) == 1:
+            meta_instance = json.loads(orthanc.RestApiGet(meta_lookup[0]['Path']))
+            meta_series = json.loads(orthanc.RestApiGet('/series/%s' % meta_instance['ParentSeries']))
+            orthanc_study_id_redacted = meta_series['ParentStudy']
+            if log_message_bitflag:
+                log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Found %s' % orthanc_study_id_redacted, **kwargs)
+            break
+
+    if orthanc_study_id_redacted is None:
+        if len(map_series_instance_uid) == 0:
+            status = {'status' : 0}
+        else:
+            status = {'status' : 1, 'error_text' : 'Problem with redaction'}
+    else:
+        # Finally, mark the two studies
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Updating redact to/from', **kwargs)
+        response_put = orthanc.RestApiPut('/studies/%s/metadata/USRedactedTo' % orthanc_study_id, orthanc_study_id_redacted)
+        response_put = orthanc.RestApiPut('/studies/%s/metadata/USRedactedFrom' % orthanc_study_id_redacted, orthanc_study_id)
+        status= {'status' : 0}
+       
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
+        global_var['log_indent_level'] = log_indent_level_prev
+    return status, orthanc_study_id_redacted
+
+# =======================================================
+def ultrasound_scan_for_redaction(orthanc_study_id, **kwargs):
+    """ Check for US images and see if study was redacted """
+# -------------------------------------------------------
+
+    global global_var
+    log_message_bitflag = python_verbose_logwarning + (2 if 'log_user' in kwargs else 0)
+    if log_message_bitflag:
+        log_indent_level_prev = global_var['log_indent_level']
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Entering %s' % frame.f_code.co_name, **kwargs)
+        global_var['log_indent_level'] += 3
+
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Pulling series info', **kwargs)
+    meta_series_list = json.loads(orthanc.RestApiGet('/studies/%s/series' % orthanc_study_id))
+    flag_found_us = False
+    for meta_series in meta_series_list:
+        flag_found_us = flag_found_us or ('Modality' in meta_series['MainDicomTags'] and meta_series['MainDicomTags']['Modality'].lower().find('us') >= 0)
+        if flag_found_us:
+            break
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Found US: %d' % flag_found_us, **kwargs)
+
+    # Ultrasound found, check to see if redacted
+    flag_found_redacted = False
+    comment_ultrasound = ''
+    if flag_found_us:
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Checking parent study meta data: %s' % orthanc_study_id, **kwargs)
+        meta_list = json.loads(orthanc.RestApiGet('/studies/%s/metadata' % orthanc_study_id))
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level']+3, 'Meta data: %s' % ', '.join(meta_list), **kwargs)
+        if 'USRedactedTo' in meta_list:
+            if log_message_bitflag:
+                log_message(log_message_bitflag, global_var['log_indent_level']+3, 'Found USRedactedTo, checking...', **kwargs)
+            orthanc_study_id_redacted = orthanc.RestApiGet('/studies/%s/metadata/USRedactedTo' % orthanc_study_id).decode('utf-8')
+            if log_message_bitflag:
+                log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Redacted to: %s' % orthanc_study_id_redacted, **kwargs)
+            try:
+                meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_redacted))
+                if log_message_bitflag:
+                    log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Quering redacted study', **kwargs)
+                flag_found_redacted = True
+                comment_ultrasound = 'Found redacted study.  Found redacted.'
+            except:
+                if log_message_bitflag:
+                    log_message(log_message_bitflag, global_var['log_indent_level']+6, 'Problem querying redacted study', **kwargs)
+                flag_found_redacted = False
+                comment_ultrasound = 'No redacted US study found.  Can not proceed.'
+        if 'USRedactedFrom' in meta_list:
+            flag_found_redacted = True
+            comment_ultrasound = 'Found redacted study.  Found redacted.'
+            orthanc_study_id_redacted = orthanc_study_id
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Found redacted: %d' % flag_found_redacted, **kwargs)
+    else:
+        comment_ultrasound = 'No US series detected.'
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Ultrasound not detected', **kwargs)
+
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
+        global_var['log_indent_level'] = log_indent_level_prev
+
+    return flag_found_us, flag_found_redacted, orthanc_study_id, comment_ultrasound
+
+# =======================================================
 def update_lookup_html(**kwargs):
     """ Update the html lookup table  """
 # -------------------------------------------------------
@@ -8072,7 +8382,11 @@ def IncomingFilter(uri, **request):
                                           trigger_type='jsanon' if flag_js else 'anonymize', 
                                           remote_user=remote_user)
             if log_message_bitflag:
-                log_message(log_message_bitflag, global_var['log_indent_level'], 'Anon returned.')
+                if status['status'] != 0:
+                    if 'error_text' in status:
+                        log_message(log_message_bitflag, global_var['log_indent_level'], 'Error: %s' % status['error_text'], **kwargs)
+                else:
+                    log_message(log_message_bitflag, global_var['log_indent_level'], 'Anon returned.')
             if flag_js:
                 return True
             else:
@@ -8664,6 +8978,41 @@ def TogglePythonVerbose(output, uri, **request):
         python_verbose_logwarning = not python_verbose_logwarning 
 
 # ============================================================================
+def UltrasoundRedact(output, uri, **request):
+    """API interface to ultrasound redaction"""
+# ----------------------------------------------------------------------------
+
+    global global_var
+    log_message_bitflag = python_verbose_logwarning
+    if log_message_bitflag:
+        log_indent_level_prev = global_var['log_indent_level']
+        global_var['log_indent_level'] = 0
+        time_0 = time.time()
+        frame = inspect.currentframe()
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Entering %s' % frame.f_code.co_name)
+        global_var['log_indent_level'] += 3
+
+    if request['method'] == 'GET':
+        orthanc_study_id = request['groups'][0]
+        status, orthanc_study_id_redacted = ultrasound_perform_redaction(orthanc_study_id)
+        if status['status'] != 0:
+            message = 'Problem with redaction: %s' % status['error_text']
+        elif orthanc_study_id_redacted is None:
+            message = 'No US found to redact'
+        else:
+            message = 'Success!' 
+
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] = log_indent_level_prev
+        output.AnswerBuffer(message, 'text/plain')
+    else:
+        if log_message_bitflag:
+            log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0))
+            global_var['log_indent_level'] = log_indent_level_prev
+        output.SendMethodNotAllowed('GET')
+        
+# ============================================================================
 def UpdateAnonymizationQueue(output, uri, **request):
     """API interface to update the anonymization queue parameters"""
 # ----------------------------------------------------------------------------
@@ -8767,6 +9116,7 @@ orthanc.RegisterRestCallback('/toggle_python_flag_assume_original_primary', Togg
 orthanc.RegisterRestCallback('/toggle_python_mail_auto', TogglePythonMailAuto)
 orthanc.RegisterRestCallback('/toggle_python_verbose', TogglePythonVerbose)
 orthanc.RegisterRestCallback('/studies/(.*)/update_anonymization_queue', UpdateAnonymizationQueue)
+orthanc.RegisterRestCallback('/studies/(.*)/redact_ultrasound', UltrasoundRedact)
 orthanc.RegisterRestCallback('/update_lookup_table', UpdateLookupTable)
 orthanc.RegisterRestCallback('/userlog/(.*)', UserLog)
 
