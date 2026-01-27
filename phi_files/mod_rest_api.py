@@ -7557,6 +7557,8 @@ def ultrasound_perform_redaction(orthanc_study_id, **kwargs):
             dataset.SOPInstanceUID = sop_instance_uid_redacted
             dataset.StudyDescription = ('Redacted %s' % study_description).strip()
             dataset.SeriesDescription = ('Redacted %s' % series_description).strip()
+            dataset.AccessionNumber = 'R%s' % accession_number
+            dataset.StudyID = 'R%s' % study_id
 
             memory_dataset = pydicom.filebase.DicomFileLike(buffer_out)
             #pydicom.dcmwrite(memory_dataset, dataset, enforce_file_format=True)
