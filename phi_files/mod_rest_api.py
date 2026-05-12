@@ -1418,6 +1418,13 @@ def anonymize_study(orthanc_study_id_parent, trigger_type, remote_user, **kwargs
     if flag_images_sent and log_message_bitflag:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Images sent to remote modalities', **kwargs)
 
+    # Update parent patient meta data
+    if log_message_bitflag:
+        log_message(log_message_bitflag, global_var['log_indent_level'], 'Updating parent patient meta data', **kwargs)
+    meta_study = json.loads(orthanc.RestApiGet('/studies/%s' % orthanc_study_id_anon))
+    orthanc_parent_id_anon = meta_study['ParentPatient']
+    orthanc.RestApiPost('/patients/%s/reconstruct' % orthanc_parent_id_anon, json.dumps({}))
+
     if log_message_bitflag:
         log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0), **kwargs)
         global_var['log_indent_level'] = log_indent_level_prev
@@ -3883,7 +3890,7 @@ def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=Non
         #flag_non_report = 'ImageType' in meta_instance
         flag_non_report = True
         if flag_screen_for_reports: #Test for unwanted mammo studies
-            for field_type, field_items in {                                  'ImageType' : ['dose', 'screen', 'report', 'exam protocol'],
+            for field_type, field_items in {                                  'ImageType' : ['dose', 'screen', 'report', 'exam *protocol'],
                                                                        'StudyDescription' : ['securview'],
                                                      'SecondaryCaptureDeviceManufacturer' : ['pacsgear', 'hipgrahics', 'hipgraphics', 'lexmark'],
                                             'SecondaryCaptureDeviceManufacturerModelName' : ['pacsscan', 'inspace'],
@@ -3891,7 +3898,7 @@ def filter_what_instances_to_keep(orthanc_study_ids=None, orthanc_series_ids=Non
                                                                            'Manufacturer' : ['ischemaview'],
                                                                   'ManufacturerModelName' : ['securview', 'blackford'],
                                                                       'SeriesDescription' : ['screen *s[a-z]*er', 'dose report', 'screen snapshot', 
-                                                                                             'summary', 'vpct', 'history', 
+                                                                                             'summary', 'vpct', 'history', 'exam *protocol',
                                                                                              'securview', 'patient protocol', 'phoenix', 
                                                                                              'carestream', 'req', 'report', 'blackford','topo']}.items():
                 #if flag_non_report and field_type in meta_instance:
@@ -7279,11 +7286,14 @@ def shift_date_time_patage_of_instances(meta_instances, shift_epoch, replace_roo
                 replace_dict['PatientBirthDate'] = date_string_new
             if 'PatientAge' in dicom_tags:
                 res_age = global_var['regexp']['PatientAge'].match(dicom_tags['PatientAge'])
-                age_number = int(res_age.group(1))
-                age_unit = res_age.group(2)
-                if age_number > 89:
-                    age_number = 90
-                    replace_dict['PatientAge'] = '%03d%s' % (age_number,age_unit)
+                if res_age is None:
+                    replace_dict['PatientAge'] = ''
+                else:
+                    age_number = int(res_age.group(1))
+                    age_unit = res_age.group(2)
+                    if age_number > 89:
+                        age_number = 90
+                        replace_dict['PatientAge'] = '%03d%s' % (age_number,age_unit)
 
         # Handle non-date/time replacements that take place at this stage
         if 'SOPInstanceUID' in dicom_tags:
