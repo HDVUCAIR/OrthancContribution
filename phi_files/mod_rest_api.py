@@ -7519,6 +7519,8 @@ def ultrasound_perform_redaction(orthanc_study_id, **kwargs):
         sop_instance_uids += [sop_instance_uid_redacted]
         study_description = dataset.StudyDescription if 'StudyDescription' in dataset else ''
         series_description = dataset.SeriesDescription if 'SeriesDescription' in dataset else ''
+        accession_number = dataset.AccessionNumber if 'AccessionNumber' in dataset else ''
+        study_id = dataset.StudyID if 'StudyID' in dataset else ''
 
         if is_scan:    
             if log_message_bitflag:

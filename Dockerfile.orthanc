@@ -14,7 +14,11 @@ RUN apt-get update \
        tzdata \
        apt-utils \
        html2text net-tools \
-       python3-bs4 python3-dateutil python3-psycopg2 python3-pydicom python3-requests python3-openpyxl \
+       python3-bs4 python3-dateutil \
+          python3-psycopg2 python3-pydicom \
+          python3-requests python3-openpyxl \
+          python3-pil python3-scipy \ 
+          python3-numpy \
     && mkdir /scripts /json 
 
 RUN groupadd -g $PROCESS_GID orthanc1 && \
