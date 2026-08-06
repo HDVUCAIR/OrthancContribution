@@ -192,6 +192,10 @@ services:
         uid: "${ORTHANC_UID}"
         gid: "${ORTHANC_GID}"
         mode: 0400
+      #- source: redcap_config.py
+      #  uid: "${ORTHANC_UID}"
+      #  gid: "${ORTHANC_GID}"
+      #  mode: 0400
     depends_on: [phi_orthanc_index]
     container_name: ${COMMON_BASENAME}_phi_orthanc
     ports: ["${HOST_IP_FOR_DICOM}:${PHI_DICOM_PORT}:${PHI_DICOM_PORT}"]

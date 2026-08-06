@@ -15,12 +15,17 @@ from PIL import Image
 import pydicom
 import random
 import re
+#from redcap import Project, RedcapError
 from scipy.ndimage import label
 import smtplib
 import threading
 import time
 import string
 
+#sys.path.append('/run/secrets')
+#import redcap_config
+
+# Global values
 global_var = {'flag' : {}, 'regexp': {}}
 try:
     from bs4 import BeautifulSoup
@@ -39,6 +44,7 @@ global_var['regexp']['search_patient_min'] = re.compile('.*[a-z0-9]{4,4}.*', re.
 global_var['regexp']['PatientAge'] = re.compile('([0-9.]+)([^0-9]*)',re.I)
 global_var['regexp']['us_manufacturer'] = re.compile('.*samsung medison.*', re.I)
 global_var['regexp']['us_station_name'] = re.compile('.*rs85_09v.*', re.I)
+#global_var['regexp']['redcap_label'] = re.compile('rcid([0-9]+)s([0-9]+)',re.I)
 
 # Global variables
 python_verbose_logwarning = 1 if os.getenv('PYTHON_VERBOSE_LOGWARNING', default='false') == 'true' or os.getenv('ORTHANC__PYTHON_VERBOSE', default='false') == 'true' else 0
@@ -8202,7 +8208,7 @@ def CSVPrescan(output, uri, **request):
     """API interface to pre-scan CSV entries"""
 # ----------------------------------------------------------------------------
     re_types = {      'PatientID' : re.compile('[0-9]+$'),
-                'AccessionNumber' : re.compile('[0-9]+$'),
+                'AccessionNumber' : re.compile('[0-9a-z]+$',re.I),
                       'StudyDate' : re.compile('(197|198|199|200|201|202)[0-9][0-1][0-9][0-3][0-9]$'),
                        'Modality' : re.compile('[a-z]+$',re.I),
                  'Anon Last Name' : re.compile('[a-z0-9_]+$', re.I),
@@ -8232,7 +8238,10 @@ def CSVPrescan(output, uri, **request):
             query_dicom = {}
             for input_type in ['AccessionNumber', 'PatientID', 'StudyDate']:
                 if input_type in incoming_datum:
-                    query_dicom[input_type] = incoming_datum[input_type]
+                    if input_type == 'PatientID':
+                        query_dicom[input_type] = incoming_datum[input_type].lstrip('0')
+                    else:
+                        query_dicom[input_type] = incoming_datum[input_type]
             query_studies = {'Level' : 'Study',
                              'Query' : query_dicom}
             answer = {'Row' : incoming_datum['Row'], 'PACS' : 0, 'Orthanc': 0}
