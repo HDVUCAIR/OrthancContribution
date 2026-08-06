@@ -8580,16 +8580,7 @@ def PrepareDataForAnonymizeGUI(output, uri, **request):
             flag_query_pacs = int(request['get']['pacs']) != 0
 
         # Check to see if XREF_MODALITY is registered for PACS queries
-        xref_modality = None
-        flag_xref_modality = True
-        if 'PYTHON_XREF_MODALITY' in os.environ:
-            for modality_name in json.loads(orthanc.RestApiGet('/modalities')):
-                meta_config = json.loads(orthanc.RestApiGet('/modalities/%s/configuration' % modality_name))
-                if meta_config['AET'] == os.environ['PYTHON_XREF_MODALITY']:
-                    xref_modality = modality_name
-                    flag_xref_modality = True
-                if flag_xref_modality:
-                    break
+        flag_xref_modality, xref_modality = check_xref_modality()
 
         # Load the lookup table
         answer, lookup_table = load_lookup_table(file_lookup)
