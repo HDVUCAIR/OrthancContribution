@@ -18,6 +18,7 @@ import re
 #from redcap import Project, RedcapError
 from scipy.ndimage import label
 import smtplib
+#import sys
 import threading
 import time
 import string
