@@ -678,7 +678,6 @@ services:
       - type: bind
         source: ./shared_files/make_certs_orthanc.bash
         target: /scripts/make_certs_orthanc.bash
-        volume:
         read_only: true
       #- type: bind
       #  source: /etc/localtime
