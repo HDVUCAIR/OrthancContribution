@@ -3550,7 +3550,7 @@ def email_message(subject, message_body, subtype='plain', alternates=None, cc=No
 
     smtp_server = os.environ['PYTHON_MAIL_SERVER']
     try:
-        s = smtplib.SMTP(smtp_server)
+        s = smtplib.SMTP(smtp_server, local_hostname=global_var['fqdn'])
     except:
         if log_message_bitflag:
             log_message(log_message_bitflag, global_var['log_indent_level'], 'Time spent in %s: %d' % (frame.f_code.co_name, time.time()-time_0),**kwargs)
@@ -4365,7 +4365,7 @@ def get_metadata_from_remote_aet(orthanc_study_id, meta_study=None):
                             response_query_id_answer = orthanc.RestApiGet('/queries/' + meta_query_series['ID'] + '/answers')
                             if len(response_query_id_answer.strip()) > 0:
                                 meta_query_id_answer = json.loads(response_query_id_answer.strip())
-                                if meta_query_id_answer[0] == "0":
+                                if len(meta_query_id_answer) > 0 and meta_query_id_answer[0] == "0":
                                     response_query_id_answer_zero = orthanc.RestApiGet('/queries/' + meta_query_series['ID'] + '/answers/0')
                                     if len(response_query_id_answer_zero.strip()) > 0:
                                         meta_query_id_answer_zero = json.loads(response_query_id_answer_zero.strip())
