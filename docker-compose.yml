@@ -41,6 +41,8 @@ services:
       ORTHANC__SAVE_JOBS: "false"
       ORTHANC__STABLE_AGE: "600"
       ORTHANC__STORAGE_DIRECTORY: "/media/storage/OrthancDB"
+      ORTHANC__ORTHANC_EXPLORER_2__UI_OPTIONS__STUDY_LIST_CONTENT_IF_NO_SEARCH: "default-ordering"
+      ORTHANC__ORTHANC_EXPLORER_2__UI_OPTIONS__DEFAULT_ORDERING: "Metadata,LastUpdate,DESC"
       # Meta data
       ORTHANC__USER_METADATA: >
         { 
@@ -354,6 +356,8 @@ services:
       ORTHANC__SAVE_JOBS: "false"
       ORTHANC__STABLE_AGE: "600"
       ORTHANC__STORAGE_DIRECTORY: "/media/storage/OrthancDB"
+      ORTHANC__ORTHANC_EXPLORER_2__UI_OPTIONS__STUDY_LIST_CONTENT_IF_NO_SEARCH: "default-ordering"
+      ORTHANC__ORTHANC_EXPLORER_2__UI_OPTIONS__DEFAULT_ORDERING: "Metadata,LastUpdate,DESC"
       LOGDIR: "/media/logs"
       #LOGFILE: "/media/logs/orthanc.log"
       TRACE_ENABLED: "false"
@@ -566,6 +570,8 @@ services:
       ORTHANC__SAVE_JOBS: "false"
       ORTHANC__STABLE_AGE: "600"
       ORTHANC__STORAGE_DIRECTORY: "/media/storage/OrthancDB"
+      ORTHANC__ORTHANC_EXPLORER_2__UI_OPTIONS__STUDY_LIST_CONTENT_IF_NO_SEARCH: "default-ordering"
+      ORTHANC__ORTHANC_EXPLORER_2__UI_OPTIONS__DEFAULT_ORDERING: "Metadata,LastUpdate,DESC"
       TRACE_ENABLED: "false"
       VERBOSE_ENABLED: "false"
       VERBOSE_PLUGINS: "false"
